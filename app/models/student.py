@@ -36,6 +36,13 @@ class Student(db.Model):
     enrollment_date = db.Column(db.Date)
     iep_status = db.Column(db.Boolean, default=False)
     section_504 = db.Column(db.Boolean, default=False)
+
+    # EL Status - proper categories per California EL classification
+    el_status = db.Column(db.String(20), default='EO')
+    # EO = English Only, Newcomer, LTEL = Long-Term EL, RFEP = Reclassified Fluent English Proficient
+    el_level = db.Column(db.String(10))  # EL 1, EL 2, EL 3 (only when Newcomer)
+
+    # Keep legacy column for migration compatibility
     ell_status = db.Column(db.Boolean, default=False)
 
     # Special programs
@@ -54,6 +61,19 @@ class Student(db.Model):
     service_records = db.relationship('ServiceRecord', backref='student', lazy='dynamic',
                                      order_by='ServiceRecord.date.desc()')
 
+    EL_STATUSES = [
+        ('EO', 'EO - English Only'),
+        ('Newcomer', 'Newcomer'),
+        ('LTEL', 'LTEL - Long-Term English Learner'),
+        ('RFEP', 'RFEP - Reclassified Fluent English Proficient'),
+    ]
+
+    EL_LEVELS = [
+        ('EL 1', 'EL 1'),
+        ('EL 2', 'EL 2'),
+        ('EL 3', 'EL 3'),
+    ]
+
     @property
     def full_name(self):
         return f"{self.last_name}, {self.first_name}"
@@ -61,6 +81,16 @@ class Student(db.Model):
     @property
     def display_name(self):
         return f"{self.first_name} {self.last_name}"
+
+    @property
+    def is_el(self):
+        return self.el_status in ('Newcomer', 'LTEL', 'RFEP')
+
+    @property
+    def el_display(self):
+        if self.el_status == 'Newcomer' and self.el_level:
+            return f"Newcomer ({self.el_level})"
+        return self.el_status or 'EO'
 
 
 class Tag(db.Model):

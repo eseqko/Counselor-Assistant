@@ -90,7 +90,29 @@
                 <label>Address</label>
                 <textarea name="address" class="form-control" rows="2">{{ student.address }}</textarea>
             </div>
-            <div style="display:flex;gap:24px;margin:16px 0;">
+
+            <h3 style="margin:20px 0 12px;font-size:1rem;">EL Status & Special Designations</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>EL Status</label>
+                    <select name="el_status" id="el_status" class="form-control">
+                        {% for val, label in el_statuses %}
+                        <option value="{{ val }}" {{ 'selected' if student.el_status == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" id="el_level_group" style="{{ '' if student.el_status == 'Newcomer' else 'display:none;' }}">
+                    <label>EL Level (Newcomer only)</label>
+                    <select name="el_level" id="el_level" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in el_levels %}
+                        <option value="{{ val }}" {{ 'selected' if student.el_level == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:24px;margin:12px 0;">
                 <div class="form-check">
                     <input type="checkbox" name="iep_status" id="iep_status" {{ 'checked' if student.iep_status }}>
                     <label for="iep_status">IEP</label>
@@ -98,10 +120,6 @@
                 <div class="form-check">
                     <input type="checkbox" name="section_504" id="section_504" {{ 'checked' if student.section_504 }}>
                     <label for="section_504">504</label>
-                </div>
-                <div class="form-check">
-                    <input type="checkbox" name="ell_status" id="ell_status" {{ 'checked' if student.ell_status }}>
-                    <label for="ell_status">ELL</label>
                 </div>
             </div>
             <div class="btn-group">
@@ -111,4 +129,19 @@
         </form>
     </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var elStatus = document.getElementById('el_status');
+    var elLevelGroup = document.getElementById('el_level_group');
+    function toggleLevel() {
+        elLevelGroup.style.display = elStatus.value === 'Newcomer' ? '' : 'none';
+        if (elStatus.value !== 'Newcomer') {
+            document.getElementById('el_level').value = '';
+        }
+    }
+    elStatus.addEventListener('change', toggleLevel);
+});
+</script>
 {% endblock %}

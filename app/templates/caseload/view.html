@@ -15,9 +15,15 @@
             ID: {{ student.student_id_number }} |
             Grade {{ student.grade_level or 'N/A' }} |
             <span class="badge badge-{{ 'success' if student.status == 'active' else 'gray' }}">{{ student.status }}</span>
+            {% if student.el_status == 'Newcomer' %}
+                <span class="badge badge-danger">{{ student.el_display }}</span>
+            {% elif student.el_status == 'LTEL' %}
+                <span class="badge badge-warning">LTEL</span>
+            {% elif student.el_status == 'RFEP' %}
+                <span class="badge badge-info">RFEP</span>
+            {% endif %}
             {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
             {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
-            {% if student.ell_status %}<span class="badge badge-primary">ELL</span>{% endif %}
         </div>
     </div>
     <div style="margin-left:auto;">
@@ -46,17 +52,16 @@
     </div>
 
     <div class="card">
-        <div class="card-header">Tags & Details</div>
+        <div class="card-header">Designations & Details</div>
         <div class="card-body">
-            {% if student.date_of_birth %}
-            <p><strong>DOB:</strong> {{ student.date_of_birth.strftime('%m/%d/%Y') }}</p>
-            {% endif %}
-            {% if student.gender %}
-            <p><strong>Gender:</strong> {{ student.gender }}</p>
-            {% endif %}
-            {% if student.ethnicity %}
-            <p><strong>Ethnicity:</strong> {{ student.ethnicity }}</p>
-            {% endif %}
+            <table>
+                <tr><td style="font-weight:600;width:40%;">EL Status</td><td>{{ student.el_display }}</td></tr>
+                <tr><td style="font-weight:600;">IEP</td><td>{{ 'Yes' if student.iep_status else 'No' }}</td></tr>
+                <tr><td style="font-weight:600;">504 Plan</td><td>{{ 'Yes' if student.section_504 else 'No' }}</td></tr>
+                {% if student.date_of_birth %}<tr><td style="font-weight:600;">DOB</td><td>{{ student.date_of_birth.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
+                {% if student.gender %}<tr><td style="font-weight:600;">Gender</td><td>{{ student.gender }}</td></tr>{% endif %}
+                {% if student.ethnicity %}<tr><td style="font-weight:600;">Ethnicity</td><td>{{ student.ethnicity }}</td></tr>{% endif %}
+            </table>
             <div style="margin-top:12px;">
                 {% for tag in student.tags %}
                 <span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span>

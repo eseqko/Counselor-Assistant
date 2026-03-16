@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Upload Caseload{% endblock %}
+{% block page_title %}Upload Caseload{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
+
+<div class="grid-2">
+    <!-- Step 1: Download Template -->
+    <div class="card">
+        <div class="card-header">Step 1: Download Template</div>
+        <div class="card-body">
+            <p style="margin-bottom:12px;font-size:0.9rem;">Download the Excel template, fill it in with your student data, then upload it back here.</p>
+            <a href="{{ url_for('caseload.download_template') }}" class="btn btn-primary">Download Excel Template</a>
+            <div style="margin-top:16px;font-size:0.82rem;color:var(--gray);">
+                <strong>Template columns:</strong>
+                <ul style="margin-top:4px;padding-left:20px;">
+                    <li>First Name (required)</li>
+                    <li>Last Name (required)</li>
+                    <li>Grade (6-12, required)</li>
+                    <li>Student ID # (required, unique)</li>
+                    <li>Email (optional)</li>
+                    <li>EL Status (Newcomer, LTEL, RFEP, or EO)</li>
+                    <li>EL Level (EL 1, EL 2, EL 3 - only for Newcomers)</li>
+                    <li>IEP (Yes or blank)</li>
+                    <li>504 Plan (Yes or blank)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Upload -->
+    <div class="card">
+        <div class="card-header">Step 2: Upload Filled Template</div>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>Select Excel File (.xlsx)</label>
+                    <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required
+                           style="padding:8px;">
+                </div>
+                <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
+                    <strong>What happens on upload:</strong>
+                    <ul style="margin-top:4px;padding-left:20px;">
+                        <li>New Student IDs are added to your caseload</li>
+                        <li>Existing Student IDs are <strong>updated</strong> with the new data</li>
+                        <li>Invalid rows are skipped and reported</li>
+                    </ul>
+                </div>
+                <button type="submit" class="btn btn-success">Upload & Import</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if added or updated %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Import Results</div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card success">
+                <div class="stat-value">{{ added }}</div>
+                <div class="stat-label">Students Added</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value">{{ updated }}</div>
+                <div class="stat-label">Students Updated</div>
+            </div>
+            {% if errors %}
+            <div class="stat-card danger">
+                <div class="stat-value">{{ errors|length }}</div>
+                <div class="stat-label">Errors</div>
+            </div>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('caseload.index') }}" class="btn btn-primary">View Caseload</a>
+    </div>
+</div>
+{% endif %}
+
+{% if errors %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header" style="color:var(--danger);">Import Errors</div>
+    <div class="card-body">
+        <p style="font-size:0.85rem;margin-bottom:12px;color:var(--gray);">
+            These rows were skipped due to validation errors. Fix them in your spreadsheet and re-upload, or add them manually.
+        </p>
+        <table>
+            <thead><tr><th style="width:100%;">Error</th></tr></thead>
+            <tbody>
+                {% for err in errors %}
+                <tr><td style="font-size:0.85rem;color:var(--danger);">{{ err }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Also offer export -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Export Current Caseload</div>
+    <div class="card-body">
+        <p style="font-size:0.9rem;margin-bottom:12px;">Download your current caseload as an Excel file for backup or editing.</p>
+        <a href="{{ url_for('caseload.export_caseload') }}" class="btn btn-outline">Export Caseload to Excel</a>
+    </div>
+</div>
+
+{% endblock %}

@@ -29,6 +29,16 @@
             </select>
         </div>
         <div class="form-group">
+            <label>EL Status</label>
+            <select name="el_status" class="form-control">
+                <option value="">All</option>
+                <option value="Newcomer" {{ 'selected' if el_filter == 'Newcomer' }}>Newcomer</option>
+                <option value="LTEL" {{ 'selected' if el_filter == 'LTEL' }}>LTEL</option>
+                <option value="RFEP" {{ 'selected' if el_filter == 'RFEP' }}>RFEP</option>
+                <option value="EO" {{ 'selected' if el_filter == 'EO' }}>EO</option>
+            </select>
+        </div>
+        <div class="form-group">
             <label>Tag</label>
             <select name="tag" class="form-control">
                 <option value="">All Tags</option>
@@ -47,7 +57,11 @@
 <div class="card">
     <div class="card-header">
         Students ({{ students|length }})
-        <a href="{{ url_for('caseload.add_student') }}" class="btn btn-sm btn-primary">+ Add Student</a>
+        <div class="btn-group">
+            <a href="{{ url_for('caseload.add_student') }}" class="btn btn-sm btn-primary">+ Add Student</a>
+            <a href="{{ url_for('caseload.upload_caseload') }}" class="btn btn-sm btn-success">Upload Caseload</a>
+            <a href="{{ url_for('caseload.export_caseload') }}" class="btn btn-sm btn-outline">Export</a>
+        </div>
     </div>
     <div class="table-responsive">
         <table>
@@ -56,9 +70,9 @@
                     <th>Name</th>
                     <th>ID</th>
                     <th>Grade</th>
-                    <th>Status</th>
-                    <th>Tags</th>
+                    <th>EL Status</th>
                     <th>Flags</th>
+                    <th>Tags</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -68,13 +82,22 @@
                     <td><a href="{{ url_for('caseload.view_student', id=student.id) }}" style="text-decoration:none;color:var(--primary);font-weight:600;">{{ student.full_name }}</a></td>
                     <td>{{ student.student_id_number }}</td>
                     <td>{{ student.grade_level or '-' }}</td>
-                    <td><span class="badge badge-{{ 'success' if student.status == 'active' else 'gray' }}">{{ student.status }}</span></td>
-                    <td>{% for tag in student.tags %}<span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span> {% endfor %}</td>
+                    <td>
+                        {% if student.el_status == 'Newcomer' %}
+                            <span class="badge badge-danger">{{ student.el_display }}</span>
+                        {% elif student.el_status == 'LTEL' %}
+                            <span class="badge badge-warning">LTEL</span>
+                        {% elif student.el_status == 'RFEP' %}
+                            <span class="badge badge-info">RFEP</span>
+                        {% else %}
+                            <span class="badge badge-gray">EO</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
                         {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
-                        {% if student.ell_status %}<span class="badge badge-primary">ELL</span>{% endif %}
                     </td>
+                    <td>{% for tag in student.tags %}<span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span> {% endfor %}</td>
                     <td>
                         <div class="btn-group">
                             <a href="{{ url_for('caseload.view_student', id=student.id) }}" class="btn btn-sm btn-outline">View</a>
@@ -85,7 +108,13 @@
                 {% endfor %}
                 {% if not students %}
                 <tr><td colspan="7">
-                    <div class="empty-state"><p>No students found. <a href="{{ url_for('caseload.add_student') }}">Add your first student.</a></p></div>
+                    <div class="empty-state">
+                        <p>No students found.</p>
+                        <div class="btn-group" style="justify-content:center;">
+                            <a href="{{ url_for('caseload.upload_caseload') }}" class="btn btn-success">Upload Caseload from Excel</a>
+                            <a href="{{ url_for('caseload.add_student') }}" class="btn btn-outline">Add Manually</a>
+                        </div>
+                    </div>
                 </td></tr>
                 {% endif %}
             </tbody>
