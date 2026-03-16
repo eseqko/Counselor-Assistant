@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block page_title %}Course Details{% endblock %}
+{% block content %}
+<div class="card" style="max-width:800px;">
+    <div class="card-header">
+        {{ course.course_number }} - {{ course.title }}
+        <a href="{{ url_for('course_catalog.edit_course', id=course.id) }}" class="btn btn-sm btn-outline">Edit</a>
+    </div>
+    <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+            <div><strong>Department:</strong> {{ course.department.name if course.department else 'N/A' }}</div>
+            <div><strong>Type:</strong> <span class="badge badge-primary">{{ course.course_type.upper() if course.course_type else 'N/A' }}</span></div>
+            <div><strong>Credits:</strong> {{ course.credits }}</div>
+            <div><strong>Grade Levels:</strong> {{ course.grade_levels or 'All' }}</div>
+            <div><strong>Semesters:</strong> {{ 'Full Year' if course.semesters == 2 else 'Semester' }}</div>
+            {% if course.is_weighted %}<div><strong>GPA Weight:</strong> +{{ course.weight }}</div>{% endif %}
+            {% if course.ncaa_approved %}<div><span class="badge badge-success">NCAA Approved</span></div>{% endif %}
+            {% if course.meets_requirement %}<div><strong>Meets:</strong> {{ course.meets_requirement }}</div>{% endif %}
+            {% if course.prerequisites %}<div><strong>Prerequisites:</strong> {{ course.prerequisites }}</div>{% endif %}
+            {% if course.instructor %}<div><strong>Instructor:</strong> {{ course.instructor }}</div>{% endif %}
+            {% if course.school_year %}<div><strong>School Year:</strong> {{ course.school_year }}</div>{% endif %}
+        </div>
+
+        {% if course.description %}
+        <h3 style="font-size:0.95rem;margin-bottom:8px;">Description</h3>
+        <p style="line-height:1.6;">{{ course.description }}</p>
+        {% endif %}
+
+        {% if course.detailed_description %}
+        <h3 style="font-size:0.95rem;margin:16px 0 8px;">Detailed Description</h3>
+        <div style="background:var(--bg);padding:16px;border-radius:6px;line-height:1.6;white-space:pre-wrap;">{{ course.detailed_description }}</div>
+        {% endif %}
+
+        {% if course.notes %}
+        <h3 style="font-size:0.95rem;margin:16px 0 8px;">Counselor Notes</h3>
+        <div style="background:#FFF3D6;padding:12px;border-radius:6px;font-size:0.9rem;">{{ course.notes }}</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}{{ student.display_name }} - Caseload{% endblock %}
+{% block page_title %}Student Profile{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">
+    &#128274; FERPA Protected Record - Access is logged for compliance.
+</div>
+
+<div class="profile-header">
+    <div class="profile-avatar">{{ student.first_name[0] }}{{ student.last_name[0] }}</div>
+    <div class="profile-info">
+        <h2>{{ student.display_name }}</h2>
+        <div class="meta">
+            ID: {{ student.student_id_number }} |
+            Grade {{ student.grade_level or 'N/A' }} |
+            <span class="badge badge-{{ 'success' if student.status == 'active' else 'gray' }}">{{ student.status }}</span>
+            {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
+            {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+            {% if student.ell_status %}<span class="badge badge-primary">ELL</span>{% endif %}
+        </div>
+    </div>
+    <div style="margin-left:auto;">
+        <div class="btn-group">
+            <a href="{{ url_for('caseload.edit_student', id=student.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Note</a>
+            <a href="{{ url_for('service_log.add_record', student_id=student.id) }}" class="btn btn-sm btn-success">+ Service</a>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Contact Information</div>
+        <div class="card-body">
+            <table>
+                {% if student.email %}<tr><td style="font-weight:600;width:40%;">Email</td><td>{{ student.email }}</td></tr>{% endif %}
+                {% if student.phone %}<tr><td style="font-weight:600;">Phone</td><td>{{ student.phone }}</td></tr>{% endif %}
+                {% if student.homeroom %}<tr><td style="font-weight:600;">Homeroom</td><td>{{ student.homeroom }}</td></tr>{% endif %}
+                {% if student.parent_guardian_name %}<tr><td style="font-weight:600;">Parent/Guardian</td><td>{{ student.parent_guardian_name }}</td></tr>{% endif %}
+                {% if student.parent_guardian_phone %}<tr><td style="font-weight:600;">Parent Phone</td><td>{{ student.parent_guardian_phone }}</td></tr>{% endif %}
+                {% if student.parent_guardian_email %}<tr><td style="font-weight:600;">Parent Email</td><td>{{ student.parent_guardian_email }}</td></tr>{% endif %}
+                {% if student.address %}<tr><td style="font-weight:600;">Address</td><td>{{ student.address }}</td></tr>{% endif %}
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Tags & Details</div>
+        <div class="card-body">
+            {% if student.date_of_birth %}
+            <p><strong>DOB:</strong> {{ student.date_of_birth.strftime('%m/%d/%Y') }}</p>
+            {% endif %}
+            {% if student.gender %}
+            <p><strong>Gender:</strong> {{ student.gender }}</p>
+            {% endif %}
+            {% if student.ethnicity %}
+            <p><strong>Ethnicity:</strong> {{ student.ethnicity }}</p>
+            {% endif %}
+            <div style="margin-top:12px;">
+                {% for tag in student.tags %}
+                <span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Notes -->
+<div class="card">
+    <div class="card-header">
+        Recent Notes
+        <a href="{{ url_for('notes.index', student_id=student.id) }}" class="btn btn-sm btn-outline">View All</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Follow-Up</th></tr></thead>
+            <tbody>
+                {% for note in notes %}
+                <tr>
+                    <td>{{ note.session_date.strftime('%m/%d/%Y') }}</td>
+                    <td><span class="badge badge-info">{{ note.note_type }}</span></td>
+                    <td><a href="{{ url_for('notes.view_note', id=note.id) }}">{{ note.title or 'View Note' }}</a></td>
+                    <td>{% if note.follow_up_needed %}<span class="badge badge-warning">Due {{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'TBD' }}</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                {% if not notes %}
+                <tr><td colspan="4"><div class="empty-state"><p>No notes yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Services -->
+<div class="card">
+    <div class="card-header">
+        Service History
+        <a href="{{ url_for('service_log.index', student_id=student.id) }}" class="btn btn-sm btn-outline">View All</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Service Type</th><th>Topic</th><th>Duration</th></tr></thead>
+            <tbody>
+                {% for rec in services %}
+                <tr>
+                    <td>{{ rec.date.strftime('%m/%d/%Y') }}</td>
+                    <td><span class="badge badge-primary">{{ rec.service_type }}</span></td>
+                    <td>{{ rec.topic or '-' }}</td>
+                    <td>{{ rec.duration_minutes or '-' }} min</td>
+                </tr>
+                {% endfor %}
+                {% if not services %}
+                <tr><td colspan="4"><div class="empty-state"><p>No service records.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div style="margin-top:20px;">
+    <form method="POST" action="{{ url_for('caseload.delete_student', id=student.id) }}" data-confirm="Are you sure you want to remove this student? This cannot be undone." style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-danger">Remove Student</button>
+    </form>
+</div>
+{% endblock %}

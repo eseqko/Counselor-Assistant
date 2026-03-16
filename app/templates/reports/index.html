@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block content %}
+
+<div class="stats-grid">
+    <a href="{{ url_for('reports.use_of_time') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#9202;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Use of Time Analysis</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">ASCA-aligned time breakdown</div>
+    </a>
+    <a href="{{ url_for('reports.student_services') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128100;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Student Service Report</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Services per student</div>
+    </a>
+    <a href="{{ url_for('reports.activity_summary') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128203;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Activity Summary</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Detailed activity report</div>
+    </a>
+    <a href="{{ url_for('reports.caseload_summary') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128101;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Caseload Summary</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Demographics & statistics</div>
+    </a>
+    <a href="{{ url_for('reports.topic_delivery') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128218;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Topic Delivery Log</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Topic coverage frequency</div>
+    </a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}New Event{% endblock %}
+{% block page_title %}New Calendar Event{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Title *</label>
+                <input type="text" name="title" class="form-control" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Start *</label>
+                    <input type="datetime-local" name="start_datetime" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>End</label>
+                    <input type="datetime-local" name="end_datetime" class="form-control">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Event Type</label>
+                    <select name="event_type" class="form-control">
+                        {% for val, label in event_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" name="location" class="form-control">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Related Student</label>
+                <select name="student_id" class="form-control">
+                    <option value="">-- None --</option>
+                    {% for s in students %}
+                    <option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id_number }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="all_day" id="all_day">
+                <label for="all_day">All Day Event</label>
+            </div>
+            <div class="form-group" style="margin-top:8px;">
+                <label>Reminder (minutes before)</label>
+                <select name="reminder_minutes" class="form-control" style="width:auto;">
+                    <option value="5">5 min</option>
+                    <option value="15" selected>15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="60">1 hour</option>
+                </select>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Create Event</button>
+                <a href="{{ url_for('calendar.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Topic Delivery Log{% endblock %}
+{% block page_title %}Topic Delivery Log{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;">
+        <div class="form-group">
+            <label>From</label>
+            <input type="date" name="date_from" class="form-control" value="{{ date_from.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <label>To</label>
+            <input type="date" name="date_to" class="form-control" value="{{ date_to.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Update</button>
+            <button type="button" class="btn btn-outline btn-sm btn-print">Print</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">Topics Delivered: {{ date_from.strftime('%m/%d/%Y') }} - {{ date_to.strftime('%m/%d/%Y') }}</div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Topic</th><th>Times Delivered</th><th>Total Minutes</th><th>Students Reached</th></tr></thead>
+            <tbody>
+                {% for topic, data in topic_counts.items() %}
+                <tr>
+                    <td>{{ topic }}</td>
+                    <td>{{ data.count }}</td>
+                    <td>{{ data.total_minutes }}</td>
+                    <td>{{ data.students }}</td>
+                </tr>
+                {% endfor %}
+                {% if not topic_counts %}
+                <tr><td colspan="4"><div class="empty-state"><p>No topics logged for this period.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

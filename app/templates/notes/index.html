@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Counselor Notes{% endblock %}
+{% block page_title %}Counselor Notes{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All notes are confidential and FERPA-protected. Access is logged.</div>
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Search</label>
+            <input type="text" name="search" class="form-control" placeholder="Search notes..." value="{{ search }}">
+        </div>
+        <div class="form-group">
+            <label>Student</label>
+            <select name="student_id" class="form-control">
+                <option value="">All Students</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Type</label>
+            <select name="type" class="form-control">
+                <option value="">All Types</option>
+                {% for val, label in note_types %}
+                <option value="{{ val }}" {{ 'selected' if note_type == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>From</label>
+            <input type="date" name="date_from" class="form-control" value="{{ request.args.get('date_from', '') }}">
+        </div>
+        <div class="form-group">
+            <label>To</label>
+            <input type="date" name="date_to" class="form-control" value="{{ request.args.get('date_to', '') }}">
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Notes ({{ notes|length }})
+        <a href="{{ url_for('notes.add_note') }}" class="btn btn-sm btn-primary">+ New Note</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Student</th><th>Type</th><th>Title</th><th>Domain</th><th>Follow-Up</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for note in notes %}
+                <tr>
+                    <td>{{ note.session_date.strftime('%m/%d/%Y') }}</td>
+                    <td><a href="{{ url_for('caseload.view_student', id=note.student.id) }}">{{ note.student.display_name }}</a></td>
+                    <td><span class="badge badge-info">{{ note.note_type }}</span></td>
+                    <td><a href="{{ url_for('notes.view_note', id=note.id) }}">{{ note.title or 'View' }}</a></td>
+                    <td>{{ note.asca_domain or '-' }}</td>
+                    <td>{% if note.follow_up_needed %}<span class="badge badge-warning">{{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'Yes' }}</span>{% endif %}</td>
+                    <td><a href="{{ url_for('notes.edit_note', id=note.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
+                </tr>
+                {% endfor %}
+                {% if not notes %}
+                <tr><td colspan="7"><div class="empty-state"><p>No notes found.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

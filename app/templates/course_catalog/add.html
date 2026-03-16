@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Add Course{% endblock %}
+{% block page_title %}Add Course{% endblock %}
+{% block content %}
+<div class="card" style="max-width:800px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Course Number *</label>
+                    <input type="text" name="course_number" class="form-control" required placeholder="e.g., ENG101">
+                </div>
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input type="text" name="title" class="form-control" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Department</label>
+                    <select name="department_id" class="form-control">
+                        <option value="">--</option>
+                        {% for d in departments %}
+                        <option value="{{ d.id }}">{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Course Type</label>
+                    <select name="course_type" class="form-control">
+                        {% for val, label in course_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Credits</label>
+                    <input type="number" name="credits" class="form-control" step="0.5" value="1.0">
+                </div>
+                <div class="form-group">
+                    <label>Grade Levels</label>
+                    <input type="text" name="grade_levels" class="form-control" placeholder="e.g., 9,10,11,12">
+                </div>
+                <div class="form-group">
+                    <label>Semesters</label>
+                    <select name="semesters" class="form-control">
+                        <option value="2">Full Year</option>
+                        <option value="1">Semester</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Prerequisites</label>
+                <input type="text" name="prerequisites" class="form-control" placeholder="Course numbers...">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Meets Requirement</label>
+                    <input type="text" name="meets_requirement" class="form-control" placeholder="e.g., English, Math">
+                </div>
+                <div class="form-group">
+                    <label>School Year</label>
+                    <input type="text" name="school_year" class="form-control" placeholder="e.g., 2025-2026">
+                </div>
+            </div>
+            <div style="display:flex;gap:24px;margin:12px 0;">
+                <div class="form-check">
+                    <input type="checkbox" name="is_weighted" id="is_weighted">
+                    <label for="is_weighted">Weighted GPA</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" name="ncaa_approved" id="ncaa_approved">
+                    <label for="ncaa_approved">NCAA Approved</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>GPA Weight Bonus</label>
+                <input type="number" name="weight" class="form-control" step="0.5" value="0" style="width:120px;">
+            </div>
+            <div class="form-group">
+                <label>Instructor</label>
+                <input type="text" name="instructor" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Detailed Description (Wiki Content)</label>
+                <textarea name="detailed_description" class="form-control" rows="6" placeholder="Detailed course info, expectations, textbooks, etc."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Counselor Notes</label>
+                <textarea name="notes" class="form-control" rows="3" placeholder="Internal notes about this course..."></textarea>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Add Course</button>
+                <a href="{{ url_for('course_catalog.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

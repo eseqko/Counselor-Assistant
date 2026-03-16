@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Course Catalog Wiki{% endblock %}
+{% block page_title %}Course Catalog Wiki{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Search</label>
+            <input type="text" name="search" class="form-control" placeholder="Course name or number..." value="{{ search }}">
+        </div>
+        <div class="form-group">
+            <label>Department</label>
+            <select name="department" class="form-control">
+                <option value="">All</option>
+                {% for d in departments %}
+                <option value="{{ d.id }}" {{ 'selected' if dept_id == d.id|string }}>{{ d.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Type</label>
+            <select name="type" class="form-control">
+                <option value="">All</option>
+                {% for val, label in course_types %}
+                <option value="{{ val }}" {{ 'selected' if course_type == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Grade</label>
+            <select name="grade" class="form-control">
+                <option value="">All</option>
+                {% for g in range(9, 13) %}
+                <option value="{{ g }}" {{ 'selected' if grade == g|string }}>{{ g }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Courses ({{ courses|length }})
+        <div class="btn-group">
+            <a href="{{ url_for('course_catalog.add_course') }}" class="btn btn-sm btn-primary">+ Add Course</a>
+            <a href="{{ url_for('course_catalog.departments') }}" class="btn btn-sm btn-outline">Departments</a>
+            <a href="{{ url_for('course_catalog.requirements') }}" class="btn btn-sm btn-outline">Grad Requirements</a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Course #</th><th>Title</th><th>Department</th><th>Type</th><th>Credits</th><th>Grades</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for c in courses %}
+                <tr>
+                    <td><strong>{{ c.course_number }}</strong></td>
+                    <td><a href="{{ url_for('course_catalog.view_course', id=c.id) }}" style="text-decoration:none;color:var(--primary);">{{ c.title }}</a></td>
+                    <td>{{ c.department.name if c.department else '-' }}</td>
+                    <td><span class="badge badge-{{ 'warning' if c.course_type in ['ap','ib','honors'] else 'primary' }}">{{ c.course_type.upper() if c.course_type else '-' }}</span></td>
+                    <td>{{ c.credits }}</td>
+                    <td>{{ c.grade_levels or '-' }}</td>
+                    <td><a href="{{ url_for('course_catalog.edit_course', id=c.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
+                </tr>
+                {% endfor %}
+                {% if not courses %}
+                <tr><td colspan="7"><div class="empty-state"><p>No courses yet. <a href="{{ url_for('course_catalog.add_course') }}">Add your first course.</a></p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

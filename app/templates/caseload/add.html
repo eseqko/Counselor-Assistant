@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Add Student{% endblock %}
+{% block page_title %}Add Student{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <h3 style="margin-bottom:16px;font-size:1rem;">Basic Information</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Student ID Number *</label>
+                    <input type="text" name="student_id_number" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>First Name *</label>
+                    <input type="text" name="first_name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Last Name *</label>
+                    <input type="text" name="last_name" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Grade Level</label>
+                    <select name="grade_level" class="form-control">
+                        <option value="">--</option>
+                        {% for g in range(6, 13) %}
+                        <option value="{{ g }}">Grade {{ g }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" name="date_of_birth" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Gender</label>
+                    <select name="gender" class="form-control">
+                        <option value="">--</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Non-Binary">Non-Binary</option>
+                        <option value="Other">Other</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Ethnicity</label>
+                    <input type="text" name="ethnicity" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Homeroom</label>
+                    <input type="text" name="homeroom" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Enrollment Date</label>
+                    <input type="date" name="enrollment_date" class="form-control">
+                </div>
+            </div>
+
+            <h3 style="margin:20px 0 16px;font-size:1rem;">Contact Information</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Student Email</label>
+                    <input type="email" name="email" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Student Phone</label>
+                    <input type="text" name="phone" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Parent/Guardian Name</label>
+                    <input type="text" name="parent_guardian_name" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Parent Phone</label>
+                    <input type="text" name="parent_guardian_phone" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Parent Email</label>
+                    <input type="email" name="parent_guardian_email" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Address</label>
+                <textarea name="address" class="form-control" rows="2"></textarea>
+            </div>
+
+            <h3 style="margin:20px 0 16px;font-size:1rem;">Special Designations</h3>
+            <div style="display:flex;gap:24px;flex-wrap:wrap;">
+                <div class="form-check">
+                    <input type="checkbox" name="iep_status" id="iep_status">
+                    <label for="iep_status">IEP</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" name="section_504" id="section_504">
+                    <label for="section_504">Section 504</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" name="ell_status" id="ell_status">
+                    <label for="ell_status">ELL/ESL</label>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:16px;">
+                <label>Tags (comma-separated)</label>
+                <input type="text" name="tags" class="form-control" placeholder="e.g., at-risk, honors, new student">
+            </div>
+
+            <div class="btn-group" style="margin-top:20px;">
+                <button type="submit" class="btn btn-primary">Add Student</button>
+                <a href="{{ url_for('caseload.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

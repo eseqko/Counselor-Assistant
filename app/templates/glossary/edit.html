@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Edit Term{% endblock %}
+{% block page_title %}Edit Glossary Term{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label>Term *</label><input type="text" name="term" class="form-control" value="{{ term.term }}" required></div>
+            <div class="form-group"><label>Definition *</label><textarea name="definition" class="form-control" rows="4" required>{{ term.definition }}</textarea></div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category" class="form-control">
+                    <option value="">--</option>
+                    {% for val, label in categories %}
+                    <option value="{{ val }}" {{ 'selected' if term.category == val }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Related Terms</label><input type="text" name="related_terms" class="form-control" value="{{ term.related_terms }}"></div>
+            <div class="form-group"><label>Source</label><input type="text" name="source" class="form-control" value="{{ term.source }}"></div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('glossary.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+        <form method="POST" action="{{ url_for('glossary.delete_term', id=term.id) }}" data-confirm="Delete this term?" style="margin-top:12px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

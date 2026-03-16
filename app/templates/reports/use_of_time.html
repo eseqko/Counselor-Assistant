@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Use of Time Report{% endblock %}
+{% block page_title %}Use of Time Analysis{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;">
+        <div class="form-group">
+            <label>From</label>
+            <input type="date" name="date_from" class="form-control" value="{{ date_from.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <label>To</label>
+            <input type="date" name="date_to" class="form-control" value="{{ date_to.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Update</button>
+            <button type="button" class="btn btn-outline btn-sm btn-print">Print</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">Use of Time - {{ date_from.strftime('%m/%d/%Y') }} to {{ date_to.strftime('%m/%d/%Y') }}</div>
+    <div class="card-body">
+        {% if total_minutes > 0 %}
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ (total_minutes / 60)|round(1) }}h</div>
+                <div class="stat-label">Total Time</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value">{{ percentages.get('direct_student', 0) }}%</div>
+                <div class="stat-label">Direct Student Services</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value">{{ percentages.get('indirect_student', 0) }}%</div>
+                <div class="stat-label">Indirect Student Services</div>
+            </div>
+            <div class="stat-card accent">
+                <div class="stat-value">{{ percentages.get('program_management', 0) }}%</div>
+                <div class="stat-label">Program Management</div>
+            </div>
+        </div>
+
+        <h3 style="margin:20px 0 12px;font-size:1rem;">Time Distribution</h3>
+        <div class="time-chart" style="height:40px;">
+            {% for stype, mins in time_by_type.items() %}
+            <div class="segment {{ 'direct' if stype == 'direct_student' else 'indirect' if stype == 'indirect_student' else 'management' if stype == 'program_management' else 'non-counseling' }}"
+                 style="flex:{{ mins }}">
+                {{ percentages.get(stype, 0) }}%
+            </div>
+            {% endfor %}
+        </div>
+        <div class="time-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div> Direct ({{ (time_by_type.get('direct_student', 0)/60)|round(1) }}h)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--info)"></div> Indirect ({{ (time_by_type.get('indirect_student', 0)/60)|round(1) }}h)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Management ({{ (time_by_type.get('program_management', 0)/60)|round(1) }}h)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--gray)"></div> Non-Counseling ({{ (time_by_type.get('non_counseling', 0)/60)|round(1) }}h)</div>
+        </div>
+
+        {% if time_by_category %}
+        <h3 style="margin:24px 0 12px;font-size:1rem;">By Category</h3>
+        <table>
+            <thead><tr><th>Category</th><th>Minutes</th><th>Hours</th></tr></thead>
+            <tbody>
+                {% for cat, mins in time_by_category.items() %}
+                <tr>
+                    <td>{{ cat.replace('_', ' ').title() }}</td>
+                    <td>{{ mins }}</td>
+                    <td>{{ (mins/60)|round(1) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <div style="margin-top:20px;padding:12px;background:#E8F8E8;border-radius:6px;font-size:0.85rem;">
+            <strong>ASCA Recommended:</strong> 80%+ Direct & Indirect Student Services | 20% or less Program Management & Non-Counseling
+        </div>
+        {% else %}
+        <div class="empty-state"><p>No activity data for this period. <a href="{{ url_for('activity_log.add_activity') }}">Log an activity</a> to see your use-of-time analysis.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

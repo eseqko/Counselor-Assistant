@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Activity Log{% endblock %}
+{% block page_title %}Activity Log{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Service Type</label>
+            <select name="service_type" class="form-control">
+                <option value="">All Types</option>
+                {% for val, label in service_types %}
+                <option value="{{ val }}" {{ 'selected' if service_type == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>From</label>
+            <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+        </div>
+        <div class="form-group">
+            <label>To</label>
+            <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Activities ({{ activities|length }})
+        <a href="{{ url_for('activity_log.add_activity') }}" class="btn btn-sm btn-primary">+ Log Activity</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Title</th><th>Service Type</th><th>Category</th><th>Duration</th><th>Students</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for a in activities %}
+                <tr>
+                    <td>{{ a.date.strftime('%m/%d/%Y') }}</td>
+                    <td>{{ a.title }}</td>
+                    <td><span class="badge badge-{{ 'success' if a.service_type == 'direct_student' else 'info' if a.service_type == 'indirect_student' else 'warning' if a.service_type == 'program_management' else 'gray' }}">{{ a.service_type.replace('_', ' ').title() }}</span></td>
+                    <td>{{ (a.category or '').replace('_', ' ').title() }}</td>
+                    <td>{{ a.duration_minutes or '-' }} min</td>
+                    <td>{{ a.num_students or '-' }}</td>
+                    <td>
+                        <a href="{{ url_for('activity_log.edit_activity', id=a.id) }}" class="btn btn-sm btn-outline">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not activities %}
+                <tr><td colspan="7"><div class="empty-state"><p>No activities logged yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

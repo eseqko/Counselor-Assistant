@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Departments{% endblock %}
+{% block page_title %}Departments{% endblock %}
+{% block content %}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Add Department</div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required></div>
+                <div class="form-group"><label>Description</label><textarea name="description" class="form-control" rows="2"></textarea></div>
+                <div class="form-group"><label>Department Head</label><input type="text" name="head" class="form-control"></div>
+                <div class="form-group"><label>Color</label><input type="color" name="color" value="#4A90D9"></div>
+                <button type="submit" class="btn btn-primary">Add</button>
+            </form>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Departments</div>
+        <div class="card-body">
+            {% for d in departments %}
+            <div style="padding:10px 0;border-bottom:1px solid #E8ECF0;display:flex;align-items:center;gap:12px;">
+                <div style="width:16px;height:16px;border-radius:4px;background:{{ d.color }};"></div>
+                <div>
+                    <strong>{{ d.name }}</strong>
+                    {% if d.head %}<span style="color:var(--gray);font-size:0.85rem;"> - {{ d.head }}</span>{% endif %}
+                    <div style="font-size:0.82rem;color:var(--gray);">{{ d.courses.count() }} courses</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not departments %}
+            <div class="empty-state"><p>No departments yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
