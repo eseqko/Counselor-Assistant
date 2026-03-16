@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Counselor Assistant{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Counselor Assistant</h2>
+            <div class="subtitle">FERPA Compliant - Local Only</div>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-section">Main</div>
+            <a href="{{ url_for('dashboard.index') }}" class="nav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+                <span class="nav-icon">&#9776;</span> Dashboard
+            </a>
+
+            <div class="nav-section">Student Services</div>
+            <a href="{{ url_for('caseload.index') }}" class="nav-item {% if request.blueprint == 'caseload' %}active{% endif %}">
+                <span class="nav-icon">&#128101;</span> Caseload Manager
+            </a>
+            <a href="{{ url_for('notes.index') }}" class="nav-item {% if request.blueprint == 'notes' %}active{% endif %}">
+                <span class="nav-icon">&#128221;</span> Counselor Notes
+            </a>
+            <a href="{{ url_for('service_log.index') }}" class="nav-item {% if request.blueprint == 'service_log' %}active{% endif %}">
+                <span class="nav-icon">&#128203;</span> Service Log
+            </a>
+
+            <div class="nav-section">Planning</div>
+            <a href="{{ url_for('calendar.index') }}" class="nav-item {% if request.blueprint == 'calendar' %}active{% endif %}">
+                <span class="nav-icon">&#128197;</span> Calendar
+            </a>
+            <a href="{{ url_for('activity_log.index') }}" class="nav-item {% if request.blueprint == 'activity_log' %}active{% endif %}">
+                <span class="nav-icon">&#9202;</span> Activity Log
+            </a>
+
+            <div class="nav-section">Resources</div>
+            <a href="{{ url_for('course_catalog.index') }}" class="nav-item {% if request.blueprint == 'course_catalog' %}active{% endif %}">
+                <span class="nav-icon">&#128218;</span> Course Catalog
+            </a>
+            <a href="{{ url_for('glossary.index') }}" class="nav-item {% if request.blueprint == 'glossary' %}active{% endif %}">
+                <span class="nav-icon">&#128214;</span> Glossary
+            </a>
+            <a href="{{ url_for('reports.index') }}" class="nav-item {% if request.blueprint == 'reports' %}active{% endif %}">
+                <span class="nav-icon">&#128200;</span> Reports
+            </a>
+
+            <div class="nav-section">System</div>
+            <a href="{{ url_for('settings.index') }}" class="nav-item {% if request.blueprint == 'settings' %}active{% endif %}">
+                <span class="nav-icon">&#9881;</span> Settings
+            </a>
+            <a href="{{ url_for('auth.logout') }}" class="nav-item">
+                <span class="nav-icon">&#10140;</span> Logout
+            </a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
+                <span class="page-title">{% block page_title %}Dashboard{% endblock %}</span>
+            </div>
+            <div class="user-info">
+                <span>{{ current_user.display_name }}</span>
+                {% if current_user.school_name %}
+                <span style="color:#aaa">|</span>
+                <span>{{ current_user.school_name }}</span>
+                {% endif %}
+                <a href="{{ url_for('settings.profile') }}">Profile</a>
+            </div>
+        </div>
+
+        <div class="content-area">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    {% else %}
+    {% block public_content %}{% endblock %}
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

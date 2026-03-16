@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Add Service Record{% endblock %}
+{% block page_title %}Add Service Record{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">-- Select --</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date *</label>
+                    <input type="date" name="date" class="form-control" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Service Type *</label>
+                    <select name="service_type" class="form-control" required>
+                        {% for val, label in service_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Duration (min)</label>
+                    <input type="number" name="duration_minutes" class="form-control" min="1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Topic</label>
+                <input type="text" name="topic" class="form-control">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">--</option>
+                        <option value="academic">Academic</option>
+                        <option value="career">Career</option>
+                        <option value="social_emotional">Social/Emotional</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Delivery</label>
+                    <select name="delivery_method" class="form-control">
+                        <option value="">--</option>
+                        <option value="in_person">In Person</option>
+                        <option value="phone">Phone</option>
+                        <option value="email">Email</option>
+                        <option value="virtual">Virtual</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Setting</label>
+                    <input type="text" name="setting" class="form-control" placeholder="e.g., Office, Classroom">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Outcome</label>
+                <textarea name="outcome" class="form-control" rows="2"></textarea>
+            </div>
+            <div style="display:flex;gap:24px;">
+                <div class="form-check">
+                    <input type="checkbox" name="follow_up_required" id="follow_up_required">
+                    <label for="follow_up_required">Follow-up Required</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" name="referral_made" id="referral_made">
+                    <label for="referral_made">Referral Made</label>
+                </div>
+            </div>
+            <div class="form-row" style="margin-top:8px;">
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Referral To</label>
+                    <input type="text" name="referral_to" class="form-control">
+                </div>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save Record</button>
+                <a href="{{ url_for('service_log.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

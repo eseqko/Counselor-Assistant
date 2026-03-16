@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}New Note{% endblock %}
+{% block page_title %}New Counselor Note{% endblock %}
+{% block content %}
+<div class="card" style="max-width:800px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">-- Select Student --</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }} ({{ s.student_id_number }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Note Type *</label>
+                    <select name="note_type" class="form-control" required>
+                        {% for val, label in note_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Session Date</label>
+                    <input type="date" name="session_date" class="form-control" value="{{ today if today else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Duration (minutes)</label>
+                    <input type="number" name="duration_minutes" class="form-control" min="1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" name="title" class="form-control" placeholder="Brief description...">
+            </div>
+            <div class="form-group">
+                <label>Notes *</label>
+                <textarea name="content" class="form-control" rows="6" required placeholder="Session details..."></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in asca_domains %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Delivery Method</label>
+                    <select name="delivery_method" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in delivery_methods %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Topic Category</label>
+                    <input type="text" name="topic_category" class="form-control">
+                </div>
+            </div>
+            <h3 style="margin:20px 0 12px;font-size:0.95rem;">Follow-Up</h3>
+            <div class="form-check">
+                <input type="checkbox" name="follow_up_needed" id="follow_up_needed">
+                <label for="follow_up_needed">Follow-up needed</label>
+            </div>
+            <div class="form-row" style="margin-top:8px;">
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Follow-Up Notes</label>
+                    <input type="text" name="follow_up_notes" class="form-control">
+                </div>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="is_confidential" id="is_confidential" checked>
+                <label for="is_confidential">Mark as Confidential</label>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save Note</button>
+                <a href="{{ url_for('notes.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

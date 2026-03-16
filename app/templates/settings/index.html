@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All data is stored locally on this computer. Nothing is uploaded to the cloud.</div>
+
+<div class="stats-grid">
+    <a href="{{ url_for('settings.profile') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128100;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Profile</div>
+        <div style="font-size:0.8rem;color:var(--gray);">Update name & school</div>
+    </a>
+    <a href="{{ url_for('auth.change_password') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128272;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Password</div>
+        <div style="font-size:0.8rem;color:var(--gray);">Change your password</div>
+    </a>
+    <a href="{{ url_for('settings.audit_log') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128220;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Audit Log</div>
+        <div style="font-size:0.8rem;color:var(--gray);">FERPA compliance log</div>
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">Data Management</div>
+    <div class="card-body">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <form method="POST" action="{{ url_for('settings.backup') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">Create Backup</button>
+            </form>
+            <a href="{{ url_for('settings.export_backup') }}" class="btn btn-outline">Download Latest Backup</a>
+        </div>
+        <p style="margin-top:12px;font-size:0.82rem;color:var(--gray);">
+            Backups are stored locally in the data/backups directory. Regular backups are recommended.
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">About</div>
+    <div class="card-body">
+        <p><strong>Counselor Assistant</strong> - All-in-One School Counselor Management Tool</p>
+        <p style="font-size:0.85rem;color:var(--gray);margin-top:8px;">
+            100% local storage. FERPA & ASCA compliant. No cloud dependencies.<br>
+            Data stored in: <code>data/counselor.db</code>
+        </p>
+    </div>
+</div>
+{% endblock %}

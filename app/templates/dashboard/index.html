@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Counselor Assistant{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_students }}</div>
+        <div class="stat-label">Active Students</div>
+    </div>
+    <div class="stat-card accent">
+        <div class="stat-value">{{ todays_events|length }}</div>
+        <div class="stat-label">Today's Events</div>
+    </div>
+    <div class="stat-card info">
+        <div class="stat-value">{{ (total_minutes / 60)|round(1) }}h</div>
+        <div class="stat-label">Hours This Week</div>
+    </div>
+    <div class="stat-card danger">
+        <div class="stat-value">{{ follow_ups|length }}</div>
+        <div class="stat-label">Follow-Ups Due</div>
+    </div>
+</div>
+
+<!-- Use of Time Bar -->
+{% if total_minutes > 0 %}
+<div class="card">
+    <div class="card-header">Weekly Use of Time</div>
+    <div class="card-body">
+        <div class="time-chart">
+            {% if direct_minutes > 0 %}
+            <div class="segment direct" style="flex:{{ direct_minutes }}">{{ (direct_minutes/total_minutes*100)|round|int }}%</div>
+            {% endif %}
+            {% if indirect_minutes > 0 %}
+            <div class="segment indirect" style="flex:{{ indirect_minutes }}">{{ (indirect_minutes/total_minutes*100)|round|int }}%</div>
+            {% endif %}
+            {% if mgmt_minutes > 0 %}
+            <div class="segment management" style="flex:{{ mgmt_minutes }}">{{ (mgmt_minutes/total_minutes*100)|round|int }}%</div>
+            {% endif %}
+            {% if non_minutes > 0 %}
+            <div class="segment non-counseling" style="flex:{{ non_minutes }}">{{ (non_minutes/total_minutes*100)|round|int }}%</div>
+            {% endif %}
+        </div>
+        <div class="time-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div> Direct ({{ (direct_minutes/60)|round(1) }}h)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--info)"></div> Indirect ({{ (indirect_minutes/60)|round(1) }}h)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Management ({{ (mgmt_minutes/60)|round(1) }}h)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--gray)"></div> Non-Counseling ({{ (non_minutes/60)|round(1) }}h)</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="grid-2">
+    <!-- Today's Schedule -->
+    <div class="card">
+        <div class="card-header">
+            Today's Schedule
+            <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary">+ Add Event</a>
+        </div>
+        <div class="card-body">
+            {% if todays_events %}
+            {% for event in todays_events %}
+            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <strong>{{ event.title }}</strong>
+                    <div style="font-size:0.82rem;color:var(--gray);">
+                        {{ event.start_datetime.strftime('%I:%M %p') }} - {{ event.end_datetime.strftime('%I:%M %p') }}
+                        {% if event.location %}| {{ event.location }}{% endif %}
+                    </div>
+                </div>
+                <span class="badge badge-{{ 'success' if event.status == 'completed' else 'primary' }}">{{ event.event_type }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state"><p>No events scheduled for today.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Follow-Ups Due -->
+    <div class="card">
+        <div class="card-header">Follow-Ups Due</div>
+        <div class="card-body">
+            {% if follow_ups %}
+            {% for note in follow_ups %}
+            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;">
+                <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);">
+                    <strong>{{ note.student.display_name }}</strong> - {{ note.title or note.note_type }}
+                    <div style="font-size:0.82rem;color:var(--gray);">
+                        Due: {{ note.follow_up_date.strftime('%m/%d/%Y') if note.follow_up_date else 'No date' }}
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state"><p>No follow-ups due this week.</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card">
+    <div class="card-header">Quick Actions</div>
+    <div class="card-body">
+        <div class="quick-actions">
+            <a href="{{ url_for('caseload.add_student') }}" class="quick-action">
+                <span class="qa-icon">&#128100;</span> Add Student
+            </a>
+            <a href="{{ url_for('notes.add_note') }}" class="quick-action">
+                <span class="qa-icon">&#128221;</span> New Note
+            </a>
+            <a href="{{ url_for('calendar.add_event') }}" class="quick-action">
+                <span class="qa-icon">&#128197;</span> New Event
+            </a>
+            <a href="{{ url_for('activity_log.add_activity') }}" class="quick-action">
+                <span class="qa-icon">&#9202;</span> Log Activity
+            </a>
+            <a href="{{ url_for('service_log.add_record') }}" class="quick-action">
+                <span class="qa-icon">&#128203;</span> Log Service
+            </a>
+            <a href="{{ url_for('reports.use_of_time') }}" class="quick-action">
+                <span class="qa-icon">&#128200;</span> Use of Time
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Recent Notes</div>
+        <div class="card-body">
+            {% for note in recent_notes %}
+            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;">
+                <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);">
+                    <strong>{{ note.student.display_name }}</strong>
+                    <span class="badge badge-info">{{ note.note_type }}</span>
+                    <div style="font-size:0.82rem;color:var(--gray);">{{ note.session_date.strftime('%m/%d/%Y') }}</div>
+                </a>
+            </div>
+            {% endfor %}
+            {% if not recent_notes %}
+            <div class="empty-state"><p>No notes yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Recent Services</div>
+        <div class="card-body">
+            {% for rec in recent_services %}
+            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;">
+                <strong>{{ rec.student.display_name }}</strong>
+                <span class="badge badge-primary">{{ rec.service_type }}</span>
+                <div style="font-size:0.82rem;color:var(--gray);">{{ rec.date.strftime('%m/%d/%Y') }}{% if rec.topic %} - {{ rec.topic }}{% endif %}</div>
+            </div>
+            {% endfor %}
+            {% if not recent_services %}
+            <div class="empty-state"><p>No service records yet.</p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}

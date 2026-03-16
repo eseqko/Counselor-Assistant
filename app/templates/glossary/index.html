@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Glossary{% endblock %}
+{% block page_title %}Counseling Glossary{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Search</label>
+            <input type="text" name="search" class="form-control" placeholder="Search terms..." value="{{ search }}">
+        </div>
+        <div class="form-group">
+            <label>Category</label>
+            <select name="category" class="form-control">
+                <option value="">All</option>
+                {% for val, label in categories %}
+                <option value="{{ val }}" {{ 'selected' if category == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <a href="{{ url_for('glossary.add_term') }}" class="btn btn-sm btn-primary">+ Add Term</a>
+        </div>
+    </form>
+</div>
+
+{% if not grouped %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No glossary terms yet.</p>
+            <form method="POST" action="{{ url_for('glossary.seed_glossary') }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">Seed with ASCA Terms</button>
+            </form>
+            <span style="margin:0 8px;">or</span>
+            <a href="{{ url_for('glossary.add_term') }}" class="btn btn-outline">Add Manually</a>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        {% for letter, terms in grouped.items() %}
+        <div class="glossary-letter">{{ letter }}</div>
+        {% for t in terms %}
+        <div class="glossary-term">
+            <div style="display:flex;justify-content:space-between;align-items:start;">
+                <div>
+                    <h4>{{ t.term }}</h4>
+                    <p>{{ t.definition }}</p>
+                    {% if t.category %}
+                    <span class="badge badge-info">{{ t.category.replace('_', ' ').title() }}</span>
+                    {% endif %}
+                    {% if t.source %}
+                    <span style="font-size:0.78rem;color:var(--gray);">Source: {{ t.source }}</span>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('glossary.edit_term', id=t.id) }}" class="btn btn-sm btn-outline" style="white-space:nowrap;">Edit</a>
+            </div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Edit Activity{% endblock %}
+{% block page_title %}Edit Activity{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Title *</label>
+                <input type="text" name="title" class="form-control" value="{{ activity.title }}" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="date" class="form-control" value="{{ activity.date.strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="form-group">
+                    <label>Start</label>
+                    <input type="time" name="start_time" id="start_time" class="form-control" value="{{ activity.start_time.strftime('%H:%M') if activity.start_time else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>End</label>
+                    <input type="time" name="end_time" id="end_time" class="form-control" value="{{ activity.end_time.strftime('%H:%M') if activity.end_time else '' }}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Service Type *</label>
+                    <select name="service_type" id="service_type" class="form-control" required>
+                        {% for val, label in service_types %}
+                        <option value="{{ val }}" {{ 'selected' if activity.service_type == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <input type="text" name="category" class="form-control" value="{{ activity.category }}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Delivery Type</label>
+                    <select name="delivery_type" class="form-control">
+                        <option value="">--</option>
+                        {% for v in ['individual', 'small_group', 'classroom', 'school_wide'] %}
+                        <option value="{{ v }}" {{ 'selected' if activity.delivery_type == v }}>{{ v.replace('_', ' ').title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label># Students</label>
+                    <input type="number" name="num_students" class="form-control" value="{{ activity.num_students }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Topic</label>
+                <input type="text" name="topic" class="form-control" value="{{ activity.topic }}">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3">{{ activity.description }}</textarea>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('activity_log.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+        <form method="POST" action="{{ url_for('activity_log.delete_activity', id=activity.id) }}" data-confirm="Delete this activity?" style="margin-top:12px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

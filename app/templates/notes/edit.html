@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Edit Note{% endblock %}
+{% block page_title %}Edit Note{% endblock %}
+{% block content %}
+<div class="card" style="max-width:800px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Note Type *</label>
+                    <select name="note_type" class="form-control" required>
+                        {% for val, label in note_types %}
+                        <option value="{{ val }}" {{ 'selected' if note.note_type == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Session Date</label>
+                    <input type="date" name="session_date" class="form-control" value="{{ note.session_date.strftime('%Y-%m-%d') if note.session_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Duration (min)</label>
+                    <input type="number" name="duration_minutes" class="form-control" value="{{ note.duration_minutes or '' }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" name="title" class="form-control" value="{{ note.title }}">
+            </div>
+            <div class="form-group">
+                <label>Notes *</label>
+                <textarea name="content" class="form-control" rows="6" required>{{ note.content }}</textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in asca_domains %}
+                        <option value="{{ val }}" {{ 'selected' if note.asca_domain == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Delivery Method</label>
+                    <select name="delivery_method" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in delivery_methods %}
+                        <option value="{{ val }}" {{ 'selected' if note.delivery_method == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Topic</label>
+                    <input type="text" name="topic_category" class="form-control" value="{{ note.topic_category }}">
+                </div>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="follow_up_needed" id="follow_up_needed" {{ 'checked' if note.follow_up_needed }}>
+                <label for="follow_up_needed">Follow-up needed</label>
+            </div>
+            <div class="form-row" style="margin-top:8px;">
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control" value="{{ note.follow_up_date.strftime('%Y-%m-%d') if note.follow_up_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Follow-Up Notes</label>
+                    <input type="text" name="follow_up_notes" class="form-control" value="{{ note.follow_up_notes }}">
+                </div>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="is_confidential" id="is_confidential" {{ 'checked' if note.is_confidential }}>
+                <label for="is_confidential">Confidential</label>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <a href="{{ url_for('notes.view_note', id=note.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+        <form method="POST" action="{{ url_for('notes.delete_note', id=note.id) }}" data-confirm="Delete this note?" style="margin-top:12px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger">Delete Note</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

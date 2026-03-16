@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Caseload Summary{% endblock %}
+{% block page_title %}Caseload Summary Report{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:12px;"><button class="btn btn-sm btn-outline btn-print">Print Report</button></div>
+
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">{{ total_students }}</div><div class="stat-label">Total Active Students</div></div>
+    <div class="stat-card warning"><div class="stat-value">{{ iep_count }}</div><div class="stat-label">IEP Students</div></div>
+    <div class="stat-card info"><div class="stat-value">{{ section_504_count }}</div><div class="stat-label">504 Plans</div></div>
+    <div class="stat-card accent"><div class="stat-value">{{ ell_count }}</div><div class="stat-label">ELL Students</div></div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">By Grade Level</div>
+        <div class="card-body">
+            <table>
+                <thead><tr><th>Grade</th><th>Count</th><th>%</th></tr></thead>
+                <tbody>
+                    {% for grade, count in by_grade.items() %}
+                    <tr>
+                        <td>Grade {{ grade }}</td>
+                        <td>{{ count }}</td>
+                        <td>{{ (count/total_students*100)|round(1) if total_students > 0 else 0 }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">By Gender</div>
+        <div class="card-body">
+            <table>
+                <thead><tr><th>Gender</th><th>Count</th><th>%</th></tr></thead>
+                <tbody>
+                    {% for gender, count in by_gender.items() %}
+                    <tr>
+                        <td>{{ gender }}</td>
+                        <td>{{ count }}</td>
+                        <td>{{ (count/total_students*100)|round(1) if total_students > 0 else 0 }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if by_ethnicity %}
+<div class="card">
+    <div class="card-header">By Ethnicity</div>
+    <div class="card-body">
+        <table>
+            <thead><tr><th>Ethnicity</th><th>Count</th><th>%</th></tr></thead>
+            <tbody>
+                {% for eth, count in by_ethnicity.items() %}
+                <tr>
+                    <td>{{ eth }}</td>
+                    <td>{{ count }}</td>
+                    <td>{{ (count/total_students*100)|round(1) if total_students > 0 else 0 }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

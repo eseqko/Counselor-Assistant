@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Edit Course{% endblock %}
+{% block page_title %}Edit Course{% endblock %}
+{% block content %}
+<div class="card" style="max-width:800px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group"><label>Course # *</label><input type="text" name="course_number" class="form-control" value="{{ course.course_number }}" required></div>
+                <div class="form-group"><label>Title *</label><input type="text" name="title" class="form-control" value="{{ course.title }}" required></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Department</label>
+                    <select name="department_id" class="form-control">
+                        <option value="">--</option>
+                        {% for d in departments %}
+                        <option value="{{ d.id }}" {{ 'selected' if course.department_id == d.id }}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="course_type" class="form-control">
+                        {% for val, label in course_types %}
+                        <option value="{{ val }}" {{ 'selected' if course.course_type == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group"><label>Description</label><textarea name="description" class="form-control" rows="3">{{ course.description }}</textarea></div>
+            <div class="form-row">
+                <div class="form-group"><label>Credits</label><input type="number" name="credits" class="form-control" step="0.5" value="{{ course.credits }}"></div>
+                <div class="form-group"><label>Grades</label><input type="text" name="grade_levels" class="form-control" value="{{ course.grade_levels }}"></div>
+                <div class="form-group"><label>Semesters</label><select name="semesters" class="form-control"><option value="2" {{ 'selected' if course.semesters == 2 }}>Full Year</option><option value="1" {{ 'selected' if course.semesters == 1 }}>Semester</option></select></div>
+            </div>
+            <div class="form-group"><label>Prerequisites</label><input type="text" name="prerequisites" class="form-control" value="{{ course.prerequisites }}"></div>
+            <div class="form-row">
+                <div class="form-group"><label>Meets Requirement</label><input type="text" name="meets_requirement" class="form-control" value="{{ course.meets_requirement }}"></div>
+                <div class="form-group"><label>School Year</label><input type="text" name="school_year" class="form-control" value="{{ course.school_year }}"></div>
+            </div>
+            <div style="display:flex;gap:24px;margin:12px 0;">
+                <div class="form-check"><input type="checkbox" name="is_weighted" {{ 'checked' if course.is_weighted }}><label>Weighted</label></div>
+                <div class="form-check"><input type="checkbox" name="ncaa_approved" {{ 'checked' if course.ncaa_approved }}><label>NCAA</label></div>
+            </div>
+            <div class="form-group"><label>GPA Weight</label><input type="number" name="weight" class="form-control" step="0.5" value="{{ course.weight }}" style="width:120px;"></div>
+            <div class="form-group"><label>Detailed Description</label><textarea name="detailed_description" class="form-control" rows="6">{{ course.detailed_description }}</textarea></div>
+            <div class="form-group"><label>Counselor Notes</label><textarea name="notes" class="form-control" rows="3">{{ course.notes }}</textarea></div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('course_catalog.view_course', id=course.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

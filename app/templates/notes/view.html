@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Note - {{ note.student.display_name }}{% endblock %}
+{% block page_title %}Counselor Note{% endblock %}
+{% block content %}
+<div class="ferpa-notice">&#128274; Confidential Record - Access Logged</div>
+
+<div class="card" style="max-width:800px;">
+    <div class="card-header">
+        {{ note.title or note.note_type }}
+        <div class="btn-group">
+            <a href="{{ url_for('notes.edit_note', id=note.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            <button class="btn btn-sm btn-outline btn-print">Print</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+            <div><strong>Student:</strong> <a href="{{ url_for('caseload.view_student', id=note.student.id) }}">{{ note.student.display_name }}</a></div>
+            <div><strong>Date:</strong> {{ note.session_date.strftime('%m/%d/%Y') }}</div>
+            <div><strong>Type:</strong> <span class="badge badge-info">{{ note.note_type }}</span></div>
+            <div><strong>Duration:</strong> {{ note.duration_minutes or 'N/A' }} min</div>
+            <div><strong>ASCA Domain:</strong> {{ note.asca_domain or 'N/A' }}</div>
+            <div><strong>Delivery:</strong> {{ note.delivery_method or 'N/A' }}</div>
+            {% if note.topic_category %}<div><strong>Topic:</strong> {{ note.topic_category }}</div>{% endif %}
+        </div>
+
+        <h3 style="font-size:0.95rem;margin-bottom:8px;">Notes</h3>
+        <div style="background:var(--bg);padding:16px;border-radius:6px;line-height:1.6;white-space:pre-wrap;">{{ note.content }}</div>
+
+        {% if note.follow_up_needed %}
+        <div style="margin-top:20px;padding:12px;background:#FFF3D6;border-radius:6px;">
+            <strong>Follow-Up Required</strong>
+            {% if note.follow_up_date %}<br>Date: {{ note.follow_up_date.strftime('%m/%d/%Y') }}{% endif %}
+            {% if note.follow_up_notes %}<br>{{ note.follow_up_notes }}{% endif %}
+        </div>
+        {% endif %}
+
+        <div style="margin-top:16px;font-size:0.8rem;color:var(--gray);">
+            Created: {{ note.created_at.strftime('%m/%d/%Y %I:%M %p') }}
+            {% if note.updated_at != note.created_at %}| Updated: {{ note.updated_at.strftime('%m/%d/%Y %I:%M %p') }}{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

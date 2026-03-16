@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Add Term{% endblock %}
+{% block page_title %}Add Glossary Term{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group"><label>Term *</label><input type="text" name="term" class="form-control" required></div>
+            <div class="form-group"><label>Definition *</label><textarea name="definition" class="form-control" rows="4" required></textarea></div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category" class="form-control">
+                    <option value="">--</option>
+                    {% for val, label in categories %}
+                    <option value="{{ val }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label>Related Terms</label><input type="text" name="related_terms" class="form-control" placeholder="Comma-separated..."></div>
+            <div class="form-group"><label>Source</label><input type="text" name="source" class="form-control" placeholder="e.g., ASCA National Model"></div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Add Term</button>
+                <a href="{{ url_for('glossary.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

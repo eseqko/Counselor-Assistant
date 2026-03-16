@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Login - Counselor Assistant{% endblock %}
+{% block public_content %}
+<div class="login-page">
+    <div class="login-card">
+        <h1>Counselor Assistant</h1>
+        <p class="subtitle">FERPA-Compliant Local Counselor Tool</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" class="form-control" required autofocus>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Sign In</button>
+        </form>
+
+        <div class="ferpa-notice" style="margin-top:20px;">
+            &#128274; All data stored locally. No cloud uploads. FERPA compliant.
+        </div>
+    </div>
+</div>
+{% endblock %}

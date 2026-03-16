@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Caseload Manager{% endblock %}
+{% block page_title %}Caseload Manager{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Search</label>
+            <input type="text" name="search" class="form-control" placeholder="Name or ID..." value="{{ search }}">
+        </div>
+        <div class="form-group">
+            <label>Grade</label>
+            <select name="grade" class="form-control">
+                <option value="">All Grades</option>
+                {% for g in range(6, 13) %}
+                <option value="{{ g }}" {{ 'selected' if grade == g|string }}>Grade {{ g }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <select name="status" class="form-control">
+                <option value="">All</option>
+                <option value="active" {{ 'selected' if status == 'active' }}>Active</option>
+                <option value="inactive" {{ 'selected' if status == 'inactive' }}>Inactive</option>
+                <option value="transferred" {{ 'selected' if status == 'transferred' }}>Transferred</option>
+                <option value="graduated" {{ 'selected' if status == 'graduated' }}>Graduated</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Tag</label>
+            <select name="tag" class="form-control">
+                <option value="">All Tags</option>
+                {% for tag in tags %}
+                <option value="{{ tag.name }}" {{ 'selected' if tag_filter == tag.name }}>{{ tag.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <a href="{{ url_for('caseload.index') }}" class="btn btn-outline btn-sm">Clear</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Students ({{ students|length }})
+        <a href="{{ url_for('caseload.add_student') }}" class="btn btn-sm btn-primary">+ Add Student</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>ID</th>
+                    <th>Grade</th>
+                    <th>Status</th>
+                    <th>Tags</th>
+                    <th>Flags</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr>
+                    <td><a href="{{ url_for('caseload.view_student', id=student.id) }}" style="text-decoration:none;color:var(--primary);font-weight:600;">{{ student.full_name }}</a></td>
+                    <td>{{ student.student_id_number }}</td>
+                    <td>{{ student.grade_level or '-' }}</td>
+                    <td><span class="badge badge-{{ 'success' if student.status == 'active' else 'gray' }}">{{ student.status }}</span></td>
+                    <td>{% for tag in student.tags %}<span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span> {% endfor %}</td>
+                    <td>
+                        {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
+                        {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+                        {% if student.ell_status %}<span class="badge badge-primary">ELL</span>{% endif %}
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <a href="{{ url_for('caseload.view_student', id=student.id) }}" class="btn btn-sm btn-outline">View</a>
+                            <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-outline">+ Note</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not students %}
+                <tr><td colspan="7">
+                    <div class="empty-state"><p>No students found. <a href="{{ url_for('caseload.add_student') }}">Add your first student.</a></p></div>
+                </td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

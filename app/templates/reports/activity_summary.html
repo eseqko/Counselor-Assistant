@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Activity Summary{% endblock %}
+{% block page_title %}Activity Summary Report{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;">
+        <div class="form-group">
+            <label>From</label>
+            <input type="date" name="date_from" class="form-control" value="{{ date_from.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <label>To</label>
+            <input type="date" name="date_to" class="form-control" value="{{ date_to.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Update</button>
+            <button type="button" class="btn btn-outline btn-sm btn-print">Print</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">Activities: {{ date_from.strftime('%m/%d/%Y') }} - {{ date_to.strftime('%m/%d/%Y') }}</div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Title</th><th>Type</th><th>Category</th><th>Duration</th><th>Students</th></tr></thead>
+            <tbody>
+                {% for a in activities %}
+                <tr>
+                    <td>{{ a.date.strftime('%m/%d/%Y') }}</td>
+                    <td>{{ a.title }}</td>
+                    <td><span class="badge badge-{{ 'success' if a.service_type == 'direct_student' else 'info' if a.service_type == 'indirect_student' else 'warning' if a.service_type == 'program_management' else 'gray' }}">{{ a.service_type.replace('_', ' ').title() }}</span></td>
+                    <td>{{ (a.category or '').replace('_', ' ').title() }}</td>
+                    <td>{{ a.duration_minutes or '-' }} min</td>
+                    <td>{{ a.num_students or '-' }}</td>
+                </tr>
+                {% endfor %}
+                {% if not activities %}
+                <tr><td colspan="6"><div class="empty-state"><p>No activities for this period.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

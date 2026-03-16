@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Edit Service Record{% endblock %}
+{% block page_title %}Edit Service Record{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="date" class="form-control" value="{{ record.date.strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="form-group">
+                    <label>Service Type *</label>
+                    <select name="service_type" class="form-control" required>
+                        {% for val, label in service_types %}
+                        <option value="{{ val }}" {{ 'selected' if record.service_type == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Duration (min)</label>
+                    <input type="number" name="duration_minutes" class="form-control" value="{{ record.duration_minutes or '' }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Topic</label>
+                <input type="text" name="topic" class="form-control" value="{{ record.topic }}">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">--</option>
+                        {% for v in ['academic', 'career', 'social_emotional'] %}
+                        <option value="{{ v }}" {{ 'selected' if record.asca_domain == v }}>{{ v.replace('_', '/').title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Delivery</label>
+                    <select name="delivery_method" class="form-control">
+                        <option value="">--</option>
+                        {% for v in ['in_person', 'phone', 'email', 'virtual'] %}
+                        <option value="{{ v }}" {{ 'selected' if record.delivery_method == v }}>{{ v.replace('_', ' ').title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Setting</label>
+                    <input type="text" name="setting" class="form-control" value="{{ record.setting }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3">{{ record.description }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Outcome</label>
+                <textarea name="outcome" class="form-control" rows="2">{{ record.outcome }}</textarea>
+            </div>
+            <div style="display:flex;gap:24px;">
+                <div class="form-check">
+                    <input type="checkbox" name="follow_up_required" {{ 'checked' if record.follow_up_required }}>
+                    <label>Follow-up</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" name="referral_made" {{ 'checked' if record.referral_made }}>
+                    <label>Referral</label>
+                </div>
+            </div>
+            <div class="form-row" style="margin-top:8px;">
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control" value="{{ record.follow_up_date.strftime('%Y-%m-%d') if record.follow_up_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Referral To</label>
+                    <input type="text" name="referral_to" class="form-control" value="{{ record.referral_to }}">
+                </div>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('service_log.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+        <form method="POST" action="{{ url_for('service_log.delete_record', id=record.id) }}" data-confirm="Delete?" style="margin-top:12px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Student Services Report{% endblock %}
+{% block page_title %}Student Services Report{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group">
+            <label>Student *</label>
+            <select name="student_id" class="form-control" required>
+                <option value="">-- Select Student --</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>From</label>
+            <input type="date" name="date_from" class="form-control" value="{{ date_from.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <label>To</label>
+            <input type="date" name="date_to" class="form-control" value="{{ date_to.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Generate</button>
+            <button type="button" class="btn btn-outline btn-sm btn-print">Print</button>
+        </div>
+    </form>
+</div>
+
+{% if selected_student %}
+<div class="card">
+    <div class="card-header">Service Report: {{ selected_student.display_name }} ({{ selected_student.student_id_number }})</div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value">{{ total_sessions }}</div><div class="stat-label">Total Sessions</div></div>
+            <div class="stat-card info"><div class="stat-value">{{ (total_minutes/60)|round(1) }}h</div><div class="stat-label">Total Time</div></div>
+        </div>
+
+        {% if by_type %}
+        <h3 style="font-size:0.95rem;margin:16px 0 8px;">By Service Type</h3>
+        {% for stype, count in by_type.items() %}
+        <span class="badge badge-primary" style="margin:2px;">{{ stype.replace('_', ' ').title() }}: {{ count }}</span>
+        {% endfor %}
+        {% endif %}
+
+        <h3 style="font-size:0.95rem;margin:20px 0 8px;">Service History</h3>
+        <table>
+            <thead><tr><th>Date</th><th>Service</th><th>Topic</th><th>Duration</th><th>Outcome</th></tr></thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td>{{ r.date.strftime('%m/%d/%Y') }}</td>
+                    <td>{{ r.service_type.replace('_', ' ').title() }}</td>
+                    <td>{{ r.topic or '-' }}</td>
+                    <td>{{ r.duration_minutes or '-' }} min</td>
+                    <td>{{ r.outcome or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

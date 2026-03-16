@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Calendar{% endblock %}
+{% block page_title %}Calendar{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.css">
+{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        Calendar
+        <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary">+ New Event</a>
+    </div>
+    <div class="card-body">
+        <div id="calendar" style="min-height:600px;"></div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+        },
+        events: '{{ url_for("calendar.get_events") }}',
+        editable: false,
+        selectable: true,
+        eventClick: function(info) {
+            window.location.href = '/calendar/' + info.event.id + '/edit';
+        },
+        select: function(info) {
+            window.location.href = '{{ url_for("calendar.add_event") }}?start=' + info.startStr;
+        },
+        height: 'auto',
+    });
+    calendar.render();
+});
+</script>
+{% endblock %}

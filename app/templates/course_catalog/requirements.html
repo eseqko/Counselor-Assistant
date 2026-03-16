@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Graduation Requirements{% endblock %}
+{% block page_title %}Graduation Requirements{% endblock %}
+{% block content %}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Add Requirement</div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('course_catalog.add_requirement') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group"><label>Name *</label><input type="text" name="name" class="form-control" required placeholder="e.g., English"></div>
+                <div class="form-group"><label>Credits Required *</label><input type="number" name="credits_required" class="form-control" step="0.5" required></div>
+                <div class="form-group"><label>Description</label><textarea name="description" class="form-control" rows="2"></textarea></div>
+                <div class="form-group"><label>Qualifying Courses</label><input type="text" name="qualifying_courses" class="form-control" placeholder="Course numbers..."></div>
+                <button type="submit" class="btn btn-primary">Add</button>
+            </form>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Requirements</div>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>Subject</th><th>Credits</th><th>Description</th></tr></thead>
+                <tbody>
+                    {% for r in requirements %}
+                    <tr>
+                        <td><strong>{{ r.name }}</strong></td>
+                        <td>{{ r.credits_required }}</td>
+                        <td>{{ r.description or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not requirements %}
+                    <tr><td colspan="3"><div class="empty-state"><p>No requirements defined yet.</p></div></td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

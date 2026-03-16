@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Log Activity{% endblock %}
+{% block page_title %}Log Activity{% endblock %}
+{% block content %}
+<div class="card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Activity Title *</label>
+                <input type="text" name="title" class="form-control" required placeholder="e.g., Individual counseling session with student">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date *</label>
+                    <input type="date" name="date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Start Time</label>
+                    <input type="time" name="start_time" id="start_time" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>End Time</label>
+                    <input type="time" name="end_time" id="end_time" class="form-control">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Duration (minutes)</label>
+                <input type="number" name="duration_minutes" id="duration_minutes" class="form-control" min="1" placeholder="Auto-calculated from times">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Service Type *</label>
+                    <select name="service_type" id="service_type" class="form-control" required>
+                        <option value="">-- Select --</option>
+                        {% for val, label in service_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select name="category" id="category" class="form-control">
+                        <option value="">-- Select Service Type First --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Delivery Type</label>
+                    <select name="delivery_type" class="form-control">
+                        <option value="">--</option>
+                        <option value="individual">Individual</option>
+                        <option value="small_group">Small Group</option>
+                        <option value="classroom">Classroom</option>
+                        <option value="school_wide">School-Wide</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Number of Students</label>
+                    <input type="number" name="num_students" class="form-control" min="0" value="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Topic</label>
+                <input type="text" name="topic" class="form-control" placeholder="e.g., Conflict Resolution, Academic Planning">
+            </div>
+            <div class="form-group">
+                <label>Grade Levels</label>
+                <input type="text" name="grade_levels" class="form-control" placeholder="e.g., 9,10">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="btn-group" style="margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Log Activity</button>
+                <a href="{{ url_for('activity_log.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+window.CATEGORIES = {{ categories|tojson }};
+</script>
+{% endblock %}
