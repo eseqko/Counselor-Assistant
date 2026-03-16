@@ -5,10 +5,14 @@ from app import db
 from app.models.student import Student, Tag
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.datavalidation import DataValidation
+try:
+    from openpyxl import Workbook, load_workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
 
 caseload_bp = Blueprint('caseload', __name__)
 
@@ -173,6 +177,9 @@ def delete_student(id):
 @login_required
 def download_template():
     """Generate and download a formatted Excel template for caseload upload."""
+    if not HAS_OPENPYXL:
+        flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
+        return redirect(url_for('caseload.caseload_list'))
     wb = Workbook()
     ws = wb.active
     ws.title = "Caseload Import"
@@ -341,6 +348,9 @@ def download_template():
 @caseload_bp.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload_caseload():
+    if not HAS_OPENPYXL:
+        flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
+        return redirect(url_for('caseload.caseload_list'))
     if request.method == 'POST':
         file = request.files.get('file')
         if not file or not file.filename.endswith(('.xlsx', '.xls')):
@@ -476,6 +486,9 @@ def upload_caseload():
 @login_required
 def export_caseload():
     """Export current caseload to Excel."""
+    if not HAS_OPENPYXL:
+        flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
+        return redirect(url_for('caseload.caseload_list'))
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id
     ).order_by(Student.grade_level, Student.last_name).all()
