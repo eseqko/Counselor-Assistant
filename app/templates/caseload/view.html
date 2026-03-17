@@ -82,8 +82,8 @@
     </div>
     {% if latest_transcript %}
     <div class="card-body">
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
-            <!-- Graduation -->
+        <!-- ── Summary Cards ── -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
             <div style="flex:1;min-width:200px;padding:14px;border-radius:8px;border:1px solid #e5e7eb;
                 {% if latest_transcript.risk_level == 'critical' %}background:#fef2f2;border-color:#fecaca;
                 {% elif latest_transcript.risk_level in ('at-risk', 'warning') %}background:#fffbeb;border-color:#fde68a;
@@ -101,7 +101,6 @@
                         {{ latest_transcript.risk_level|upper|replace('-', ' ') }}
                     </span>
                 </div>
-                <!-- Progress bar -->
                 <div style="height:6px;background:#e5e7eb;border-radius:3px;margin-top:8px;overflow:hidden;">
                     <div style="height:100%;border-radius:3px;width:{{ [((latest_transcript.total_completed / 225) * 100)|round|int, 100]|min }}%;
                         {% if latest_transcript.risk_level == 'critical' %}background:#dc2626;
@@ -109,7 +108,6 @@
                         {% else %}background:#059669;{% endif %}"></div>
                 </div>
             </div>
-            <!-- a-g -->
             <div style="flex:1;min-width:200px;padding:14px;border-radius:8px;border:1px solid #e5e7eb;
                 {% if latest_transcript.ag_status == 'deficient' %}background:#fef2f2;border-color:#fecaca;
                 {% elif latest_transcript.ag_status == 'verify' %}background:#fffbeb;border-color:#fde68a;
@@ -124,34 +122,207 @@
                 <div style="font-size:0.78rem;color:#6b7280;">
                     areas met |
                     <span class="badge badge-{{ 'danger' if latest_transcript.ag_status == 'deficient' else 'warning' if latest_transcript.ag_status == 'verify' else 'success' }}">
-                        {% if latest_transcript.ag_status == 'deficient' %}DEFICIENT
-                        {% elif latest_transcript.ag_status == 'verify' %}VERIFY
-                        {% else %}ON TRACK{% endif %}
+                        {% if latest_transcript.ag_status == 'deficient' %}DEFICIENT{% elif latest_transcript.ag_status == 'verify' %}VERIFY{% else %}ON TRACK{% endif %}
                     </span>
                     {% if latest_transcript.ag_areas_deficient %}| {{ latest_transcript.ag_areas_deficient }} deficient{% endif %}
                 </div>
             </div>
-            <!-- CTE -->
             <div style="flex:1;min-width:200px;padding:14px;border-radius:8px;border:1px solid #e5e7eb;
                 {% if latest_transcript.cte_is_completer %}background:#f5f3ff;border-color:#ddd6fe;
                 {% else %}background:#eff6ff;border-color:#bfdbfe;{% endif %}">
                 <div style="font-size:0.72rem;text-transform:uppercase;font-weight:700;color:#6b7280;letter-spacing:0.5px;">CTE Pathway</div>
-                <div style="font-size:1.5rem;font-weight:700;margin:4px 0;
-                    {% if latest_transcript.cte_is_completer %}color:#7c3aed;{% else %}color:#2563eb;{% endif %}">
+                <div style="font-size:1.5rem;font-weight:700;margin:4px 0;{% if latest_transcript.cte_is_completer %}color:#7c3aed;{% else %}color:#2563eb;{% endif %}">
                     {{ latest_transcript.cte_completed|int }} credits
                 </div>
                 <div style="font-size:0.78rem;color:#6b7280;">
+                    {% if latest_transcript.cte_is_completer %}<span class="badge" style="background:#ede9fe;color:#5b21b6;">COMPLETER</span>
+                    {% elif latest_transcript.cte_level and latest_transcript.cte_level != 'none' %}<span class="badge badge-info">{{ latest_transcript.cte_level|upper }}</span>
+                    {% else %}<span class="badge badge-gray">NOT STARTED</span>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Detail Tabs ── -->
+        <div style="border-bottom:2px solid #e5e7eb;display:flex;gap:0;margin-bottom:0;">
+            <button class="transcript-tab active" onclick="switchTranscriptTab('grad', this)" style="padding:8px 16px;font-size:0.82rem;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280;border-bottom:2px solid transparent;margin-bottom:-2px;">
+                Graduation Credits
+            </button>
+            <button class="transcript-tab" onclick="switchTranscriptTab('ag', this)" style="padding:8px 16px;font-size:0.82rem;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280;border-bottom:2px solid transparent;margin-bottom:-2px;">
+                a-g Requirements
+            </button>
+            <button class="transcript-tab" onclick="switchTranscriptTab('cte', this)" style="padding:8px 16px;font-size:0.82rem;font-weight:600;border:none;background:none;cursor:pointer;color:#6b7280;border-bottom:2px solid transparent;margin-bottom:-2px;">
+                CTE Pathway
+            </button>
+        </div>
+
+        <!-- ── Graduation Credits Table ── -->
+        <div id="transcript-panel-grad" class="transcript-panel" style="padding-top:12px;">
+            {% if transcript_credits %}
+            <div class="table-responsive">
+                <table style="width:100%;font-size:0.84rem;border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#1a365d;color:white;">
+                            <th style="padding:8px 10px;text-align:left;font-weight:600;font-size:0.78rem;">Subject Area</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Req'd</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Completed</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">WIP</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Still Need</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subject, data in transcript_credits.items() %}
+                        {% set need = [0, (data.required|default(0)) - (data.completed|default(0)) - (data.wip|default(0))]|max %}
+                        <tr style="border-bottom:1px solid #e5e7eb;
+                            {% if need > 0 %}background:#fff5f5;{% elif data.wip|default(0) > 0 %}background:#fffff0;{% endif %}">
+                            <td style="padding:7px 10px;">
+                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;
+                                    {% if need <= 0 %}background:#38a169;{% elif need > 0 %}background:#e53e3e;{% endif %}"></span>
+                                {{ subject }}
+                            </td>
+                            <td style="padding:7px 10px;text-align:center;">{{ data.required|default(0)|int }}</td>
+                            <td style="padding:7px 10px;text-align:center;font-weight:600;">{{ data.completed|default(0)|int }}</td>
+                            <td style="padding:7px 10px;text-align:center;color:#d69e2e;">{{ data.wip|default(0)|int if data.wip|default(0) > 0 else '-' }}</td>
+                            <td style="padding:7px 10px;text-align:center;{% if need > 0 %}color:#dc2626;font-weight:700;{% endif %}">
+                                {{ need|int if need > 0 else '-' }}
+                            </td>
+                            <td style="padding:7px 10px;text-align:center;">
+                                {% if need <= 0 and data.wip|default(0) > 0 %}
+                                    <span class="badge badge-warning" style="font-size:0.7rem;">In Progress</span>
+                                {% elif need <= 0 %}
+                                    <span class="badge badge-success" style="font-size:0.7rem;">Complete</span>
+                                {% else %}
+                                    <span class="badge badge-danger" style="font-size:0.7rem;">Need {{ need|int }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        <!-- Totals row -->
+                        <tr style="background:#edf2f7;font-weight:700;border-top:2px solid #cbd5e0;">
+                            <td style="padding:8px 10px;">TOTALS</td>
+                            <td style="padding:8px 10px;text-align:center;">225</td>
+                            <td style="padding:8px 10px;text-align:center;">{{ latest_transcript.total_completed|int }}</td>
+                            <td style="padding:8px 10px;text-align:center;color:#d69e2e;">{{ latest_transcript.total_wip|int if latest_transcript.total_wip else '-' }}</td>
+                            <td style="padding:8px 10px;text-align:center;{% if latest_transcript.total_needed > 0 %}color:#dc2626;{% endif %}">
+                                {{ latest_transcript.total_needed|int if latest_transcript.total_needed > 0 else '-' }}
+                            </td>
+                            <td style="padding:8px 10px;text-align:center;">
+                                {% if latest_transcript.total_needed <= 0 %}
+                                    <span class="badge badge-success" style="font-size:0.7rem;">Complete</span>
+                                {% else %}
+                                    <span class="badge badge-danger" style="font-size:0.7rem;">Need {{ latest_transcript.total_needed|int }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p style="color:#9ca3af;font-size:0.85rem;padding:12px 0;">Credit details not available. Re-import transcript to populate.</p>
+            {% endif %}
+        </div>
+
+        <!-- ── a-g Requirements Table ── -->
+        <div id="transcript-panel-ag" class="transcript-panel" style="display:none;padding-top:12px;">
+            {% if transcript_ag %}
+            <div class="table-responsive">
+                <table style="width:100%;font-size:0.84rem;border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#2d3748;color:white;">
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;width:40px;">Area</th>
+                            <th style="padding:8px 10px;text-align:left;font-weight:600;font-size:0.78rem;">Subject</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Req'd</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Completed</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">WIP</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Still Need</th>
+                            <th style="padding:8px 10px;text-align:center;font-weight:600;font-size:0.78rem;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for area, data in transcript_ag.items() %}
+                        {% set need = data.needed|default(0) %}
+                        <tr style="border-bottom:1px solid #e5e7eb;
+                            {% if data.verify|default(false) %}background:#fffff0;
+                            {% elif data.isMet|default(false) %}background:#f0fff4;
+                            {% else %}background:#fff5f5;{% endif %}">
+                            <td style="padding:7px 10px;text-align:center;">
+                                <span style="display:inline-flex;width:26px;height:26px;border-radius:50%;background:#1a365d;color:white;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;">{{ area }}</span>
+                            </td>
+                            <td style="padding:7px 10px;">{{ data.label|default(area) }}</td>
+                            <td style="padding:7px 10px;text-align:center;">{{ data.required|default(0)|int }}</td>
+                            <td style="padding:7px 10px;text-align:center;font-weight:600;">{{ data.completed|default(0)|int }}</td>
+                            <td style="padding:7px 10px;text-align:center;color:#d69e2e;">{{ data.wip|default(0)|int if data.wip|default(0) > 0 else '-' }}</td>
+                            <td style="padding:7px 10px;text-align:center;{% if need > 0 and not data.verify|default(false) %}color:#dc2626;font-weight:700;{% endif %}">
+                                {{ need|int if need > 0 else '-' }}
+                            </td>
+                            <td style="padding:7px 10px;text-align:center;">
+                                {% if data.verify|default(false) %}
+                                    <span class="badge badge-warning" style="font-size:0.7rem;">Verify</span>
+                                {% elif data.isMet|default(false) %}
+                                    <span class="badge badge-success" style="font-size:0.7rem;">Met</span>
+                                {% else %}
+                                    <span class="badge badge-danger" style="font-size:0.7rem;">Need {{ need|int }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top:10px;padding:10px 14px;background:#ebf8ff;border:1px solid #bee3f8;border-radius:6px;font-size:0.78rem;color:#2a4365;line-height:1.5;">
+                Areas e (LOTE) and f (VPA) are combined as "Fine Arts / LOTE" on the transcript. Verify the student's individual course list for <strong>2 years of the same language</strong> (area e) and <strong>1 year of VPA</strong> (area f).
+            </div>
+            {% else %}
+            <p style="color:#9ca3af;font-size:0.85rem;padding:12px 0;">a-g details not available. Re-import transcript to populate.</p>
+            {% endif %}
+        </div>
+
+        <!-- ── CTE Pathway Panel ── -->
+        <div id="transcript-panel-cte" class="transcript-panel" style="display:none;padding-top:12px;">
+            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;">
+                <div style="font-weight:700;color:#1a365d;margin-bottom:14px;">CTE Pathway Progress — {{ latest_transcript.cte_completed|int }} credits completed</div>
+                <!-- Step indicator -->
+                <div style="display:flex;align-items:center;gap:0;margin-bottom:16px;">
+                    {% set cte_steps = [('Explorer', 5), ('Concentrator', 10), ('Completer', 15), ('Advanced', 20)] %}
+                    {% for step_name, step_min in cte_steps %}
+                    {% set reached = latest_transcript.cte_completed >= step_min %}
+                    {% if not loop.first %}
+                    <div style="flex:0 0 40px;height:3px;margin-bottom:20px;{% if reached %}background:#38a169;{% else %}background:#e5e7eb;{% endif %}"></div>
+                    {% endif %}
+                    <div style="flex:1;text-align:center;">
+                        <div style="width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;margin-bottom:6px;
+                            {% if reached %}background:#38a169;color:white;{% else %}background:#e5e7eb;color:#6b7280;{% endif %}">
+                            {% if reached %}&#10003;{% else %}{{ step_min }}{% endif %}
+                        </div>
+                        <div style="font-size:0.72rem;font-weight:600;{% if reached %}color:#38a169;{% else %}color:#6b7280;{% endif %}">{{ step_name }}</div>
+                        <div style="font-size:0.65rem;color:#9ca3af;">{{ step_min }}+ credits</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <!-- Detail text -->
+                <div style="font-size:0.84rem;color:#4a5568;line-height:1.6;">
                     {% if latest_transcript.cte_is_completer %}
-                    <span class="badge" style="background:#ede9fe;color:#5b21b6;">COMPLETER</span>
+                    <strong style="color:#38a169;">CTE Pathway Completer</strong> — Student has completed 15+ CTE credits, meeting pathway completion requirements.
                     {% elif latest_transcript.cte_level and latest_transcript.cte_level != 'none' %}
-                    <span class="badge badge-info">{{ latest_transcript.cte_level|upper }}</span>
+                    <strong>Current Level: {{ latest_transcript.cte_level|capitalize }}</strong> — {{ [0, 15 - latest_transcript.cte_completed|int]|max }} more credits needed to reach Completer status.
+                    {% elif latest_transcript.cte_completed > 0 %}
+                    Student has {{ latest_transcript.cte_completed|int }} CTE credits. {{ [0, 15 - latest_transcript.cte_completed|int]|max }} more credits needed for Completer status.
                     {% else %}
-                    <span class="badge badge-gray">NOT STARTED</span>
+                    No CTE credits completed. Student needs to begin a CTE pathway (10 credits required for graduation).
+                    {% endif %}
+                </div>
+                <div style="margin-top:12px;font-size:0.82rem;">
+                    <strong>Graduation Requirement (10 credits):</strong>
+                    {% if latest_transcript.cte_completed >= 10 %}
+                    <span style="color:#38a169;">&#10003; Met</span>
+                    {% else %}
+                    <span style="color:#dc2626;">Need {{ [0, 10 - latest_transcript.cte_completed|int]|max }} more credits</span>
                     {% endif %}
                 </div>
             </div>
         </div>
-        <div style="font-size:0.72rem;color:#9ca3af;">
+
+        <div style="font-size:0.72rem;color:#9ca3af;margin-top:12px;">
             Last imported: {{ latest_transcript.import_date.strftime('%m/%d/%Y %I:%M %p') }}
             {% if latest_transcript.quarter %} | Quarter: {{ latest_transcript.quarter }}{% endif %}
         </div>
@@ -177,6 +348,19 @@
         </div>
     </div>
 </div>
+
+<style>
+    .transcript-tab.active { color: #1a365d !important; border-bottom-color: #1a365d !important; }
+    .transcript-tab:hover { color: #1a365d; }
+</style>
+<script>
+function switchTranscriptTab(tab, btn) {
+    document.querySelectorAll('.transcript-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.transcript-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('transcript-panel-' + tab).style.display = 'block';
+    btn.classList.add('active');
+}
+</script>
 
 <!-- Recent Notes -->
 <div class="card">
