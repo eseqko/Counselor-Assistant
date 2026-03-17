@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript Reviewer — Graduation, a-g &amp; CTE Analysis</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs" type="module"></script>
+    <style>
+        :root {
+            --primary: #1a365d;
+            --primary-light: #2a4a7f;
+            --accent: #e53e3e;
+            --success: #38a169;
+            --warning: #d69e2e;
+            --bg: #f7fafc;
+            --card-bg: #ffffff;
+            --text: #1a202c;
+            --text-muted: #718096;
+            --border: #e2e8f0;
+            --shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--shadow-lg);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        header h1 { font-size: 1.25rem; font-weight: 600; }
+        header .subtitle { font-size: 0.8rem; opacity: 0.8; margin-top: 2px; }
+        .quarter-selector {
+            display: flex; align-items: center; gap: 8px; font-size: 0.85rem;
+        }
+        .quarter-selector label { opacity: 0.9; }
+        .quarter-selector select {
+            padding: 4px 8px; border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.15);
+            color: white; font-size: 0.85rem;
+        }
+        .quarter-selector select option { color: var(--text); background: white; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed var(--border); border-radius: 12px;
+            padding: 48px; text-align: center;
+            background: var(--card-bg); transition: all 0.2s;
+            cursor: pointer; position: relative;
+        }
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--primary); background: #ebf4ff;
+        }
+        .drop-zone-icon { font-size: 3rem; margin-bottom: 12px; }
+        .drop-zone-text { font-size: 1.1rem; color: var(--text-muted); }
+        .drop-zone-hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; }
+        .drop-zone input[type="file"] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer;
+        }
+
+        /* Loading */
+        .loading { text-align: center; padding: 40px; display: none; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--border); border-top-color: var(--primary);
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Summary Bar */
+        .summary-bar { display: none; gap: 16px; margin: 24px 0; flex-wrap: wrap; }
+        .summary-card {
+            flex: 1; min-width: 140px;
+            background: var(--card-bg); border-radius: 8px;
+            padding: 16px; box-shadow: var(--shadow); text-align: center;
+        }
+        .summary-card .number { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+        .summary-card .label { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+        .summary-card.critical .number { color: var(--accent); }
+        .summary-card.warning .number { color: var(--warning); }
+        .summary-card.ok .number { color: var(--success); }
+
+        /* Student List */
+        .student-list { display: none; flex-direction: column; gap: 16px; }
+        .student-card {
+            background: var(--card-bg); border-radius: 8px;
+            box-shadow: var(--shadow); overflow: hidden;
+            border-left: 4px solid var(--success);
+        }
+        .student-card.deficient { border-left-color: var(--accent); }
+        .student-card.at-risk { border-left-color: var(--warning); }
+        .student-header {
+            padding: 16px 20px; display: flex; align-items: center;
+            justify-content: space-between; cursor: pointer; user-select: none;
+        }
+        .student-header:hover { background: #f8faff; }
+        .student-info h3 { font-size: 1rem; font-weight: 600; }
+        .student-info .meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+        .student-badges { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .badge {
+            padding: 3px 10px; border-radius: 12px;
+            font-size: 0.75rem; font-weight: 600;
+        }
+        .badge-critical { background: #fed7d7; color: #c53030; }
+        .badge-warning { background: #fefcbf; color: #975a16; }
+        .badge-ok { background: #c6f6d5; color: #276749; }
+        .badge-info { background: #bee3f8; color: #2a4365; }
+        .badge-purple { background: #e9d8fd; color: #553c9a; }
+        .expand-arrow {
+            font-size: 0.8rem; transition: transform 0.2s; color: var(--text-muted);
+        }
+        .student-card.expanded .expand-arrow { transform: rotate(180deg); }
+        .student-detail {
+            display: none; padding: 0 20px 20px;
+            border-top: 1px solid var(--border);
+        }
+        .student-card.expanded .student-detail { display: block; }
+
+        /* Analysis Tabs */
+        .analysis-tabs {
+            display: flex; gap: 0; border-bottom: 2px solid var(--border);
+            margin: 16px 0 0;
+        }
+        .analysis-tab {
+            padding: 10px 18px; font-size: 0.82rem; font-weight: 600;
+            cursor: pointer; border: none; background: none;
+            color: var(--text-muted); border-bottom: 2px solid transparent;
+            margin-bottom: -2px; transition: all 0.2s;
+        }
+        .analysis-tab:hover { color: var(--primary); }
+        .analysis-tab.active {
+            color: var(--primary); border-bottom-color: var(--primary);
+        }
+        .analysis-tab .tab-badge {
+            display: inline-block; font-size: 0.65rem; padding: 1px 6px;
+            border-radius: 8px; margin-left: 4px; font-weight: 700;
+            vertical-align: middle;
+        }
+        .tab-panel { display: none; padding-top: 12px; }
+        .tab-panel.active { display: block; }
+
+        /* Credit Table */
+        .credit-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.85rem; margin-top: 12px;
+        }
+        .credit-table th {
+            background: var(--primary); color: white;
+            padding: 8px 10px; text-align: left;
+            font-weight: 600; font-size: 0.78rem;
+        }
+        .credit-table th:not(:first-child) { text-align: center; }
+        .credit-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+        .credit-table td:not(:first-child) { text-align: center; }
+        .credit-table tr:hover { background: #f7fafc; }
+        .credit-table tr.deficient-row { background: #fff5f5; }
+        .credit-table tr.deficient-row:hover { background: #fed7d7; }
+        .credit-table tr.wip-row { background: #fffff0; }
+        .credit-table tr.total-row { font-weight: 700; background: #edf2f7; }
+        .status-indicator {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; margin-right: 6px;
+        }
+        .status-complete { background: var(--success); }
+        .status-deficient { background: var(--accent); }
+        .status-in-progress { background: var(--warning); }
+
+        /* a-g Table */
+        .ag-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 0.85rem; margin-top: 12px;
+        }
+        .ag-table th {
+            background: #2d3748; color: white;
+            padding: 8px 10px; text-align: left;
+            font-weight: 600; font-size: 0.78rem;
+        }
+        .ag-table th:not(:first-child):not(:nth-child(2)) { text-align: center; }
+        .ag-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        .ag-table td:not(:first-child):not(:nth-child(2)) { text-align: center; }
+        .ag-table tr:hover { background: #f7fafc; }
+        .ag-table tr.ag-deficient { background: #fff5f5; }
+        .ag-table tr.ag-met { background: #f0fff4; }
+        .ag-table tr.ag-verify { background: #fffff0; }
+        .ag-badge-area {
+            display: inline-flex; width: 24px; height: 24px;
+            border-radius: 50%; background: var(--primary);
+            color: white; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700;
+        }
+        .ag-summary-row {
+            display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+        }
+        .ag-summary-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 14px; background: var(--card-bg);
+            border: 1px solid var(--border); border-radius: 8px;
+            font-size: 0.82rem;
+        }
+        .ag-summary-item .ag-count {
+            font-size: 1.2rem; font-weight: 700;
+        }
+        .ag-summary-item .ag-label {
+            font-size: 0.75rem; color: var(--text-muted);
+        }
+
+        /* CTE Section */
+        .cte-pathway {
+            background: var(--bg); border-radius: 8px;
+            padding: 16px; margin-top: 12px;
+            border: 1px solid var(--border);
+        }
+        .cte-pathway h4 {
+            font-size: 0.9rem; font-weight: 700;
+            color: var(--primary); margin-bottom: 12px;
+        }
+        .cte-progress-steps {
+            display: flex; gap: 0; align-items: center;
+            margin-bottom: 12px;
+        }
+        .cte-step {
+            flex: 1; text-align: center; padding: 10px 8px;
+            position: relative;
+        }
+        .cte-step-dot {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--border); color: var(--text-muted);
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700;
+            margin-bottom: 6px; transition: all 0.3s;
+        }
+        .cte-step.reached .cte-step-dot {
+            background: var(--success); color: white;
+        }
+        .cte-step.current .cte-step-dot {
+            background: var(--warning); color: white;
+            box-shadow: 0 0 0 3px rgba(214,158,46,0.3);
+        }
+        .cte-step-label {
+            font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
+        }
+        .cte-step.reached .cte-step-label { color: var(--success); }
+        .cte-step.current .cte-step-label { color: var(--warning); }
+        .cte-step-credits {
+            font-size: 0.65rem; color: var(--text-muted);
+        }
+        .cte-connector {
+            flex: 0 0 40px; height: 3px; background: var(--border);
+            margin-bottom: 20px;
+        }
+        .cte-connector.filled { background: var(--success); }
+        .cte-detail {
+            font-size: 0.82rem; color: #4a5568; line-height: 1.6;
+        }
+
+        /* Recommendations */
+        .recommendations { margin-top: 16px; }
+        .recommendations h4 { font-size: 0.9rem; margin-bottom: 8px; font-weight: 600; }
+        .rec-item {
+            padding: 10px 14px; border-radius: 6px; margin-bottom: 8px;
+            font-size: 0.84rem; line-height: 1.4;
+            display: flex; align-items: flex-start; gap: 10px;
+        }
+        .rec-critical { background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; }
+        .rec-warning { background: #fffff0; border: 1px solid #fefcbf; color: #975a16; }
+        .rec-info { background: #ebf8ff; border: 1px solid #bee3f8; color: #2a4365; }
+        .rec-ok { background: #f0fff4; border: 1px solid #c6f6d5; color: #276749; }
+        .rec-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+        /* Progress bar */
+        .progress-bar-container { margin-top: 12px; }
+        .progress-label {
+            display: flex; justify-content: space-between;
+            font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px;
+        }
+        .progress-bar {
+            height: 8px; background: #edf2f7;
+            border-radius: 4px; overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%; border-radius: 4px; transition: width 0.4s ease;
+        }
+        .progress-fill.good { background: var(--success); }
+        .progress-fill.warning { background: var(--warning); }
+        .progress-fill.critical { background: var(--accent); }
+
+        /* Reset Button */
+        .reset-btn {
+            display: none; margin: 20px 0 0;
+            padding: 10px 20px; background: var(--primary);
+            color: white; border: none; border-radius: 6px;
+            cursor: pointer; font-size: 0.9rem;
+        }
+        .reset-btn:hover { background: var(--primary-light); }
+
+        /* Print Styles */
+        @media print {
+            header { background: black !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .drop-zone, .reset-btn, .quarter-selector { display: none !important; }
+            .summary-bar, .student-list { display: flex !important; }
+            .student-detail { display: block !important; }
+            .tab-panel { display: block !important; }
+            .student-card { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <div>
+        <h1>Transcript Reviewer</h1>
+        <div class="subtitle">Graduation, a-g &amp; CTE Pathway Analysis</div>
+    </div>
+    <div class="quarter-selector">
+        <label for="overrideQuarter">Current Quarter Override:</label>
+        <select id="overrideQuarter">
+            <option value="auto">Auto-detect</option>
+            <option value="9-Q1">9th — Q1</option><option value="9-Q2">9th — Q2</option>
+            <option value="9-Q3">9th — Q3</option><option value="9-Q4">9th — Q4</option>
+            <option value="10-Q1">10th — Q1</option><option value="10-Q2">10th — Q2</option>
+            <option value="10-Q3">10th — Q3</option><option value="10-Q4">10th — Q4</option>
+            <option value="11-Q1">11th — Q1</option><option value="11-Q2">11th — Q2</option>
+            <option value="11-Q3">11th — Q3</option><option value="11-Q4">11th — Q4</option>
+            <option value="12-Q1">12th — Q1</option><option value="12-Q2">12th — Q2</option>
+            <option value="12-Q3">12th — Q3</option><option value="12-Q4">12th — Q4</option>
+        </select>
+    </div>
+</header>
+<div class="container">
+    <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".pdf" multiple>
+        <div class="drop-zone-icon">&#128196;</div>
+        <div class="drop-zone-text">Drag &amp; drop transcript PDFs here</div>
+        <div class="drop-zone-hint">Single PDF, multiple PDFs, or a multi-student PDF — all supported</div>
+    </div>
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div>Analyzing transcripts...</div>
+    </div>
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="student-list" id="studentList"></div>
+    <button class="reset-btn" id="resetBtn">Analyze More Transcripts</button>
+</div>
+<script type="module">
+// ============================================================
+// PDF.js Setup
+// ============================================================
+const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs';
+
+// ============================================================
+// Graduation Requirements
+// ============================================================
+const GRAD_REQUIREMENTS = {
+    'English':                      40,
+    'Math':                         20,
+    'State Math Requirement':       10,
+    'Life Science':                 10,
+    'Physical Science':             10,
+    'Economics':                     5,
+    'Government':                    5,
+    'US History':                   10,
+    'World History, CLT':           10,
+    'Fine Arts / LOTE':             10,
+    'Career Technical Education':   10,
+    'Physical Education':           20,
+    'Health Education':              5,
+    'Electives':                    60,
+};
+const TOTAL_REQUIRED = 225;
+const CREDITS_PER_QUARTER = 20;
+const MAX_CREDITS_PER_SUBJECT_PER_QUARTER = 5;
+const MONTH_TO_QUARTER = { '10': 'Q1', '12': 'Q2', '3': 'Q3', '03': 'Q3', '5': 'Q4', '05': 'Q4' };
+const QUARTER_ORDER = ['Q1', 'Q2', 'Q3', 'Q4'];
+const GRADE_ORDER = [9, 10, 11, 12];
+
+// ============================================================
+// UC/CSU a-g Requirement Mapping
+// ============================================================
+const AG_REQUIREMENTS = {
+    a: {
+        label: 'History / Social Science',
+        required: 20,
+        recommended: 20,
+        years: '2 years required',
+        gradSubjects: ['US History', 'World History, CLT', 'Government', 'Economics'],
+        note: 'Includes US History, World History, 1 semester Government, 1 semester Economics'
+    },
+    b: {
+        label: 'English',
+        required: 40,
+        recommended: 40,
+        years: '4 years required',
+        gradSubjects: ['English'],
+        note: '4 years of college-prep English'
+    },
+    c: {
+        label: 'Mathematics',
+        required: 30,
+        recommended: 40,
+        years: '3 years required, 4 recommended',
+        gradSubjects: ['Math', 'State Math Requirement'],
+        note: 'Must include Math 1, 2, and 3 (or higher)'
+    },
+    d: {
+        label: 'Laboratory Science',
+        required: 20,
+        recommended: 30,
+        years: '2 years required, 3 recommended',
+        gradSubjects: ['Life Science', 'Physical Science'],
+        note: 'Must include 1 biological + 1 physical science with lab'
+    },
+    e: {
+        label: 'Language Other Than English',
+        required: 20,
+        recommended: 30,
+        years: '2 years required, 3 recommended',
+        gradSubjects: [],
+        // This comes from Fine Arts / LOTE but can't be separated from transcript summary
+        note: '2 years of SAME language. Cannot determine from credit summary — verify transcript courses.',
+        fromCombined: 'Fine Arts / LOTE',
+        verifyManually: true
+    },
+    f: {
+        label: 'Visual & Performing Arts',
+        required: 10,
+        recommended: 10,
+        years: '1 year required',
+        gradSubjects: [],
+        note: '1 year in a single VPA discipline. Cannot determine from credit summary — verify transcript courses.',
+        fromCombined: 'Fine Arts / LOTE',
+        verifyManually: true
+    },
+    g: {
+        label: 'College-Prep Elective',
+        required: 10,
+        recommended: 10,
+        years: '1 year required',
+        gradSubjects: ['Electives'],
+        note: '1 year of an additional a-g approved course beyond required areas'
+    },
+};
+
+// ============================================================
+// CTE Pathway Definitions
+// ============================================================
+const CTE_LEVELS = [
+    { name: 'Explorer', minCredits: 5, description: 'Completed introductory CTE course' },
+    { name: 'Concentrator', minCredits: 10, description: 'Completed 2+ CTE courses in a pathway' },
+    { name: 'Completer', minCredits: 15, description: 'Completed 3+ courses — pathway complete' },
+    { name: 'Advanced', minCredits: 20, description: 'Exceeded pathway requirements with capstone/WBL' },
+];
+
+// ============================================================
+// PDF Text Extraction
+// ============================================================
+async function extractPdfPages(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const items = content.items.map(item => ({
+            text: item.str,
+            x: Math.round(item.transform[4]),
+            y: Math.round(item.transform[5]),
+            width: item.width,
+            height: item.height
+        }));
+        pages.push(items);
+    }
+    return pages;
+}
+
+function pageItemsToLines(items) {
+    if (!items.length) return [];
+    const lines = [];
+    const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
+    let currentLine = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+        if (Math.abs(sorted[i].y - currentLine[0].y) <= 3) {
+            currentLine.push(sorted[i]);
+        } else {
+            currentLine.sort((a, b) => a.x - b.x);
+            lines.push(currentLine);
+            currentLine = [sorted[i]];
+        }
+    }
+    currentLine.sort((a, b) => a.x - b.x);
+    lines.push(currentLine);
+    return lines;
+}
+
+function lineToText(line) {
+    let text = '';
+    for (let i = 0; i < line.length; i++) {
+        if (i > 0) {
+            const gap = line[i].x - (line[i-1].x + line[i-1].width);
+            text += gap > 8 ? '  ' : (gap > 2 ? ' ' : '');
+        }
+        text += line[i].text;
+    }
+    return text;
+}
+
+// ============================================================
+// Transcript Splitting
+// ============================================================
+function splitIntoStudents(pages) {
+    const students = [];
+    let currentPages = [];
+    for (const pageItems of pages) {
+        const lines = pageItemsToLines(pageItems);
+        const topText = lines.slice(0, 8).map(l => lineToText(l)).join(' ');
+        const isFirstPage = /Jefferson\s+Union\s+High\s+School\s+District/i.test(topText) &&
+                            (/Student\s*Name/i.test(topText) || /Perm\s*ID/i.test(topText)) &&
+                            !/Graduation\s+Requirements/i.test(lines.slice(0, 15).map(l => lineToText(l)).join(' '));
+        const allText = lines.map(l => lineToText(l)).join(' ');
+        const hasCreditSummary = /Graduation\s+Requirements.*Credit\s+Summary/i.test(allText);
+        if (isFirstPage && currentPages.length > 0) {
+            students.push(currentPages);
+            currentPages = [];
+        }
+        currentPages.push({ items: pageItems, lines, isFirstPage, hasCreditSummary });
+    }
+    if (currentPages.length > 0) students.push(currentPages);
+    return students;
+}
+
+// ============================================================
+// Parsing: Student Header
+// ============================================================
+function parseStudentHeader(pages) {
+    let name = '', grade = 0, classOf = 0, permId = '', enterDate = '';
+    let gpaWeighted = '', gpaUC = '', classRank = '';
+
+    for (const page of pages) {
+        const lines = page.lines;
+        const allText = lines.map(l => lineToText(l)).join(' ');
+
+        if (!name) {
+            for (let i = 0; i < lines.length - 1; i++) {
+                const text = lineToText(lines[i]);
+                if (/Student\s*Name/i.test(text)) {
+                    const nextLine = lines[i + 1];
+                    const nameItems = nextLine.filter(item =>
+                        item.text.trim().length > 0 && item.x < 220 &&
+                        !/Jefferson|Union|School|District|Transcript/i.test(item.text)
+                    );
+                    const candidate = nameItems.map(it => it.text).join(' ').trim();
+                    if (candidate && candidate.length > 2) name = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (!permId || !grade) {
+            for (let i = 0; i < lines.length - 1; i++) {
+                const text = lineToText(lines[i]);
+                if (/Perm\s*ID/i.test(text) && /\bGrd\b/i.test(text)) {
+                    let permIdX = null, grdX = null;
+                    for (const item of lines[i]) {
+                        if (/Perm/i.test(item.text)) permIdX = item.x;
+                        if (/Grd/i.test(item.text)) grdX = item.x;
+                    }
+                    const valLine = lines[i + 1];
+                    for (const item of valLine) {
+                        const t = item.text.trim();
+                        if (!t) continue;
+                        if (permIdX !== null && !permId && Math.abs(item.x - permIdX) < 15 && /^\d{4,}$/.test(t)) permId = t;
+                        if (grdX !== null && !grade && Math.abs(item.x - grdX) < 15 && /^\d{1,2}$/.test(t)) grade = parseInt(t);
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!classOf) {
+            const cm = allText.match(/Class\s+of\s+(\d{4})/i);
+            if (cm) classOf = parseInt(cm[1]);
+        }
+
+        if (!enterDate) {
+            for (let i = 0; i < lines.length - 1; i++) {
+                const text = lineToText(lines[i]);
+                if (/Enter\s*Date/i.test(text)) {
+                    let enterX = null;
+                    for (const item of lines[i]) {
+                        if (/Enter/i.test(item.text)) { enterX = item.x; break; }
+                    }
+                    for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+                        for (const item of lines[j]) {
+                            if (/^\d{2}\/\d{2}\/\d{4}$/.test(item.text.trim())) {
+                                if (enterX === null || Math.abs(item.x - enterX) < 20) {
+                                    enterDate = item.text.trim(); break;
+                                }
+                            }
+                        }
+                        if (enterDate) break;
+                    }
+                    if (enterDate) break;
+                }
+            }
+        }
+
+        if (!gpaWeighted) {
+            const wm = allText.match(/CHS\s*[-–]?\s*Weighted\s+([\d.]+)/i);
+            if (wm) gpaWeighted = wm[1];
+        }
+        if (!gpaUC) {
+            const um = allText.match(/CHS\s*[-–]?\s*UC\s+10[-–]12\s+([\d.]+)/i);
+            if (um) gpaUC = um[1];
+        }
+        if (!classRank) {
+            const rm = allText.match(/Class\s+Rank\s+(\d+\s+out\s+of\s+\d+)/i);
+            if (rm) classRank = rm[1];
+        }
+    }
+
+    if (!grade && classOf) {
+        const currentSchoolYear = 2026;
+        grade = 12 - (classOf - currentSchoolYear);
+        if (grade < 9 || grade > 12) grade = 0;
+    }
+
+    return { name, grade, classOf, permId, enterDate, gpaWeighted, gpaUC, classRank };
+}
+
+// ============================================================
+// Known graduation requirement subjects
+// ============================================================
+const KNOWN_SUBJECTS = [
+    { canonical: 'English',                     patterns: [/^english$/i] },
+    { canonical: 'Math',                        patterns: [/^math$/i] },
+    { canonical: 'State Math Requirement',      patterns: [/^state\s*math\s*(req|equivalent)/i] },
+    { canonical: 'Life Science',                patterns: [/^life\s*science$/i] },
+    { canonical: 'Physical Science',            patterns: [/^physical\s*science$/i] },
+    { canonical: 'Economics',                   patterns: [/^economics$/i] },
+    { canonical: 'Government',                  patterns: [/^government$/i] },
+    { canonical: 'US History',                  patterns: [/^us\s*history$/i] },
+    { canonical: 'World History, CLT',          patterns: [/^world\s*history/i] },
+    { canonical: 'Fine Arts / LOTE',            patterns: [/^fine\s*arts/i, /^lote/i, /^fine\s*arts.*lote/i, /^lote.*cte/i] },
+    { canonical: 'Career Technical Education',  patterns: [/^career\s*tech/i, /^cte$/i] },
+    { canonical: 'Physical Education',          patterns: [/^physical\s*education$/i] },
+    { canonical: 'Health Education',            patterns: [/^health\s*education$/i] },
+    { canonical: 'Electives',                   patterns: [/^electives?$/i] },
+];
+
+function matchKnownSubject(text) {
+    const clean = text.trim();
+    for (const subj of KNOWN_SUBJECTS) {
+        for (const pat of subj.patterns) {
+            if (pat.test(clean)) return subj.canonical;
+        }
+    }
+    if (/^TOTALS$/i.test(clean)) return 'TOTALS';
+    return null;
+}
+
+// ============================================================
+// Parsing: Credit Summary Table
+// ============================================================
+function parseCreditSummary(pages) {
+    let summaryPage = null;
+    for (const page of pages) {
+        if (page.hasCreditSummary) { summaryPage = page; break; }
+    }
+    if (!summaryPage) {
+        for (const page of pages) {
+            const text = page.lines.map(l => lineToText(l)).join(' ');
+            if (/Subject\s+Area.*Req.*Comp/i.test(text)) { summaryPage = page; break; }
+        }
+    }
+    if (!summaryPage) return null;
+
+    const allItems = summaryPage.items;
+    let headerY = null, tableLeftX = null;
+    let colReqd = null, colComp = null, colWIP = null, colNeed = null;
+
+    let subjectAreaItem = allItems.find(item => /Subject\s*Area/i.test(item.text));
+    if (!subjectAreaItem) {
+        subjectAreaItem = allItems.find(item =>
+            /^Subject$/i.test(item.text.trim()) && allItems.some(other =>
+                Math.abs(other.y - item.y) <= 3 && /^Area$/i.test(other.text.trim())
+            )
+        );
+    }
+
+    if (subjectAreaItem) {
+        headerY = subjectAreaItem.y;
+        tableLeftX = subjectAreaItem.x;
+        for (const item of allItems) {
+            if (Math.abs(item.y - headerY) > 3) continue;
+            const t = item.text.trim().toLowerCase();
+            if (/^req/i.test(t)) colReqd = item.x;
+            else if (/^comp/i.test(t)) colComp = item.x;
+            else if (/^wip$/i.test(t)) colWIP = item.x;
+            else if (/^need$/i.test(t)) colNeed = item.x;
+        }
+    }
+
+    if (!colReqd || !colComp || headerY === null) {
+        for (const line of summaryPage.lines) {
+            const text = lineToText(line);
+            if (/Subject\s*Area/i.test(text) && /Req/i.test(text) && /Comp/i.test(text)) {
+                for (const item of line) {
+                    const t = item.text.trim().toLowerCase();
+                    if (/subject/i.test(t)) { tableLeftX = item.x; headerY = item.y; }
+                    if (/^req/i.test(t)) colReqd = item.x;
+                    else if (/^comp/i.test(t)) colComp = item.x;
+                    else if (/^wip$/i.test(t)) colWIP = item.x;
+                    else if (/^need$/i.test(t)) colNeed = item.x;
+                }
+                break;
+            }
+        }
+    }
+
+    if (!colReqd || !colComp || headerY === null) return null;
+
+    const tableRightX = (colNeed || colWIP || colComp) + 40;
+    const colTolerance = 15;
+
+    const tableItems = allItems.filter(item =>
+        item.x >= tableLeftX - 5 && item.x <= tableRightX + 10 && item.y < headerY - 2
+    );
+
+    const rowMap = new Map();
+    for (const item of tableItems) {
+        const yKey = Math.round(item.y / 3) * 3;
+        if (!rowMap.has(yKey)) rowMap.set(yKey, []);
+        rowMap.get(yKey).push(item);
+    }
+
+    const rows = [...rowMap.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([, items]) => items.sort((a, b) => a.x - b.x));
+
+    const credits = {};
+    let totals = null;
+
+    function nearestColumn(x) {
+        const cols = [
+            { name: 'reqd', pos: colReqd }, { name: 'comp', pos: colComp },
+            { name: 'wip', pos: colWIP }, { name: 'need', pos: colNeed },
+        ].filter(c => c.pos !== null);
+        let best = null, bestDist = Infinity;
+        for (const col of cols) {
+            const dist = Math.abs(x - col.pos);
+            if (dist < bestDist && dist < colTolerance) { bestDist = dist; best = col.name; }
+        }
+        return best;
+    }
+
+    for (const row of rows) {
+        const textItems = [], numberItems = [];
+        for (const item of row) {
+            if (/^[\d.]+$/.test(item.text.trim()) && item.x >= colReqd - colTolerance) {
+                numberItems.push(item);
+            } else if (item.x < colReqd - 5) {
+                textItems.push(item);
+            }
+        }
+        const rawSubject = textItems.map(i => i.text).join(' ').trim();
+        if (!rawSubject) continue;
+        if (/^Achievements$/i.test(rawSubject) || /^Service\s*Learning$/i.test(rawSubject)) break;
+
+        const canonical = matchKnownSubject(rawSubject);
+        if (!canonical) continue;
+
+        const values = { reqd: 0, comp: 0, wip: 0, need: 0 };
+        for (const item of numberItems) {
+            const col = nearestColumn(item.x);
+            if (col) values[col] = parseFloat(item.text) || 0;
+        }
+
+        if (canonical === 'TOTALS') {
+            totals = { required: values.reqd, completed: values.comp, wip: values.wip, need: values.need };
+        } else {
+            const calculatedNeed = Math.max(0, values.reqd - values.comp - values.wip);
+            credits[canonical] = {
+                required: values.reqd, completed: values.comp,
+                wip: values.wip, need: values.need > 0 ? values.need : calculatedNeed,
+                calculatedNeed
+            };
+        }
+    }
+
+    for (const subj of KNOWN_SUBJECTS) {
+        if (!credits[subj.canonical]) {
+            const reqd = GRAD_REQUIREMENTS[subj.canonical] || 0;
+            credits[subj.canonical] = { required: reqd, completed: 0, wip: 0, need: reqd, calculatedNeed: reqd };
+        }
+    }
+
+    return { credits, totals };
+}
+
+// ============================================================
+// Parsing: Detect current quarter
+// ============================================================
+function detectCurrentQuarter(pages) {
+    let lastCompletedGrade = 9, lastCompletedQuarter = 'Q1';
+    let hasWIP = false, wipGrade = null, wipQuarter = null;
+
+    for (const page of pages) {
+        for (const line of page.lines) {
+            const text = lineToText(line);
+            if (/Work\s+In\s+Progress/i.test(text)) hasWIP = true;
+            const blockMatch = text.match(/Yr:\s*(\d{4})\s+Month:\s*(\d{1,2})\s+Grade:\s*(\d{1,2})/i);
+            if (blockMatch) {
+                const month = blockMatch[2];
+                const grade = parseInt(blockMatch[3]);
+                const quarter = MONTH_TO_QUARTER[month] || 'Q1';
+                if (hasWIP) { wipGrade = grade; wipQuarter = quarter; }
+                else { lastCompletedGrade = grade; lastCompletedQuarter = quarter; }
+            }
+        }
+    }
+
+    if (wipGrade && wipQuarter) return { grade: wipGrade, quarter: wipQuarter, source: 'wip' };
+
+    const qIdx = QUARTER_ORDER.indexOf(lastCompletedQuarter);
+    if (qIdx < 3) return { grade: lastCompletedGrade, quarter: QUARTER_ORDER[qIdx + 1], source: 'inferred' };
+    const nextGrade = lastCompletedGrade + 1;
+    if (nextGrade <= 12) return { grade: nextGrade, quarter: 'Q1', source: 'inferred' };
+    return { grade: 12, quarter: 'Q4', source: 'graduated' };
+}
+
+// ============================================================
+// Analysis Engines
+// ============================================================
+function calculateQuartersRemaining(currentGrade, currentQuarter) {
+    const gradeIdx = GRADE_ORDER.indexOf(currentGrade);
+    const quarterIdx = QUARTER_ORDER.indexOf(currentQuarter);
+    if (gradeIdx === -1 || quarterIdx === -1) return 0;
+    return (4 - quarterIdx) + Math.max(0, 3 - gradeIdx) * 4;
+}
+
+function analyzeStudent(header, creditSummary, currentQuarterInfo) {
+    const { credits, totals } = creditSummary;
+
+    const overrideVal = document.getElementById('overrideQuarter').value;
+    let currentGrade, currentQuarter;
+    if (overrideVal !== 'auto') {
+        const parts = overrideVal.split('-');
+        currentGrade = parseInt(parts[0]);
+        currentQuarter = parts[1];
+    } else {
+        currentGrade = currentQuarterInfo.grade;
+        currentQuarter = currentQuarterInfo.quarter;
+    }
+
+    const quartersRemaining = calculateQuartersRemaining(currentGrade, currentQuarter);
+    const maxPossibleCredits = quartersRemaining * CREDITS_PER_QUARTER;
+    const totalCompleted = Object.values(credits).reduce((s, c) => s + c.completed, 0);
+    const totalWIP = Object.values(credits).reduce((s, c) => s + c.wip, 0);
+    const totalNeeded = Math.max(0, TOTAL_REQUIRED - totalCompleted - totalWIP);
+
+    const deficiencies = [];
+    const subjectAnalysis = [];
+
+    for (const [subject, data] of Object.entries(credits)) {
+        const needAfterWIP = Math.max(0, data.required - data.completed - data.wip);
+        const quartersNeededForSubject = Math.ceil(needAfterWIP / MAX_CREDITS_PER_SUBJECT_PER_QUARTER);
+        const semestersNeeded = Math.ceil(needAfterWIP / 10);
+        const isComplete = needAfterWIP <= 0;
+        const isDeficient = needAfterWIP > 0;
+        const canComplete = quartersNeededForSubject <= quartersRemaining;
+
+        subjectAnalysis.push({
+            subject, ...data, needAfterWIP, quartersNeeded: quartersNeededForSubject,
+            semestersNeeded, isComplete, isDeficient, canComplete
+        });
+
+        if (isDeficient) {
+            deficiencies.push({
+                subject, creditsNeeded: needAfterWIP,
+                quartersNeeded: quartersNeededForSubject, canComplete, semestersNeeded
+            });
+        }
+    }
+
+    const impossibleSubjects = deficiencies.filter(d => !d.canComplete);
+    const totalSubjectQuartersNeeded = deficiencies.reduce((s, d) => s + d.quartersNeeded, 0);
+    const totalSlotsAvailable = quartersRemaining * 4;
+    const slotPressure = totalSlotsAvailable > 0 ? totalSubjectQuartersNeeded / totalSlotsAvailable : 0;
+    const canGraduateCredits = totalNeeded <= maxPossibleCredits;
+    const canGraduateSubjects = impossibleSubjects.length === 0;
+    const canGraduate = canGraduateCredits && canGraduateSubjects;
+
+    let riskLevel;
+    if (!canGraduate) riskLevel = 'critical';
+    else if (deficiencies.length > 0 && slotPressure > 0.7) riskLevel = 'at-risk';
+    else if (deficiencies.length > 0) riskLevel = 'warning';
+    else riskLevel = 'on-track';
+
+    // ── a-g Analysis ──
+    const agAnalysis = analyzeAG(credits);
+
+    // ── CTE Analysis ──
+    const cteAnalysis = analyzeCTE(credits);
+
+    return {
+        header, credits, totals, subjectAnalysis, deficiencies,
+        quartersRemaining, maxPossibleCredits, totalCompleted, totalWIP, totalNeeded,
+        currentGrade, currentQuarter, canGraduate, canGraduateCredits, canGraduateSubjects,
+        impossibleSubjects, slotPressure, riskLevel,
+        agAnalysis, cteAnalysis
+    };
+}
+
+// ============================================================
+// a-g Requirement Analysis
+// ============================================================
+function analyzeAG(credits) {
+    const areas = {};
+    let totalMet = 0;
+    let totalAreas = 0;
+    let needsVerification = 0;
+
+    for (const [area, req] of Object.entries(AG_REQUIREMENTS)) {
+        totalAreas++;
+        let completed = 0;
+        let wip = 0;
+
+        if (req.verifyManually) {
+            // Fine Arts / LOTE combined — we know the total but not the split
+            const combined = credits['Fine Arts / LOTE'] || { completed: 0, wip: 0 };
+            // We can say: if combined completed >= required for BOTH e+f (30), both are likely met
+            // If combined >= 20, area e might be met (or f at 10 might be met)
+            // But we can't be sure without individual course data
+            completed = combined.completed;
+            wip = combined.wip;
+            needsVerification++;
+        } else {
+            for (const subj of req.gradSubjects) {
+                const data = credits[subj];
+                if (data) {
+                    completed += data.completed;
+                    wip += data.wip;
+                }
+            }
+        }
+
+        const needed = Math.max(0, req.required - completed - wip);
+        const isMet = needed <= 0;
+        if (isMet && !req.verifyManually) totalMet++;
+
+        areas[area] = {
+            area, label: req.label, required: req.required,
+            recommended: req.recommended, years: req.years,
+            completed, wip, needed, isMet,
+            verifyManually: req.verifyManually || false,
+            note: req.note
+        };
+    }
+
+    // Overall a-g eligibility
+    const allMetOrVerify = Object.values(areas).every(a => a.isMet || a.verifyManually);
+    const definitelyDeficient = Object.values(areas).filter(a => !a.isMet && !a.verifyManually);
+
+    let agStatus;
+    if (definitelyDeficient.length > 0) agStatus = 'deficient';
+    else if (needsVerification > 0) agStatus = 'verify';
+    else agStatus = 'on-track';
+
+    return { areas, totalMet, totalAreas, needsVerification, agStatus, definitelyDeficient };
+}
+
+// ============================================================
+// CTE Pathway Analysis
+// ============================================================
+function analyzeCTE(credits) {
+    const cteData = credits['Career Technical Education'] || { completed: 0, wip: 0, required: 10 };
+    const totalCTE = cteData.completed + cteData.wip;
+    const completedCTE = cteData.completed;
+
+    // Determine CTE level
+    let currentLevel = null;
+    let nextLevel = null;
+    for (let i = CTE_LEVELS.length - 1; i >= 0; i--) {
+        if (completedCTE >= CTE_LEVELS[i].minCredits) {
+            currentLevel = CTE_LEVELS[i];
+            if (i < CTE_LEVELS.length - 1) nextLevel = CTE_LEVELS[i + 1];
+            break;
+        }
+    }
+    if (!currentLevel && completedCTE > 0) {
+        nextLevel = CTE_LEVELS[0];
+    }
+
+    const gradReqMet = completedCTE + cteData.wip >= cteData.required;
+    const isCompleter = completedCTE >= 15;
+    const creditsToCompleter = Math.max(0, 15 - completedCTE);
+
+    return {
+        completed: completedCTE, wip: cteData.wip, total: totalCTE,
+        required: cteData.required, currentLevel, nextLevel,
+        gradReqMet, isCompleter, creditsToCompleter
+    };
+}
+
+// ============================================================
+// Recommendation Engine
+// ============================================================
+function generateRecommendations(analysis) {
+    const recs = [];
+    const { deficiencies, quartersRemaining, canGraduate, impossibleSubjects,
+            totalNeeded, maxPossibleCredits, slotPressure, totalCompleted, totalWIP,
+            agAnalysis, cteAnalysis } = analysis;
+
+    // Graduation recommendations
+    for (const imp of impossibleSubjects) {
+        const semestersWord = imp.semestersNeeded === 1 ? 'semester' : 'semesters';
+        const availableSemesters = Math.floor(quartersRemaining / 2);
+        recs.push({
+            level: 'critical', icon: '!!',
+            text: `CANNOT complete ${imp.subject} in time. Needs ${imp.creditsNeeded} credits (${imp.semestersNeeded} ${semestersWord}) but only ${availableSemesters} semester(s) remain. Explore credit recovery or summer school immediately.`
+        });
+    }
+
+    if (!canGraduate && totalNeeded > maxPossibleCredits) {
+        recs.push({
+            level: 'critical', icon: '!!',
+            text: `Total credits needed (${totalNeeded}) exceed maximum earnable (${maxPossibleCredits}) in ${quartersRemaining} quarter(s). Cannot graduate on time without credit recovery.`
+        });
+    }
+
+    const urgentDefs = deficiencies
+        .filter(d => d.canComplete && d.quartersNeeded >= quartersRemaining - 1 && d.subject !== 'Electives')
+        .sort((a, b) => b.quartersNeeded - a.quartersNeeded);
+    for (const def of urgentDefs) {
+        const semestersRemaining = Math.floor(quartersRemaining / 2);
+        recs.push({
+            level: 'warning', icon: '!',
+            text: `${def.subject}: Needs ${def.creditsNeeded} credits. Must enroll EVERY remaining semester (${def.semestersNeeded} of ${semestersRemaining} available).`
+        });
+    }
+
+    const standardDefs = deficiencies
+        .filter(d => d.canComplete && !urgentDefs.includes(d) && d.subject !== 'Electives')
+        .sort((a, b) => b.creditsNeeded - a.creditsNeeded);
+    for (const def of standardDefs) {
+        const semestersRemaining = Math.floor(quartersRemaining / 2);
+        recs.push({
+            level: 'info', icon: 'i',
+            text: `${def.subject}: Needs ${def.creditsNeeded} more credits — plan ${def.semestersNeeded} semester(s) of ${semestersRemaining} remaining.`
+        });
+    }
+
+    const electiveDef = deficiencies.find(d => d.subject === 'Electives');
+    if (electiveDef) {
+        recs.push({
+            level: 'info', icon: 'i',
+            text: `Electives: Needs ${electiveDef.creditsNeeded} more elective credits.`
+        });
+    }
+
+    if (canGraduate && slotPressure > 0.7) {
+        recs.push({
+            level: 'warning', icon: '!',
+            text: `Tight schedule: ${Math.round(slotPressure * 100)}% of remaining class slots needed for grad requirements.`
+        });
+    }
+
+    // a-g recommendations
+    if (agAnalysis.definitelyDeficient.length > 0) {
+        const areas = agAnalysis.definitelyDeficient.map(a =>
+            `area ${Object.entries(AG_REQUIREMENTS).find(([,v]) => v.label === a.label)?.[0] || '?'} (${a.label}: need ${a.needed} more credits)`
+        ).join(', ');
+        recs.push({
+            level: 'warning', icon: '!',
+            text: `a-g deficiency: ${areas}. Student is NOT currently UC/CSU eligible in these areas.`
+        });
+    }
+
+    if (agAnalysis.needsVerification > 0) {
+        recs.push({
+            level: 'info', icon: 'i',
+            text: `a-g areas e (LOTE) and f (VPA) cannot be verified from credit summary alone — "Fine Arts / LOTE" is combined. Check individual course list for 2 years same language + 1 year VPA.`
+        });
+    }
+
+    // CTE recommendation
+    if (!cteAnalysis.isCompleter && cteAnalysis.completed > 0) {
+        recs.push({
+            level: 'info', icon: 'i',
+            text: `CTE Pathway: ${cteAnalysis.creditsToCompleter} more credits needed to become a CTE Completer. Consider scheduling capstone or work-based learning courses.`
+        });
+    }
+
+    if (deficiencies.length === 0) {
+        recs.push({
+            level: 'ok', icon: '✓',
+            text: `Student is on track for graduation. All subject requirements met or in progress. ${totalCompleted} / ${TOTAL_REQUIRED} credits (${totalWIP} WIP).`
+        });
+    }
+
+    return recs;
+}
+
+// ============================================================
+// UI Rendering
+// ============================================================
+function renderSummaryBar(results) {
+    const bar = document.getElementById('summaryBar');
+    const total = results.length;
+    const critical = results.filter(r => r.riskLevel === 'critical').length;
+    const atRisk = results.filter(r => r.riskLevel === 'at-risk' || r.riskLevel === 'warning').length;
+    const onTrack = results.filter(r => r.riskLevel === 'on-track').length;
+    const agDeficient = results.filter(r => r.agAnalysis.agStatus === 'deficient').length;
+    const cteCompleters = results.filter(r => r.cteAnalysis.isCompleter).length;
+
+    bar.innerHTML = `
+        <div class="summary-card"><div class="number">${total}</div><div class="label">Students Analyzed</div></div>
+        <div class="summary-card critical"><div class="number">${critical}</div><div class="label">Cannot Graduate</div></div>
+        <div class="summary-card warning"><div class="number">${atRisk}</div><div class="label">At Risk / Deficient</div></div>
+        <div class="summary-card ok"><div class="number">${onTrack}</div><div class="label">On Track</div></div>
+        <div class="summary-card ${agDeficient > 0 ? 'warning' : 'ok'}"><div class="number">${agDeficient}</div><div class="label">a-g Deficient</div></div>
+        <div class="summary-card ok"><div class="number">${cteCompleters}</div><div class="label">CTE Completers</div></div>
+    `;
+    bar.style.display = 'flex';
+}
+
+let _cardCounter = 0;
+function renderStudentCard(result) {
+    const { header, subjectAnalysis, deficiencies, quartersRemaining, totalCompleted,
+            totalWIP, totalNeeded, currentGrade, currentQuarter, riskLevel,
+            agAnalysis, cteAnalysis } = result;
+    const recs = generateRecommendations(result);
+    const cardId = 'card-' + (_cardCounter++);
+
+    const progressPct = Math.min(100, ((totalCompleted + totalWIP) / TOTAL_REQUIRED * 100));
+    const progressClass = progressPct >= 90 ? 'good' : progressPct >= 60 ? 'warning' : 'critical';
+
+    const riskBadge = {
+        'critical': '<span class="badge badge-critical">CRITICAL</span>',
+        'at-risk': '<span class="badge badge-warning">AT RISK</span>',
+        'warning': '<span class="badge badge-warning">DEFICIENT</span>',
+        'on-track': '<span class="badge badge-ok">ON TRACK</span>'
+    }[riskLevel];
+
+    const agBadge = agAnalysis.agStatus === 'deficient'
+        ? '<span class="badge badge-critical">a-g DEFICIENT</span>'
+        : agAnalysis.agStatus === 'verify'
+        ? '<span class="badge badge-warning">a-g VERIFY</span>'
+        : '<span class="badge badge-ok">a-g ON TRACK</span>';
+
+    const cteBadge = cteAnalysis.isCompleter
+        ? '<span class="badge badge-purple">CTE COMPLETER</span>'
+        : cteAnalysis.completed >= 10
+        ? '<span class="badge badge-info">CTE CONCENTRATOR</span>'
+        : '';
+
+    const cardClass = riskLevel === 'critical' ? 'deficient' : riskLevel === 'at-risk' || riskLevel === 'warning' ? 'at-risk' : '';
+    const card = document.createElement('div');
+    card.className = `student-card ${cardClass}`;
+
+    // ── Graduation tab rows ──
+    const subjectRows = subjectAnalysis.map(s => {
+        const rowClass = s.isDeficient ? 'deficient-row' : s.wip > 0 ? 'wip-row' : '';
+        const statusClass = s.isComplete ? 'status-complete' : s.isDeficient ? 'status-deficient' : 'status-in-progress';
+        const statusLabel = s.isComplete ? 'Complete' : s.wip > 0 && s.needAfterWIP <= 0 ? 'In Progress' : `Need ${s.needAfterWIP}`;
+        return `<tr class="${rowClass}">
+            <td><span class="status-indicator ${statusClass}"></span>${s.subject}</td>
+            <td>${s.required}</td><td>${s.completed}</td>
+            <td>${s.wip || '-'}</td><td>${s.needAfterWIP || '-'}</td>
+            <td>${statusLabel}</td>
+        </tr>`;
+    }).join('');
+
+    const totalRow = `<tr class="total-row">
+        <td>TOTALS</td><td>${TOTAL_REQUIRED}</td><td>${totalCompleted}</td>
+        <td>${totalWIP || '-'}</td><td>${totalNeeded || '-'}</td>
+        <td>${totalNeeded <= 0 ? 'Complete' : `Need ${totalNeeded}`}</td>
+    </tr>`;
+
+    // ── a-g tab rows ──
+    const agRows = Object.entries(agAnalysis.areas).map(([area, data]) => {
+        const rowClass = data.verifyManually ? 'ag-verify' : data.isMet ? 'ag-met' : 'ag-deficient';
+        const statusLabel = data.verifyManually
+            ? `<span style="color:var(--warning);font-weight:600;">Verify</span>`
+            : data.isMet
+            ? `<span style="color:var(--success);">Met</span>`
+            : `<span style="color:var(--accent);font-weight:600;">Need ${data.needed}</span>`;
+        return `<tr class="${rowClass}">
+            <td><span class="ag-badge-area">${area}</span></td>
+            <td>${data.label}<br><small style="color:var(--text-muted)">${data.years}</small></td>
+            <td>${data.required}</td>
+            <td>${data.completed}</td>
+            <td>${data.wip || '-'}</td>
+            <td>${data.needed || '-'}</td>
+            <td>${statusLabel}</td>
+        </tr>`;
+    }).join('');
+
+    // ── CTE tab ──
+    const cteSteps = CTE_LEVELS.map((level, i) => {
+        const reached = cteAnalysis.completed >= level.minCredits;
+        const isCurrent = cteAnalysis.currentLevel && cteAnalysis.currentLevel.name === level.name;
+        const cls = reached ? 'reached' : isCurrent ? 'current' : '';
+        const connector = i < CTE_LEVELS.length - 1
+            ? `<div class="cte-connector ${cteAnalysis.completed >= CTE_LEVELS[i+1].minCredits ? 'filled' : ''}"></div>`
+            : '';
+        return `
+            <div class="cte-step ${cls}">
+                <div class="cte-step-dot">${reached ? '&#10003;' : level.minCredits}</div>
+                <div class="cte-step-label">${level.name}</div>
+                <div class="cte-step-credits">${level.minCredits}+ credits</div>
+            </div>
+            ${connector}
+        `;
+    }).join('');
+
+    // Recommendations HTML
+    const recsHTML = recs.map(r => `
+        <div class="rec-item rec-${r.level}">
+            <span class="rec-icon">${r.icon === '!!' ? '&#9888;&#65039;' : r.icon === '!' ? '&#9888;' : r.icon === '✓' ? '&#10003;' : '&#8505;'}</span>
+            <span>${r.text}</span>
+        </div>
+    `).join('');
+
+    let displayName = header.name && header.name.length > 1 ? header.name : '';
+    const idLabel = header.permId ? `ID: ${header.permId}` : '';
+    if (!displayName && idLabel) displayName = `Student ${idLabel}`;
+    else if (!displayName) displayName = 'Unknown Student';
+
+    // Tab badge colors
+    const gradTabBadge = riskLevel === 'on-track'
+        ? '<span class="tab-badge" style="background:#c6f6d5;color:#276749">&#10003;</span>'
+        : riskLevel === 'critical'
+        ? '<span class="tab-badge" style="background:#fed7d7;color:#c53030">!</span>'
+        : '<span class="tab-badge" style="background:#fefcbf;color:#975a16">!</span>';
+    const agTabBadge = agAnalysis.agStatus === 'on-track'
+        ? '<span class="tab-badge" style="background:#c6f6d5;color:#276749">&#10003;</span>'
+        : agAnalysis.agStatus === 'verify'
+        ? '<span class="tab-badge" style="background:#fefcbf;color:#975a16">?</span>'
+        : '<span class="tab-badge" style="background:#fed7d7;color:#c53030">!</span>';
+    const cteTabBadge = cteAnalysis.isCompleter
+        ? '<span class="tab-badge" style="background:#e9d8fd;color:#553c9a">&#10003;</span>'
+        : '<span class="tab-badge" style="background:#bee3f8;color:#2a4365">' + cteAnalysis.completed + '</span>';
+
+    card.innerHTML = `
+        <div class="student-header" onclick="this.parentElement.classList.toggle('expanded')">
+            <div class="student-info">
+                <h3>${displayName}${displayName !== idLabel && idLabel ? ` <span style="font-weight:400;font-size:0.82rem;color:var(--text-muted)">(${idLabel})</span>` : ''}</h3>
+                <div class="meta">
+                    Grade ${header.grade} | Class of ${header.classOf}
+                    ${header.gpaWeighted ? ` | GPA: ${header.gpaWeighted}` : ''}
+                    ${header.gpaUC ? ` | UC GPA: ${header.gpaUC}` : ''}
+                    ${header.classRank ? ` | Rank: ${header.classRank}` : ''}
+                    | ${currentGrade}th ${currentQuarter} | ${quartersRemaining} qtr(s) left
+                </div>
+            </div>
+            <div class="student-badges">
+                ${riskBadge} ${agBadge} ${cteBadge}
+                <span class="expand-arrow">&#9660;</span>
+            </div>
+        </div>
+        <div class="student-detail">
+            <div class="progress-bar-container">
+                <div class="progress-label">
+                    <span>Credits: ${totalCompleted}${totalWIP > 0 ? ` + ${totalWIP} WIP` : ''} / ${TOTAL_REQUIRED}</span>
+                    <span>${Math.round(progressPct)}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill ${progressClass}" style="width: ${progressPct}%"></div>
+                </div>
+            </div>
+
+            <!-- Analysis Tabs -->
+            <div class="analysis-tabs">
+                <button class="analysis-tab active" onclick="switchTab('${cardId}','grad',this)">Graduation ${gradTabBadge}</button>
+                <button class="analysis-tab" onclick="switchTab('${cardId}','ag',this)">a-g Requirements ${agTabBadge}</button>
+                <button class="analysis-tab" onclick="switchTab('${cardId}','cte',this)">CTE Pathway ${cteTabBadge}</button>
+            </div>
+
+            <!-- Graduation Tab -->
+            <div class="tab-panel active" id="${cardId}-grad">
+                <table class="credit-table">
+                    <thead><tr>
+                        <th>Subject Area</th><th>Req'd</th><th>Comp</th><th>WIP</th><th>Need</th><th>Status</th>
+                    </tr></thead>
+                    <tbody>${subjectRows}${totalRow}</tbody>
+                </table>
+            </div>
+
+            <!-- a-g Tab -->
+            <div class="tab-panel" id="${cardId}-ag">
+                <div class="ag-summary-row">
+                    <div class="ag-summary-item">
+                        <div><div class="ag-count" style="color:var(--success)">${agAnalysis.totalMet}</div><div class="ag-label">Areas Met</div></div>
+                    </div>
+                    <div class="ag-summary-item">
+                        <div><div class="ag-count" style="color:var(--accent)">${agAnalysis.definitelyDeficient.length}</div><div class="ag-label">Deficient</div></div>
+                    </div>
+                    <div class="ag-summary-item">
+                        <div><div class="ag-count" style="color:var(--warning)">${agAnalysis.needsVerification}</div><div class="ag-label">Verify Manually</div></div>
+                    </div>
+                </div>
+                <table class="ag-table">
+                    <thead><tr>
+                        <th>Area</th><th>Subject</th><th>Req'd</th><th>Comp</th><th>WIP</th><th>Need</th><th>Status</th>
+                    </tr></thead>
+                    <tbody>${agRows}</tbody>
+                </table>
+                <div style="margin-top:10px;padding:10px 14px;background:#ebf8ff;border:1px solid #bee3f8;border-radius:6px;font-size:0.8rem;color:#2a4365;line-height:1.5;">
+                    <strong>Note:</strong> Areas e (LOTE) and f (VPA) are combined as "Fine Arts / LOTE" on the transcript credit summary.
+                    To verify: check the student's individual course list for <strong>2 years of the same language</strong> (area e)
+                    and <strong>1 year of Visual/Performing Arts</strong> (area f). Also confirm all courses are on the
+                    <a href="https://doorways.ucop.edu/list" target="_blank" style="color:#2a4365;">UC a-g approved list</a>.
+                </div>
+            </div>
+
+            <!-- CTE Tab -->
+            <div class="tab-panel" id="${cardId}-cte">
+                <div class="cte-pathway">
+                    <h4>CTE Pathway Progress — ${cteAnalysis.completed} credits completed${cteAnalysis.wip ? ` (${cteAnalysis.wip} WIP)` : ''}</h4>
+                    <div class="cte-progress-steps">${cteSteps}</div>
+                    <div class="cte-detail">
+                        ${cteAnalysis.isCompleter
+                            ? '<strong style="color:var(--success)">&#10003; CTE Pathway Completer</strong> — Student has completed 15+ credits in Career Technical Education, meeting pathway completion requirements.'
+                            : cteAnalysis.currentLevel
+                            ? `<strong>Current Level: ${cteAnalysis.currentLevel.name}</strong> — ${cteAnalysis.currentLevel.description}. Need ${cteAnalysis.creditsToCompleter} more credits to reach Completer status.`
+                            : cteAnalysis.completed > 0
+                            ? `Student has ${cteAnalysis.completed} CTE credits. ${cteAnalysis.creditsToCompleter} more credits needed for Completer status.`
+                            : 'No CTE credits completed yet. Student needs to begin a CTE pathway to meet the 10-credit graduation requirement and work toward pathway completion.'
+                        }
+                        <br><br>
+                        <strong>Graduation Requirement (10 credits):</strong>
+                        ${cteAnalysis.gradReqMet
+                            ? '<span style="color:var(--success)">&#10003; Met</span>'
+                            : `<span style="color:var(--accent)">Need ${Math.max(0, cteAnalysis.required - cteAnalysis.completed - cteAnalysis.wip)} more credits</span>`
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="recommendations">
+                <h4>Recommendations</h4>
+                ${recsHTML}
+            </div>
+        </div>
+    `;
+    return card;
+}
+
+// Tab switching (exposed globally)
+window.switchTab = function(cardId, tab, btn) {
+    const card = btn.closest('.student-detail');
+    card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    card.querySelectorAll('.analysis-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(cardId + '-' + tab).classList.add('active');
+    btn.classList.add('active');
+};
+
+// ============================================================
+// Main Processing Pipeline
+// ============================================================
+async function processFiles(files) {
+    const dropZone = document.getElementById('dropZone');
+    const loading = document.getElementById('loading');
+    const studentList = document.getElementById('studentList');
+    const resetBtn = document.getElementById('resetBtn');
+
+    dropZone.style.display = 'none';
+    loading.style.display = 'block';
+    studentList.innerHTML = '';
+
+    const allResults = [];
+    try {
+        for (const file of files) {
+            if (file.type !== 'application/pdf') continue;
+            const pages = await extractPdfPages(file);
+            const studentChunks = splitIntoStudents(pages);
+
+            for (const chunk of studentChunks) {
+                try {
+                    const header = parseStudentHeader(chunk);
+                    const creditSummary = parseCreditSummary(chunk);
+                    if (!creditSummary || Object.keys(creditSummary.credits).length === 0) continue;
+                    const quarterInfo = detectCurrentQuarter(chunk);
+                    const analysis = analyzeStudent(header, creditSummary, quarterInfo);
+                    allResults.push(analysis);
+                } catch (err) {
+                    console.error('[Transcript Reviewer] Error parsing student:', err);
+                }
+            }
+        }
+
+        const sortOrder = { 'critical': 0, 'at-risk': 1, 'warning': 2, 'on-track': 3 };
+        allResults.sort((a, b) => sortOrder[a.riskLevel] - sortOrder[b.riskLevel]);
+
+        renderSummaryBar(allResults);
+        for (const result of allResults) {
+            studentList.appendChild(renderStudentCard(result));
+        }
+        studentList.style.display = 'flex';
+        resetBtn.style.display = 'inline-block';
+    } catch (err) {
+        console.error('Processing error:', err);
+        studentList.innerHTML = `<div style="color: var(--accent); padding: 20px;">Error processing PDF: ${err.message}</div>`;
+        studentList.style.display = 'flex';
+    }
+    loading.style.display = 'none';
+}
+
+// ============================================================
+// Event Handlers
+// ============================================================
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const resetBtn = document.getElementById('resetBtn');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => {
+    if (e.target.files.length) processFiles(e.target.files);
+});
+resetBtn.addEventListener('click', () => {
+    document.getElementById('dropZone').style.display = '';
+    document.getElementById('summaryBar').style.display = 'none';
+    document.getElementById('studentList').style.display = 'none';
+    document.getElementById('studentList').innerHTML = '';
+    resetBtn.style.display = 'none';
+    fileInput.value = '';
+});
+</script>
+</body>
+</html>

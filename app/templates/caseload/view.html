@@ -71,6 +71,28 @@
     </div>
 </div>
 
+<!-- Transcript Analysis -->
+<div class="card">
+    <div class="card-header">
+        Transcript Analysis
+        <div class="btn-group">
+            <button class="btn btn-sm btn-primary" onclick="document.getElementById('transcriptSection').style.display = document.getElementById('transcriptSection').style.display === 'none' ? 'block' : 'none'; this.textContent = document.getElementById('transcriptSection').style.display === 'none' ? 'Show Analyzer' : 'Hide Analyzer';">Show Analyzer</button>
+            <a href="{{ url_for('static', filename='transcript_reviewer/index.html') }}" target="_blank" class="btn btn-sm btn-outline">Open Full Page</a>
+        </div>
+    </div>
+    <div id="transcriptSection" style="display:none;">
+        <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin:12px 0;">
+            <iframe id="transcriptFrame"
+                    src="{{ url_for('static', filename='transcript_reviewer/index.html') }}"
+                    style="width:100%;height:700px;border:none;display:block;"
+                    title="Transcript Reviewer"
+                    sandbox="allow-scripts allow-same-origin allow-popups"
+                    loading="lazy"></iframe>
+        </div>
+        <p style="font-size:0.75rem;color:#9ca3af;padding:4px 0;">Drop a transcript PDF above to analyze graduation progress, a-g eligibility, and CTE pathway status. Data stays in your browser.</p>
+    </div>
+</div>
+
 <!-- Recent Notes -->
 <div class="card">
     <div class="card-header">
