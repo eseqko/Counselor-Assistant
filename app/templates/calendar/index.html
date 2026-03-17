@@ -10,9 +10,34 @@
     <div class="card-header">
         Calendar
         <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary">+ New Event</a>
+        <button id="subscribe-btn" class="btn btn-sm btn-outline-secondary" onclick="showFeedUrl()">Subscribe (Google Calendar)</button>
     </div>
     <div class="card-body">
         <div id="calendar" style="min-height:600px;"></div>
+    </div>
+</div>
+
+<!-- Subscribe Modal -->
+<div id="feed-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+    <div style="background:#fff; max-width:550px; margin:100px auto; border-radius:8px; padding:24px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <h5>Subscribe to Your Calendar</h5>
+        <p style="font-size:14px; color:#666;">Copy this URL and add it to Google Calendar (or any calendar app) as a subscription.</p>
+        <div style="display:flex; gap:8px;">
+            <input type="text" id="feed-url-input" readonly style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+            <button class="btn btn-sm btn-primary" onclick="copyFeedUrl()">Copy</button>
+        </div>
+        <p id="copy-confirm" style="color:green; font-size:13px; margin-top:8px; display:none;">Copied!</p>
+        <hr>
+        <p style="font-size:13px; color:#666; margin-bottom:4px;"><strong>How to subscribe in Google Calendar:</strong></p>
+        <ol style="font-size:13px; color:#666; padding-left:20px;">
+            <li>Open <strong>Google Calendar</strong> on your computer</li>
+            <li>Click the <strong>+</strong> next to "Other calendars" in the left sidebar</li>
+            <li>Select <strong>"From URL"</strong></li>
+            <li>Paste the URL above and click <strong>"Add calendar"</strong></li>
+        </ol>
+        <div style="text-align:right; margin-top:12px;">
+            <button class="btn btn-sm btn-secondary" onclick="closeFeedModal()">Close</button>
+        </div>
     </div>
 </div>
 
@@ -42,5 +67,27 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     calendar.render();
 });
+
+function showFeedUrl() {
+    fetch('{{ url_for("calendar.feed_url") }}')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('feed-url-input').value = data.feed_url;
+            document.getElementById('feed-modal').style.display = 'block';
+            document.getElementById('copy-confirm').style.display = 'none';
+        });
+}
+
+function copyFeedUrl() {
+    var input = document.getElementById('feed-url-input');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(function() {
+        document.getElementById('copy-confirm').style.display = 'block';
+    });
+}
+
+function closeFeedModal() {
+    document.getElementById('feed-modal').style.display = 'none';
+}
 </script>
 {% endblock %}

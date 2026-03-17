@@ -2,6 +2,7 @@ from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
+import secrets
 
 
 @login_manager.user_loader
@@ -20,6 +21,7 @@ class User(UserMixin, db.Model):
     school_name = db.Column(db.String(200), default='')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_login = db.Column(db.DateTime)
+    calendar_feed_token = db.Column(db.String(64), unique=True)
 
     # Relationships
     notes = db.relationship('Note', backref='author', lazy='dynamic')
@@ -31,6 +33,12 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def get_or_create_feed_token(self):
+        if not self.calendar_feed_token:
+            self.calendar_feed_token = secrets.token_urlsafe(32)
+            db.session.commit()
+        return self.calendar_feed_token
 
 
 class AuditLog(db.Model):
