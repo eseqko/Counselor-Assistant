@@ -80,7 +80,7 @@ def create_app(config_class=Config):
 
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event
-        from app.models import service_record, course, glossary_term
+        from app.models import service_record, course, glossary_term, transcript
         db.create_all()
 
         # Auto-migrate: add any missing columns to existing tables

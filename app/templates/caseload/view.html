@@ -76,20 +76,105 @@
     <div class="card-header">
         Transcript Analysis
         <div class="btn-group">
-            <button class="btn btn-sm btn-primary" onclick="document.getElementById('transcriptSection').style.display = document.getElementById('transcriptSection').style.display === 'none' ? 'block' : 'none'; this.textContent = document.getElementById('transcriptSection').style.display === 'none' ? 'Show Analyzer' : 'Hide Analyzer';">Show Analyzer</button>
-            <a href="{{ url_for('static', filename='transcript_reviewer/index.html') }}" target="_blank" class="btn btn-sm btn-outline">Open Full Page</a>
+            <a href="{{ url_for('caseload.transcript_batch') }}" class="btn btn-sm btn-outline">Batch Import</a>
+            <button class="btn btn-sm btn-primary" onclick="document.getElementById('transcriptSection').style.display = document.getElementById('transcriptSection').style.display === 'none' ? 'block' : 'none'; this.textContent = document.getElementById('transcriptSection').style.display === 'none' ? 'Analyze Transcript' : 'Hide Analyzer';">Analyze Transcript</button>
         </div>
     </div>
-    <div id="transcriptSection" style="display:none;">
-        <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin:12px 0;">
-            <iframe id="transcriptFrame"
-                    src="{{ url_for('static', filename='transcript_reviewer/index.html') }}"
-                    style="width:100%;height:700px;border:none;display:block;"
-                    title="Transcript Reviewer"
-                    sandbox="allow-scripts allow-same-origin allow-popups"
-                    loading="lazy"></iframe>
+    {% if latest_transcript %}
+    <div class="card-body">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+            <!-- Graduation -->
+            <div style="flex:1;min-width:200px;padding:14px;border-radius:8px;border:1px solid #e5e7eb;
+                {% if latest_transcript.risk_level == 'critical' %}background:#fef2f2;border-color:#fecaca;
+                {% elif latest_transcript.risk_level in ('at-risk', 'warning') %}background:#fffbeb;border-color:#fde68a;
+                {% else %}background:#f0fdf4;border-color:#bbf7d0;{% endif %}">
+                <div style="font-size:0.72rem;text-transform:uppercase;font-weight:700;color:#6b7280;letter-spacing:0.5px;">Graduation</div>
+                <div style="font-size:1.5rem;font-weight:700;margin:4px 0;
+                    {% if latest_transcript.risk_level == 'critical' %}color:#dc2626;
+                    {% elif latest_transcript.risk_level in ('at-risk', 'warning') %}color:#d97706;
+                    {% else %}color:#059669;{% endif %}">
+                    {{ latest_transcript.total_completed|int }} / 225
+                </div>
+                <div style="font-size:0.78rem;color:#6b7280;">
+                    {% if latest_transcript.total_wip %}+ {{ latest_transcript.total_wip|int }} WIP | {% endif %}
+                    <span class="badge badge-{{ 'danger' if latest_transcript.risk_level == 'critical' else 'warning' if latest_transcript.risk_level in ('at-risk', 'warning') else 'success' }}">
+                        {{ latest_transcript.risk_level|upper|replace('-', ' ') }}
+                    </span>
+                </div>
+                <!-- Progress bar -->
+                <div style="height:6px;background:#e5e7eb;border-radius:3px;margin-top:8px;overflow:hidden;">
+                    <div style="height:100%;border-radius:3px;width:{{ [((latest_transcript.total_completed / 225) * 100)|round|int, 100]|min }}%;
+                        {% if latest_transcript.risk_level == 'critical' %}background:#dc2626;
+                        {% elif latest_transcript.risk_level in ('at-risk', 'warning') %}background:#d97706;
+                        {% else %}background:#059669;{% endif %}"></div>
+                </div>
+            </div>
+            <!-- a-g -->
+            <div style="flex:1;min-width:200px;padding:14px;border-radius:8px;border:1px solid #e5e7eb;
+                {% if latest_transcript.ag_status == 'deficient' %}background:#fef2f2;border-color:#fecaca;
+                {% elif latest_transcript.ag_status == 'verify' %}background:#fffbeb;border-color:#fde68a;
+                {% else %}background:#f0fdf4;border-color:#bbf7d0;{% endif %}">
+                <div style="font-size:0.72rem;text-transform:uppercase;font-weight:700;color:#6b7280;letter-spacing:0.5px;">a-g Eligibility</div>
+                <div style="font-size:1.5rem;font-weight:700;margin:4px 0;
+                    {% if latest_transcript.ag_status == 'deficient' %}color:#dc2626;
+                    {% elif latest_transcript.ag_status == 'verify' %}color:#d97706;
+                    {% else %}color:#059669;{% endif %}">
+                    {{ latest_transcript.ag_areas_met }} / 7
+                </div>
+                <div style="font-size:0.78rem;color:#6b7280;">
+                    areas met |
+                    <span class="badge badge-{{ 'danger' if latest_transcript.ag_status == 'deficient' else 'warning' if latest_transcript.ag_status == 'verify' else 'success' }}">
+                        {% if latest_transcript.ag_status == 'deficient' %}DEFICIENT
+                        {% elif latest_transcript.ag_status == 'verify' %}VERIFY
+                        {% else %}ON TRACK{% endif %}
+                    </span>
+                    {% if latest_transcript.ag_areas_deficient %}| {{ latest_transcript.ag_areas_deficient }} deficient{% endif %}
+                </div>
+            </div>
+            <!-- CTE -->
+            <div style="flex:1;min-width:200px;padding:14px;border-radius:8px;border:1px solid #e5e7eb;
+                {% if latest_transcript.cte_is_completer %}background:#f5f3ff;border-color:#ddd6fe;
+                {% else %}background:#eff6ff;border-color:#bfdbfe;{% endif %}">
+                <div style="font-size:0.72rem;text-transform:uppercase;font-weight:700;color:#6b7280;letter-spacing:0.5px;">CTE Pathway</div>
+                <div style="font-size:1.5rem;font-weight:700;margin:4px 0;
+                    {% if latest_transcript.cte_is_completer %}color:#7c3aed;{% else %}color:#2563eb;{% endif %}">
+                    {{ latest_transcript.cte_completed|int }} credits
+                </div>
+                <div style="font-size:0.78rem;color:#6b7280;">
+                    {% if latest_transcript.cte_is_completer %}
+                    <span class="badge" style="background:#ede9fe;color:#5b21b6;">COMPLETER</span>
+                    {% elif latest_transcript.cte_level and latest_transcript.cte_level != 'none' %}
+                    <span class="badge badge-info">{{ latest_transcript.cte_level|upper }}</span>
+                    {% else %}
+                    <span class="badge badge-gray">NOT STARTED</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        <p style="font-size:0.75rem;color:#9ca3af;padding:4px 0;">Drop a transcript PDF above to analyze graduation progress, a-g eligibility, and CTE pathway status. Data stays in your browser.</p>
+        <div style="font-size:0.72rem;color:#9ca3af;">
+            Last imported: {{ latest_transcript.import_date.strftime('%m/%d/%Y %I:%M %p') }}
+            {% if latest_transcript.quarter %} | Quarter: {{ latest_transcript.quarter }}{% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No transcript data saved yet. Use <a href="{{ url_for('caseload.transcript_batch') }}">Batch Import</a> or the analyzer below to import transcript data.</p>
+        </div>
+    </div>
+    {% endif %}
+    <div id="transcriptSection" style="display:none;">
+        <div style="border-top:1px solid #e5e7eb;padding:12px;">
+            <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                <iframe id="transcriptFrame"
+                        src="{{ url_for('static', filename='transcript_reviewer/index.html') }}"
+                        style="width:100%;height:700px;border:none;display:block;"
+                        title="Transcript Reviewer"
+                        sandbox="allow-scripts allow-same-origin allow-popups"
+                        loading="lazy"></iframe>
+            </div>
+            <p style="font-size:0.75rem;color:#9ca3af;padding:4px 0;">Drop a transcript PDF to analyze. To save results, use <a href="{{ url_for('caseload.transcript_batch') }}">Batch Import</a>.</p>
+        </div>
     </div>
 </div>
 
