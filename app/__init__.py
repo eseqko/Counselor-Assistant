@@ -12,6 +12,36 @@ login_manager.login_message_category = 'info'
 csrf = CSRFProtect()
 
 
+def _add_missing_columns(app):
+    """Add any columns defined in models but missing from the SQLite database."""
+    import sqlalchemy
+    inspector = sqlalchemy.inspect(db.engine)
+    for table_name, table in db.metadata.tables.items():
+        if not inspector.has_table(table_name):
+            continue
+        existing = {col['name'] for col in inspector.get_columns(table_name)}
+        for col in table.columns:
+            if col.name not in existing:
+                col_type = col.type.compile(db.engine.dialect)
+                default = ''
+                if col.default is not None and col.default.is_scalar:
+                    val = col.default.arg
+                    if isinstance(val, bool):
+                        default = f" DEFAULT {1 if val else 0}"
+                    elif isinstance(val, str):
+                        default = f" DEFAULT '{val}'"
+                    elif isinstance(val, (int, float)):
+                        default = f" DEFAULT {val}"
+                nullable = "" if col.nullable else " NOT NULL"
+                if nullable and not default:
+                    # SQLite can't add NOT NULL without default; make nullable
+                    nullable = ""
+                sql = f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type}{nullable}{default}"
+                db.session.execute(sqlalchemy.text(sql))
+                app.logger.info(f"Added missing column: {table_name}.{col.name}")
+    db.session.commit()
+
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -52,6 +82,9 @@ def create_app(config_class=Config):
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term
         db.create_all()
+
+        # Auto-migrate: add any missing columns to existing tables
+        _add_missing_columns(app)
 
         # Create default admin user if none exists
         from app.models.user import User
