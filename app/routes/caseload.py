@@ -1,8 +1,10 @@
 import io
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
+import json
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student, Tag
+from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 try:
@@ -116,8 +118,10 @@ def view_student(id):
     log_action('view', 'student', student.id)
     notes = student.notes.limit(10).all()
     services = student.service_records.limit(10).all()
+    latest_transcript = student.transcript_records.first()
     return render_template('caseload/view.html',
-        student=student, notes=notes, services=services)
+        student=student, notes=notes, services=services,
+        latest_transcript=latest_transcript)
 
 
 @caseload_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
@@ -542,3 +546,80 @@ def export_caseload():
         as_attachment=True,
         download_name='My_Caseload_Export.xlsx'
     )
+
+
+# =====================================================================
+#  TRANSCRIPT ANALYSIS — SAVE & BATCH IMPORT
+# =====================================================================
+
+@caseload_bp.route('/transcript/batch')
+@login_required
+def transcript_batch():
+    """Batch transcript import page."""
+    return render_template('caseload/transcript_batch.html')
+
+
+@caseload_bp.route('/transcript/save', methods=['POST'])
+@login_required
+def transcript_save():
+    """Save transcript analysis results for one or more students.
+
+    Expects JSON body: { "students": [ { permId, quarter, ... }, ... ] }
+    Matches students by permId → student_id_number.
+    """
+    data = request.get_json()
+    if not data or 'students' not in data:
+        return jsonify({'error': 'Missing students data'}), 400
+
+    saved = 0
+    skipped = 0
+    not_found = []
+
+    for entry in data['students']:
+        perm_id = str(entry.get('permId', '')).strip()
+        if not perm_id:
+            skipped += 1
+            continue
+
+        student = Student.query.filter_by(
+            student_id_number=perm_id,
+            assigned_counselor_id=current_user.id
+        ).first()
+
+        if not student:
+            not_found.append(perm_id)
+            continue
+
+        record = TranscriptRecord(
+            student_id=student.id,
+            quarter=entry.get('quarter', ''),
+            total_completed=entry.get('totalCompleted', 0),
+            total_wip=entry.get('totalWIP', 0),
+            total_needed=entry.get('totalNeeded', 0),
+            risk_level=entry.get('riskLevel', ''),
+            ag_status=entry.get('agStatus', ''),
+            ag_areas_met=entry.get('agAreasMet', 0),
+            ag_areas_deficient=entry.get('agAreasDeficient', 0),
+            cte_completed=entry.get('cteCompleted', 0),
+            cte_level=entry.get('cteLevel', 'none'),
+            cte_is_completer=entry.get('cteIsCompleter', False),
+            credits_json=json.dumps(entry.get('credits', {})),
+            ag_json=json.dumps(entry.get('agAreas', {})),
+            created_by_id=current_user.id,
+        )
+        db.session.add(record)
+        saved += 1
+
+    db.session.commit()
+
+    if saved > 0:
+        log_action('import', 'transcript',
+                   details=f'Saved transcript data for {saved} student(s)')
+
+    return jsonify({
+        'saved': saved,
+        'skipped': skipped,
+        'notFound': not_found,
+        'message': f'Saved {saved} transcript record(s).'
+                   + (f' {len(not_found)} student(s) not found in your caseload.' if not_found else '')
+    })
