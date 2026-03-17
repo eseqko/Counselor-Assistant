@@ -67,10 +67,6 @@
                 <span class="page-title">{% block page_title %}Dashboard{% endblock %}</span>
             </div>
             <div class="user-info">
-                {% if request.device_token is defined and request.device_token %}
-                <span class="badge badge-info" style="font-size:0.75rem;">&#128241; {{ request.device_token.device_name }}</span>
-                <span style="color:#aaa">|</span>
-                {% endif %}
                 <span>{{ current_user.display_name }}</span>
                 {% if current_user.school_name %}
                 <span style="color:#aaa">|</span>

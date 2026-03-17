@@ -6,7 +6,6 @@ from app.models.user import AuditLog
 
 def log_action(action, resource_type=None, resource_id=None, details=None):
     """Log an action for FERPA compliance audit trail."""
-    device = getattr(request, 'device_token', None) if request else None
     entry = AuditLog(
         user_id=current_user.id if current_user and current_user.is_authenticated else None,
         action=action,
@@ -14,7 +13,6 @@ def log_action(action, resource_type=None, resource_id=None, details=None):
         resource_id=resource_id,
         details=details,
         ip_address=request.remote_addr if request else None,
-        device_token_id=device.id if device else None,
     )
     db.session.add(entry)
     db.session.commit()
