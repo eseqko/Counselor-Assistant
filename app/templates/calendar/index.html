@@ -10,9 +10,18 @@
     <div class="card-header">
         Calendar
         <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary">+ New Event</a>
-        <button id="subscribe-btn" class="btn btn-sm btn-outline-secondary" onclick="showFeedUrl()">Subscribe (Google Calendar)</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="showFeedUrl()">Subscribe (Google Calendar)</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="showImportModal()">Import Google Calendar</button>
     </div>
     <div class="card-body">
+        {% if current_user.external_ical_url %}
+        <div style="margin-bottom:12px; padding:8px 12px; background:#fce4ec; border-radius:4px; font-size:13px; display:flex; align-items:center; gap:8px;">
+            <span style="color:#c62828;">Google Calendar connected</span>
+            <form method="POST" action="{{ url_for('calendar.external_ical') }}" style="margin:0;">
+                <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size:12px;">Disconnect</button>
+            </form>
+        </div>
+        {% endif %}
         <div id="calendar" style="min-height:600px;"></div>
     </div>
 </div>
@@ -41,12 +50,43 @@
     </div>
 </div>
 
+<!-- Import Google Calendar Modal -->
+<div id="import-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+    <div style="background:#fff; max-width:550px; margin:100px auto; border-radius:8px; padding:24px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <h5>Import Google Calendar</h5>
+        <p style="font-size:14px; color:#666;">Paste your Google Calendar's <strong>secret address in iCal format</strong> to see those events here.</p>
+        <form method="POST" action="{{ url_for('calendar.external_ical') }}">
+            <div style="display:flex; gap:8px;">
+                <input type="url" name="external_ical_url" placeholder="https://calendar.google.com/calendar/ical/...basic.ics"
+                    value="{{ current_user.external_ical_url or '' }}"
+                    style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+            </div>
+        </form>
+        <hr>
+        <p style="font-size:13px; color:#666; margin-bottom:4px;"><strong>How to find your secret address:</strong></p>
+        <ol style="font-size:13px; color:#666; padding-left:20px;">
+            <li>Open <strong>Google Calendar</strong> on your computer</li>
+            <li>Click the <strong>three dots</strong> next to your calendar name and select <strong>"Settings and sharing"</strong></li>
+            <li>Scroll to <strong>"Integrate calendar"</strong></li>
+            <li>Copy the <strong>"Secret address in iCal format"</strong> URL</li>
+        </ol>
+        <div style="text-align:right; margin-top:12px;">
+            <button class="btn btn-sm btn-secondary" onclick="closeImportModal()">Close</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.9/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
+    var eventSources = [
+        { url: '{{ url_for("calendar.get_events") }}' },
+        { url: '{{ url_for("calendar.get_external_events") }}' }
+    ];
     var calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         headerToolbar: {
@@ -54,10 +94,13 @@ document.addEventListener('DOMContentLoaded', function() {
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
         },
-        events: '{{ url_for("calendar.get_events") }}',
+        eventSources: eventSources,
         editable: false,
         selectable: true,
         eventClick: function(info) {
+            if (info.event.extendedProps && info.event.extendedProps.source === 'google') {
+                return; // Google events are read-only
+            }
             window.location.href = '/calendar/' + info.event.id + '/edit';
         },
         select: function(info) {
@@ -88,6 +131,14 @@ function copyFeedUrl() {
 
 function closeFeedModal() {
     document.getElementById('feed-modal').style.display = 'none';
+}
+
+function showImportModal() {
+    document.getElementById('import-modal').style.display = 'block';
+}
+
+function closeImportModal() {
+    document.getElementById('import-modal').style.display = 'none';
 }
 </script>
 {% endblock %}
