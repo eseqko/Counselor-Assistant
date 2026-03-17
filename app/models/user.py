@@ -1,3 +1,4 @@
+from flask import request, current_app
 from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,6 +8,23 @@ from datetime import datetime, timezone
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+@login_manager.request_loader
+def load_user_from_device_token(req):
+    """Authenticate requests via device_token cookie."""
+    token = req.cookies.get('device_token')
+    if not token:
+        return None
+    from app.models.device import DeviceToken
+    device = DeviceToken.lookup(token, current_app.config['SECRET_KEY'])
+    if device:
+        device.last_used_at = datetime.now(timezone.utc)
+        device.last_ip = req.remote_addr
+        db.session.commit()
+        req.device_token = device
+        return User.query.get(device.user_id)
+    return None
 
 
 class User(UserMixin, db.Model):
@@ -44,6 +62,8 @@ class AuditLog(db.Model):
     resource_id = db.Column(db.Integer)
     details = db.Column(db.Text)
     ip_address = db.Column(db.String(45))
+    device_token_id = db.Column(db.Integer, db.ForeignKey('device_tokens.id'), nullable=True)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = db.relationship('User', backref='audit_logs')
+    device_token = db.relationship('DeviceToken')

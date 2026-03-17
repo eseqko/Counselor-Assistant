@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Link Device - Counselor Assistant{% endblock %}
+{% block public_content %}
+<div class="login-page">
+    <div class="login-card">
+        <h1>Counselor Assistant</h1>
+        <p class="subtitle">Link This Device</p>
+
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        <p style="text-align:center;margin-top:16px;">
+            <a href="{{ url_for('auth.login') }}">Go to Login</a>
+        </p>
+        {% else %}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <p style="font-size:0.9rem;color:#666;margin-bottom:16px;">
+            Enter a name for this device so you can identify it later (e.g. "My Laptop", "Office iPad").
+        </p>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Device Name</label>
+                <input type="text" name="device_name" class="form-control" required autofocus
+                       placeholder="e.g. My Laptop" maxlength="120">
+            </div>
+            <button type="submit" class="btn btn-primary">Register This Device</button>
+        </form>
+
+        <div class="ferpa-notice" style="margin-top:20px;">
+            &#128274; This device will get full access to your counselor data. Only proceed if you trust this device.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

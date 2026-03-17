@@ -14,7 +14,7 @@
                 {% for log in logs.items %}
                 <tr>
                     <td style="white-space:nowrap;">{{ log.timestamp.strftime('%m/%d/%Y %I:%M %p') }}</td>
-                    <td>{{ log.user.display_name if log.user else 'System' }}</td>
+                    <td>{{ log.user.display_name if log.user else 'System' }}{% if log.device_token %} <span class="badge badge-info" style="font-size:0.7rem;">{{ log.device_token.device_name }}</span>{% endif %}</td>
                     <td><span class="badge badge-{{ 'danger' if log.action == 'delete' else 'warning' if log.action == 'update' else 'success' if log.action == 'create' else 'info' }}">{{ log.action }}</span></td>
                     <td>{{ log.resource_type or '-' }}{% if log.resource_id %} #{{ log.resource_id }}{% endif %}</td>
                     <td style="font-size:0.82rem;">{{ log.details or '-' }}</td>

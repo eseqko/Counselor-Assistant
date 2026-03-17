@@ -3,7 +3,7 @@
 {% block page_title %}Settings{% endblock %}
 {% block content %}
 
-<div class="ferpa-notice">&#128274; All data is stored locally on this computer. Nothing is uploaded to the cloud.</div>
+<div class="ferpa-notice">&#128274; All data is stored locally on this computer. Linked devices access data over your local network.</div>
 
 <div class="stats-grid">
     <a href="{{ url_for('settings.profile') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
@@ -20,6 +20,11 @@
         <div class="stat-value" style="font-size:1.5rem;">&#128220;</div>
         <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Audit Log</div>
         <div style="font-size:0.8rem;color:var(--gray);">FERPA compliance log</div>
+    </a>
+    <a href="{{ url_for('devices.index') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128241;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Linked Devices</div>
+        <div style="font-size:0.8rem;color:var(--gray);">Manage device access</div>
     </a>
 </div>
 
