@@ -123,10 +123,19 @@ def view_student(id):
     # Pre-parse JSON fields for template
     transcript_credits = None
     transcript_ag = None
+    credits_total_shortfall = 0
+    credits_all_met = True
     if latest_transcript:
         if latest_transcript.credits_json:
             try:
                 transcript_credits = json.loads(latest_transcript.credits_json)
+                # Sum per-subject shortfalls (completed < required)
+                for data in transcript_credits.values():
+                    req = data.get('required', 0) or 0
+                    comp = data.get('completed', 0) or 0
+                    if comp < req:
+                        credits_all_met = False
+                        credits_total_shortfall += req - comp
             except (json.JSONDecodeError, TypeError):
                 pass
         if latest_transcript.ag_json:
@@ -139,7 +148,9 @@ def view_student(id):
         student=student, notes=notes, services=services,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
-        transcript_ag=transcript_ag)
+        transcript_ag=transcript_ag,
+        credits_total_shortfall=credits_total_shortfall,
+        credits_all_met=credits_all_met)
 
 
 @caseload_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
