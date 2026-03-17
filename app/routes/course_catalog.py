@@ -10,35 +10,7 @@ course_catalog_bp = Blueprint('course_catalog', __name__)
 @course_catalog_bp.route('/')
 @login_required
 def index():
-    search = request.args.get('search', '').strip()
-    dept_id = request.args.get('department', '')
-    course_type = request.args.get('type', '')
-    grade = request.args.get('grade', '')
-
-    query = Course.query.filter_by(is_active=True)
-
-    if search:
-        query = query.filter(
-            db.or_(
-                Course.title.ilike(f'%{search}%'),
-                Course.course_number.ilike(f'%{search}%'),
-                Course.description.ilike(f'%{search}%'),
-            )
-        )
-    if dept_id:
-        query = query.filter_by(department_id=int(dept_id))
-    if course_type:
-        query = query.filter_by(course_type=course_type)
-    if grade:
-        query = query.filter(Course.grade_levels.contains(grade))
-
-    courses = query.order_by(Course.department_id, Course.course_number).all()
-    departments = Department.query.order_by(Department.sort_order, Department.name).all()
-
-    return render_template('course_catalog/index.html',
-        courses=courses, departments=departments, search=search,
-        dept_id=dept_id, course_type=course_type, grade=grade,
-        course_types=Course.COURSE_TYPES)
+    return render_template('course_catalog/index.html')
 
 
 @course_catalog_bp.route('/course/<int:id>')

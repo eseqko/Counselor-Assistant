@@ -1,76 +1,78 @@
 {% extends "base.html" %}
-{% block title %}Course Catalog Wiki{% endblock %}
+{% block title %}Course Catalog{% endblock %}
 {% block page_title %}Course Catalog Wiki{% endblock %}
+{% block head %}
+<style>
+    .catalog-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        flex-wrap: wrap;
+    }
+    .catalog-toolbar .tab-btn {
+        padding: 6px 16px;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 2px solid var(--border-color, #dde1e7);
+        background: #fff;
+        color: #6b7280;
+        transition: all 0.2s;
+    }
+    .catalog-toolbar .tab-btn:hover {
+        border-color: var(--primary, #2C5F8A);
+        color: var(--primary, #2C5F8A);
+    }
+    .catalog-toolbar .tab-btn.active {
+        background: var(--primary, #2C5F8A);
+        color: #fff;
+        border-color: var(--primary, #2C5F8A);
+    }
+    .catalog-toolbar .tab-hint {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        margin-left: auto;
+    }
+    .catalog-frame-wrap {
+        border: 1px solid #dde1e7;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #f4f6f9;
+    }
+    .catalog-frame-wrap iframe {
+        width: 100%;
+        height: calc(100vh - 180px);
+        min-height: 500px;
+        border: none;
+        display: block;
+    }
+</style>
+{% endblock %}
 {% block content %}
-
-<div class="filter-bar">
-    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
-        <div class="form-group">
-            <label>Search</label>
-            <input type="text" name="search" class="form-control" placeholder="Course name or number..." value="{{ search }}">
-        </div>
-        <div class="form-group">
-            <label>Department</label>
-            <select name="department" class="form-control">
-                <option value="">All</option>
-                {% for d in departments %}
-                <option value="{{ d.id }}" {{ 'selected' if dept_id == d.id|string }}>{{ d.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Type</label>
-            <select name="type" class="form-control">
-                <option value="">All</option>
-                {% for val, label in course_types %}
-                <option value="{{ val }}" {{ 'selected' if course_type == val }}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Grade</label>
-            <select name="grade" class="form-control">
-                <option value="">All</option>
-                {% for g in range(9, 13) %}
-                <option value="{{ g }}" {{ 'selected' if grade == g|string }}>{{ g }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group">
-            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-        </div>
-    </form>
+<div class="catalog-toolbar">
+    <button class="tab-btn active" id="tabCatalog" onclick="switchCatalogView('index.html', this)">Catalog</button>
+    <button class="tab-btn" id="tabEditor" onclick="switchCatalogView('editor.html', this)">Editor</button>
+    <button class="tab-btn" id="tabSetup" onclick="switchCatalogView('setup.html', this)">School Setup</button>
+    <span class="tab-hint">Data is stored in your browser's local storage</span>
 </div>
-
-<div class="card">
-    <div class="card-header">
-        Courses ({{ courses|length }})
-        <div class="btn-group">
-            <a href="{{ url_for('course_catalog.add_course') }}" class="btn btn-sm btn-primary">+ Add Course</a>
-            <a href="{{ url_for('course_catalog.departments') }}" class="btn btn-sm btn-outline">Departments</a>
-            <a href="{{ url_for('course_catalog.requirements') }}" class="btn btn-sm btn-outline">Grad Requirements</a>
-        </div>
-    </div>
-    <div class="table-responsive">
-        <table>
-            <thead><tr><th>Course #</th><th>Title</th><th>Department</th><th>Type</th><th>Credits</th><th>Grades</th><th>Actions</th></tr></thead>
-            <tbody>
-                {% for c in courses %}
-                <tr>
-                    <td><strong>{{ c.course_number }}</strong></td>
-                    <td><a href="{{ url_for('course_catalog.view_course', id=c.id) }}" style="text-decoration:none;color:var(--primary);">{{ c.title }}</a></td>
-                    <td>{{ c.department.name if c.department else '-' }}</td>
-                    <td><span class="badge badge-{{ 'warning' if c.course_type in ['ap','ib','honors'] else 'primary' }}">{{ c.course_type.upper() if c.course_type else '-' }}</span></td>
-                    <td>{{ c.credits }}</td>
-                    <td>{{ c.grade_levels or '-' }}</td>
-                    <td><a href="{{ url_for('course_catalog.edit_course', id=c.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
-                </tr>
-                {% endfor %}
-                {% if not courses %}
-                <tr><td colspan="7"><div class="empty-state"><p>No courses yet. <a href="{{ url_for('course_catalog.add_course') }}">Add your first course.</a></p></div></td></tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
+<div class="catalog-frame-wrap">
+    <iframe id="catalogFrame"
+            src="{{ url_for('static', filename='course_catalog/index.html') }}"
+            title="Virtual Course Catalog"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            loading="lazy"></iframe>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+function switchCatalogView(page, btn) {
+    var base = '{{ url_for("static", filename="course_catalog/") }}';
+    document.getElementById('catalogFrame').src = base + page;
+    var btns = document.querySelectorAll('.catalog-toolbar .tab-btn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+    btn.classList.add('active');
+}
+</script>
 {% endblock %}
