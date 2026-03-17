@@ -6,6 +6,8 @@ from app.models.student import Student
 from app.models.user import User
 from app.utils.audit import log_action
 from datetime import datetime, date, timedelta
+import re
+import requests as http_requests
 
 calendar_bp = Blueprint('calendar', __name__)
 
@@ -214,6 +216,117 @@ def ical_feed(token):
     ics_content = '\r\n'.join(lines) + '\r\n'
     return Response(ics_content, mimetype='text/calendar',
                     headers={'Content-Disposition': 'inline; filename="calendar.ics"'})
+
+
+@calendar_bp.route('/external-ical', methods=['GET', 'POST'])
+@login_required
+def external_ical():
+    """Save or remove the user's external Google Calendar iCal URL."""
+    if request.method == 'POST':
+        ical_url = request.form.get('external_ical_url', '').strip()
+        if ical_url and not ical_url.startswith(('http://', 'https://')):
+            flash('Please enter a valid URL starting with https://', 'danger')
+            return redirect(url_for('calendar.index'))
+        current_user.external_ical_url = ical_url or None
+        db.session.commit()
+        if ical_url:
+            flash('Google Calendar connected successfully.', 'success')
+        else:
+            flash('Google Calendar disconnected.', 'info')
+        return redirect(url_for('calendar.index'))
+    return jsonify({'external_ical_url': current_user.external_ical_url or ''})
+
+
+@calendar_bp.route('/external-events')
+@login_required
+def get_external_events():
+    """Fetch and return events from the user's external iCal feed."""
+    if not current_user.external_ical_url:
+        return jsonify([])
+
+    try:
+        resp = http_requests.get(current_user.external_ical_url, timeout=10)
+        resp.raise_for_status()
+        events = _parse_ical_feed(resp.text)
+        return jsonify(events)
+    except Exception:
+        return jsonify([])
+
+
+def _parse_ical_feed(ics_text):
+    """Parse an iCal feed and return a list of FullCalendar-compatible event dicts."""
+    events = []
+    # Unfold lines (iCal continuation lines start with space or tab)
+    ics_text = re.sub(r'\r?\n[ \t]', '', ics_text)
+    blocks = re.split(r'BEGIN:VEVENT', ics_text)
+
+    for block in blocks[1:]:  # skip preamble before first VEVENT
+        block = block.split('END:VEVENT')[0]
+        props = {}
+        for line in block.strip().splitlines():
+            if ':' in line:
+                key, _, value = line.partition(':')
+                # Strip parameters (e.g., DTSTART;VALUE=DATE -> DTSTART)
+                base_key = key.split(';')[0].strip()
+                props[base_key] = value.strip()
+
+        title = _ical_unescape(props.get('SUMMARY', 'Google Calendar Event'))
+        description = _ical_unescape(props.get('DESCRIPTION', ''))
+        location = _ical_unescape(props.get('LOCATION', ''))
+
+        start = _parse_ical_datetime(props.get('DTSTART', ''))
+        end = _parse_ical_datetime(props.get('DTEND', ''))
+        if not start:
+            continue
+
+        # Detect all-day events (date-only, no time component)
+        is_all_day = 'VALUE=DATE' in block and 'DTSTART;VALUE=DATE' in block.replace(' ', '')
+        if not is_all_day:
+            # Also detect by checking if the key had VALUE=DATE param
+            for line in block.strip().splitlines():
+                if line.startswith('DTSTART') and 'VALUE=DATE' in line:
+                    is_all_day = True
+                    break
+
+        event = {
+            'title': title,
+            'start': start,
+            'color': '#DB4437',  # Google red
+            'allDay': is_all_day,
+            'editable': False,
+            'extendedProps': {
+                'description': description,
+                'location': location,
+                'event_type': 'google_calendar',
+                'source': 'google',
+            }
+        }
+        if end:
+            event['end'] = end
+
+        events.append(event)
+
+    return events
+
+
+def _parse_ical_datetime(value):
+    """Parse an iCal datetime string into an ISO format string."""
+    if not value:
+        return None
+    value = value.replace('Z', '')
+    try:
+        if len(value) == 8:  # Date only: 20260317
+            return datetime.strptime(value, '%Y%m%d').strftime('%Y-%m-%d')
+        elif 'T' in value:  # Full datetime: 20260317T090000
+            return datetime.strptime(value, '%Y%m%dT%H%M%S').isoformat()
+    except ValueError:
+        pass
+    return None
+
+
+def _ical_unescape(text):
+    """Unescape iCal text fields."""
+    return text.replace('\\n', '\n').replace('\\,', ',').replace('\\;', ';').replace('\\\\', '\\')
 
 
 def _ical_dt(dt):
