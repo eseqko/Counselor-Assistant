@@ -53,6 +53,7 @@ class CalendarEvent(db.Model):
         ('team_meeting', 'Team Meeting'),
         ('professional_dev', 'Professional Development'),
         ('deadline', 'Deadline'),
+        ('follow_up', 'Follow-Up'),
         ('personal', 'Personal'),
         ('other', 'Other'),
     ]
@@ -66,6 +67,7 @@ class CalendarEvent(db.Model):
         'team_meeting': '#9B59B6',
         'professional_dev': '#1ABC9C',
         'deadline': '#E67E22',
+        'follow_up': '#E91E63',
         'personal': '#95A5A6',
         'other': '#34495E',
     }
