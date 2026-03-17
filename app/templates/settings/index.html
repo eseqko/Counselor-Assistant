@@ -24,7 +24,36 @@
 </div>
 
 <div class="card">
-    <div class="card-header">Data Management</div>
+    <div class="card-header">Export / Import Data</div>
+    <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--gray);margin-bottom:12px;">
+            Transfer your caseload and course catalog between devices. Export creates a portable file you can
+            save to Google Drive, a USB drive, or any shared folder &mdash; then import it on another computer.
+        </p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;">
+            <a href="{{ url_for('settings.export_data') }}" class="btn btn-primary">Export Data</a>
+            <form method="POST" action="{{ url_for('settings.import_data') }}" enctype="multipart/form-data"
+                  style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="file" name="import_file" accept=".json"
+                       style="font-size:0.85rem;border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
+                <button type="submit" class="btn btn-outline">Import Data</button>
+            </form>
+        </div>
+        <details style="margin-top:14px;">
+            <summary style="font-size:0.82rem;color:var(--gray);cursor:pointer;">What's included?</summary>
+            <ul style="font-size:0.82rem;color:var(--gray);margin:6px 0 0 16px;line-height:1.7;">
+                <li><strong>Caseload:</strong> Students, tags, counselor notes, service records, transcript records</li>
+                <li><strong>Course Catalog:</strong> Departments, courses, graduation requirements</li>
+                <li>Existing students are matched by Student ID &mdash; duplicates are updated, not created twice</li>
+                <li>Courses are matched by course number &mdash; existing courses are skipped</li>
+            </ul>
+        </details>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Backups</div>
     <div class="card-body">
         <div style="display:flex;gap:12px;flex-wrap:wrap;">
             <form method="POST" action="{{ url_for('settings.backup') }}">
