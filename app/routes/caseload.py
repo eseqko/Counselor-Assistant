@@ -320,11 +320,11 @@ def download_template():
 
     # --- Freeze top row and protect ---
     ws.freeze_panes = 'A2'
-    ws.sheet_protection.sheet = True
-    ws.sheet_protection.formatCells = False
-    ws.sheet_protection.insertRows = False
-    ws.sheet_protection.sort = False
-    ws.sheet_protection.autoFilter = False
+    ws.protection.sheet = True
+    ws.protection.formatCells = False
+    ws.protection.insertRows = False
+    ws.protection.sort = False
+    ws.protection.autoFilter = False
 
     # Save to buffer
     buffer = io.BytesIO()
