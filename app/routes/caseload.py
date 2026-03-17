@@ -119,9 +119,27 @@ def view_student(id):
     notes = student.notes.limit(10).all()
     services = student.service_records.limit(10).all()
     latest_transcript = student.transcript_records.first()
+
+    # Pre-parse JSON fields for template
+    transcript_credits = None
+    transcript_ag = None
+    if latest_transcript:
+        if latest_transcript.credits_json:
+            try:
+                transcript_credits = json.loads(latest_transcript.credits_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if latest_transcript.ag_json:
+            try:
+                transcript_ag = json.loads(latest_transcript.ag_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
     return render_template('caseload/view.html',
         student=student, notes=notes, services=services,
-        latest_transcript=latest_transcript)
+        latest_transcript=latest_transcript,
+        transcript_credits=transcript_credits,
+        transcript_ag=transcript_ag)
 
 
 @caseload_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
