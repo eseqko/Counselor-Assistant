@@ -172,27 +172,34 @@
                     </thead>
                     <tbody>
                         {% for subject, data in transcript_credits.items() %}
-                        {% set need = [0, (data.required|default(0)) - (data.completed|default(0)) - (data.wip|default(0))]|max %}
+                        {% set completed = data.completed|default(0) %}
+                        {% set required = data.required|default(0) %}
+                        {% set wip = data.wip|default(0) %}
+                        {% set shortfall = [0, required - completed]|max %}
+                        {% set need_after_wip = [0, required - completed - wip]|max %}
                         <tr style="border-bottom:1px solid #e5e7eb;
-                            {% if need > 0 %}background:#fff5f5;{% elif data.wip|default(0) > 0 %}background:#fffff0;{% endif %}">
+                            {% if need_after_wip > 0 %}background:#fff5f5;
+                            {% elif shortfall > 0 %}background:#fffff0;{% endif %}">
                             <td style="padding:7px 10px;">
                                 <span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;
-                                    {% if need <= 0 %}background:#38a169;{% elif need > 0 %}background:#e53e3e;{% endif %}"></span>
+                                    {% if shortfall <= 0 %}background:#38a169;
+                                    {% elif need_after_wip > 0 %}background:#e53e3e;
+                                    {% else %}background:#d69e2e;{% endif %}"></span>
                                 {{ subject }}
                             </td>
-                            <td style="padding:7px 10px;text-align:center;">{{ data.required|default(0)|int }}</td>
-                            <td style="padding:7px 10px;text-align:center;font-weight:600;">{{ data.completed|default(0)|int }}</td>
-                            <td style="padding:7px 10px;text-align:center;color:#d69e2e;">{{ data.wip|default(0)|int if data.wip|default(0) > 0 else '-' }}</td>
-                            <td style="padding:7px 10px;text-align:center;{% if need > 0 %}color:#dc2626;font-weight:700;{% endif %}">
-                                {{ need|int if need > 0 else '-' }}
+                            <td style="padding:7px 10px;text-align:center;">{{ required|int }}</td>
+                            <td style="padding:7px 10px;text-align:center;font-weight:600;{% if shortfall > 0 %}color:#dc2626;{% endif %}">{{ completed|int }}</td>
+                            <td style="padding:7px 10px;text-align:center;color:#d69e2e;">{{ wip|int if wip > 0 else '-' }}</td>
+                            <td style="padding:7px 10px;text-align:center;{% if shortfall > 0 %}color:#dc2626;font-weight:700;{% endif %}">
+                                {{ shortfall|int if shortfall > 0 else '-' }}
                             </td>
                             <td style="padding:7px 10px;text-align:center;">
-                                {% if need <= 0 and data.wip|default(0) > 0 %}
-                                    <span class="badge badge-warning" style="font-size:0.7rem;">In Progress</span>
-                                {% elif need <= 0 %}
+                                {% if shortfall <= 0 %}
                                     <span class="badge badge-success" style="font-size:0.7rem;">Complete</span>
+                                {% elif need_after_wip <= 0 %}
+                                    <span class="badge badge-warning" style="font-size:0.7rem;">In Progress</span>
                                 {% else %}
-                                    <span class="badge badge-danger" style="font-size:0.7rem;">Need {{ need|int }}</span>
+                                    <span class="badge badge-danger" style="font-size:0.7rem;">Need {{ need_after_wip|int }}</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -203,14 +210,14 @@
                             <td style="padding:8px 10px;text-align:center;">225</td>
                             <td style="padding:8px 10px;text-align:center;">{{ latest_transcript.total_completed|int }}</td>
                             <td style="padding:8px 10px;text-align:center;color:#d69e2e;">{{ latest_transcript.total_wip|int if latest_transcript.total_wip else '-' }}</td>
-                            <td style="padding:8px 10px;text-align:center;{% if latest_transcript.total_needed > 0 %}color:#dc2626;{% endif %}">
-                                {{ latest_transcript.total_needed|int if latest_transcript.total_needed > 0 else '-' }}
+                            <td style="padding:8px 10px;text-align:center;{% if not credits_all_met %}color:#dc2626;{% endif %}">
+                                {{ credits_total_shortfall|int if credits_total_shortfall > 0 else '-' }}
                             </td>
                             <td style="padding:8px 10px;text-align:center;">
-                                {% if latest_transcript.total_needed <= 0 %}
-                                    <span class="badge badge-success" style="font-size:0.7rem;">Complete</span>
+                                {% if credits_all_met %}
+                                    <span class="badge badge-success" style="font-size:0.7rem;">All Met</span>
                                 {% else %}
-                                    <span class="badge badge-danger" style="font-size:0.7rem;">Need {{ latest_transcript.total_needed|int }}</span>
+                                    <span class="badge badge-danger" style="font-size:0.7rem;">Incomplete</span>
                                 {% endif %}
                             </td>
                         </tr>
