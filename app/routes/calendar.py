@@ -6,6 +6,8 @@ from app.models.student import Student
 from app.models.user import User
 from app.utils.audit import log_action
 from datetime import datetime, date, timedelta
+from dateutil.rrule import rrulestr
+import pytz
 import re
 import requests as http_requests
 
@@ -258,70 +260,175 @@ def _parse_ical_feed(ics_text):
     events = []
     # Unfold lines (iCal continuation lines start with space or tab)
     ics_text = re.sub(r'\r?\n[ \t]', '', ics_text)
+
+    # Build a lookup of VTIMEZONE definitions for TZID resolution
+    tz_map = {}
+    for tz_block in re.findall(r'BEGIN:VTIMEZONE(.*?)END:VTIMEZONE', ics_text, re.DOTALL):
+        m = re.search(r'TZID:(.*)', tz_block)
+        if m:
+            tz_map[m.group(1).strip()] = True
+
+    # Window for recurring event expansion: 90 days before/after today
+    window_start = datetime.utcnow() - timedelta(days=90)
+    window_end = datetime.utcnow() + timedelta(days=90)
+
     blocks = re.split(r'BEGIN:VEVENT', ics_text)
 
     for block in blocks[1:]:  # skip preamble before first VEVENT
         block = block.split('END:VEVENT')[0]
-        props = {}
+
+        # Parse properties, preserving full key (with params) and base key
+        props = {}       # base_key -> value
+        full_keys = {}   # base_key -> full key with params
         for line in block.strip().splitlines():
             if ':' in line:
                 key, _, value = line.partition(':')
-                # Strip parameters (e.g., DTSTART;VALUE=DATE -> DTSTART)
                 base_key = key.split(';')[0].strip()
                 props[base_key] = value.strip()
+                full_keys[base_key] = key.strip()
 
         title = _ical_unescape(props.get('SUMMARY', 'Google Calendar Event'))
         description = _ical_unescape(props.get('DESCRIPTION', ''))
         location = _ical_unescape(props.get('LOCATION', ''))
 
-        start = _parse_ical_datetime(props.get('DTSTART', ''))
-        end = _parse_ical_datetime(props.get('DTEND', ''))
-        if not start:
+        # Extract TZID from DTSTART parameters if present
+        dtstart_key = full_keys.get('DTSTART', '')
+        tzid = None
+        tzid_match = re.search(r'TZID=([^;:]+)', dtstart_key)
+        if tzid_match:
+            tzid = tzid_match.group(1)
+
+        start_val = props.get('DTSTART', '')
+        end_val = props.get('DTEND', '')
+
+        start_dt = _parse_ical_datetime_tz(start_val, tzid)
+        end_dt = _parse_ical_datetime_tz(end_val, tzid)
+        if not start_dt:
             continue
 
-        # Detect all-day events (date-only, no time component)
-        is_all_day = 'VALUE=DATE' in block and 'DTSTART;VALUE=DATE' in block.replace(' ', '')
-        if not is_all_day:
-            # Also detect by checking if the key had VALUE=DATE param
-            for line in block.strip().splitlines():
-                if line.startswith('DTSTART') and 'VALUE=DATE' in line:
-                    is_all_day = True
-                    break
+        # Detect all-day events
+        is_all_day = False
+        for line in block.strip().splitlines():
+            if line.startswith('DTSTART') and 'VALUE=DATE' in line:
+                is_all_day = True
+                break
 
-        event = {
-            'title': title,
-            'start': start,
-            'color': '#DB4437',  # Google red
-            'allDay': is_all_day,
-            'editable': False,
-            'extendedProps': {
-                'description': description,
-                'location': location,
-                'event_type': 'google_calendar',
-                'source': 'google',
-            }
-        }
-        if end:
-            event['end'] = end
+        # Calculate event duration for recurring instances
+        duration = None
+        if start_dt and end_dt and not is_all_day:
+            duration = end_dt - start_dt
 
-        events.append(event)
+        # Handle recurring events with RRULE
+        rrule_str = props.get('RRULE', '')
+        exdate_strs = [line.partition(':')[2].strip()
+                       for line in block.strip().splitlines()
+                       if line.startswith('EXDATE')]
+
+        if rrule_str and not is_all_day:
+            try:
+                # Build full RRULE string for dateutil
+                rule = rrulestr(
+                    f"DTSTART:{start_val}\nRRULE:{rrule_str}",
+                    ignoretz=True
+                )
+                # Parse excluded dates
+                excluded = set()
+                for exd in exdate_strs:
+                    for part in exd.split(','):
+                        part = part.strip().replace('Z', '')
+                        try:
+                            excluded.add(datetime.strptime(part[:15], '%Y%m%dT%H%M%S'))
+                        except ValueError:
+                            pass
+
+                for occ_start in rule.between(window_start, window_end, inc=True):
+                    if occ_start in excluded:
+                        continue
+                    occ_end = occ_start + duration if duration else None
+                    # Apply same timezone conversion as the original event
+                    occ_start_utc = _apply_tz(occ_start, start_val, tzid)
+                    occ_end_utc = _apply_tz(occ_end, end_val, tzid) if occ_end else None
+
+                    evt = _build_event(title, occ_start_utc, occ_end_utc,
+                                       is_all_day, description, location)
+                    events.append(evt)
+            except Exception:
+                # Fall back to single instance if RRULE parsing fails
+                start_iso = _format_dt_iso(start_dt, start_val, tzid, is_all_day)
+                end_iso = _format_dt_iso(end_dt, end_val, tzid, is_all_day) if end_dt else None
+                events.append(_build_event(title, start_iso, end_iso,
+                                           is_all_day, description, location))
+        else:
+            start_iso = _format_dt_iso(start_dt, start_val, tzid, is_all_day)
+            end_iso = _format_dt_iso(end_dt, end_val, tzid, is_all_day) if end_dt else None
+            events.append(_build_event(title, start_iso, end_iso,
+                                       is_all_day, description, location))
 
     return events
 
 
-def _parse_ical_datetime(value):
-    """Parse an iCal datetime string into an ISO format string."""
+def _build_event(title, start, end, all_day, description, location):
+    """Build a FullCalendar-compatible event dict."""
+    event = {
+        'title': title,
+        'start': start,
+        'color': '#DB4437',
+        'allDay': all_day,
+        'editable': False,
+        'extendedProps': {
+            'description': description,
+            'location': location,
+            'event_type': 'google_calendar',
+            'source': 'google',
+        }
+    }
+    if end:
+        event['end'] = end
+    return event
+
+
+def _parse_ical_datetime_tz(value, tzid=None):
+    """Parse an iCal datetime string into a naive datetime object (for calculations)."""
     if not value:
         return None
-    value = value.replace('Z', '')
+    clean = value.replace('Z', '')
     try:
-        if len(value) == 8:  # Date only: 20260317
-            return datetime.strptime(value, '%Y%m%d').strftime('%Y-%m-%d')
-        elif 'T' in value:  # Full datetime: 20260317T090000
-            return datetime.strptime(value, '%Y%m%dT%H%M%S').isoformat()
+        if len(clean) == 8:
+            return datetime.strptime(clean, '%Y%m%d')
+        elif 'T' in clean:
+            return datetime.strptime(clean, '%Y%m%dT%H%M%S')
     except ValueError:
         pass
     return None
+
+
+def _apply_tz(dt, raw_value, tzid):
+    """Convert a naive datetime to a UTC ISO string based on the original timezone info."""
+    if dt is None:
+        return None
+    # If original value was UTC (ends with Z), localize as UTC
+    if isinstance(raw_value, str) and raw_value.endswith('Z'):
+        return dt.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+    # If a TZID was specified, convert from that timezone to UTC
+    if tzid:
+        try:
+            tz = pytz.timezone(tzid)
+            localized = tz.localize(dt)
+            utc_dt = localized.astimezone(pytz.utc)
+            return utc_dt.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+        except (pytz.exceptions.UnknownTimeZoneError, Exception):
+            pass
+    # Floating time — return as-is (no timezone info, FullCalendar uses browser tz)
+    return dt.isoformat()
+
+
+def _format_dt_iso(dt, raw_value, tzid, is_all_day):
+    """Format a parsed datetime as an ISO string for FullCalendar, preserving tz info."""
+    if dt is None:
+        return None
+    if is_all_day:
+        return dt.strftime('%Y-%m-%d')
+    return _apply_tz(dt, raw_value, tzid)
 
 
 def _ical_unescape(text):
