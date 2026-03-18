@@ -8,3 +8,5 @@ cryptography==44.0.0
 python-dateutil==2.9.0
 apscheduler==3.10.4
 openpyxl==3.1.5
+pytz==2024.1
+requests==2.32.3

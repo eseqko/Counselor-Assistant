@@ -65,6 +65,7 @@ def create_app(config_class=Config):
     from app.routes.course_catalog import course_catalog_bp
     from app.routes.glossary import glossary_bp
     from app.routes.settings import settings_bp
+    from app.routes.ai import ai_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -77,6 +78,7 @@ def create_app(config_class=Config):
     app.register_blueprint(course_catalog_bp, url_prefix='/course-catalog')
     app.register_blueprint(glossary_bp, url_prefix='/glossary')
     app.register_blueprint(settings_bp, url_prefix='/settings')
+    app.register_blueprint(ai_bp, url_prefix='/ai')
 
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event

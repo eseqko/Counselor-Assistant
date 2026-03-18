@@ -421,6 +421,74 @@ function switchTranscriptTab(tab, btn) {
     </div>
 </div>
 
+<!-- AI Support Insights -->
+<div class="card">
+    <div class="card-header">
+        AI Support Insights
+        <button class="btn btn-sm btn-primary" onclick="getStudentInsights()" id="ai-insights-btn">Analyze Student</button>
+    </div>
+    <div class="card-body" id="ai-insights-body">
+        <div id="ai-insights-placeholder" style="color:var(--gray);font-size:0.85rem;">
+            Click "Analyze Student" to get AI-powered insights on patterns, service gaps, risk indicators, and recommended next steps.
+            <br><span style="font-size:0.78rem;">Powered by Ollama — all data stays on this computer.</span>
+        </div>
+        <div id="ai-insights-loading" style="display:none;text-align:center;padding:20px;">
+            <div style="display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#4A90D9;border-radius:50%;animation:aispin 0.8s linear infinite;"></div>
+            <p style="margin-top:8px;font-size:0.85rem;color:var(--gray);">Analyzing student history...</p>
+        </div>
+        <div id="ai-insights-result" style="display:none;line-height:1.7;font-size:0.88rem;white-space:pre-wrap;"></div>
+        <div id="ai-insights-error" style="display:none;color:#dc2626;font-size:0.85rem;"></div>
+    </div>
+</div>
+<style>@keyframes aispin { to { transform: rotate(360deg); } }</style>
+<script>
+function getStudentInsights() {
+    var btn = document.getElementById('ai-insights-btn');
+    var placeholder = document.getElementById('ai-insights-placeholder');
+    var loading = document.getElementById('ai-insights-loading');
+    var result = document.getElementById('ai-insights-result');
+    var error = document.getElementById('ai-insights-error');
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    placeholder.style.display = 'none';
+    loading.style.display = 'block';
+    result.style.display = 'none';
+    error.style.display = 'none';
+
+    fetch('/ai/student-insights', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ student_id: {{ student.id }} })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Refresh Insights';
+        if (data.error) {
+            error.style.display = 'block';
+            error.textContent = data.error.includes('Connection') ?
+                'Could not connect to Ollama. Make sure it is running (ollama serve).' :
+                data.error;
+        } else {
+            result.style.display = 'block';
+            result.textContent = data.insights;
+        }
+    })
+    .catch(function(err) {
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = 'Could not connect to Ollama. Make sure it is running (ollama serve).';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    });
+}
+</script>
+
 <div style="margin-top:20px;">
     <form method="POST" action="{{ url_for('caseload.delete_student', id=student.id) }}" data-confirm="Are you sure you want to remove this student? This cannot be undone." style="display:inline;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
