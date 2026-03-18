@@ -655,7 +655,7 @@ select.form-control {
 
 /* Print styles */
 @media print {
-    .sidebar, .top-bar, .btn, .filter-bar { display: none !important; }
+    .sidebar, .top-bar, .btn, .filter-bar, .no-print { display: none !important; }
     .main-content { margin-left: 0 !important; }
     .card { box-shadow: none; border: 1px solid #ccc; }
 }
