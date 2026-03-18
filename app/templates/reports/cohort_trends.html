@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+{% block title %}Cohort Trends{% endblock %}
+{% block page_title %}Cohort Trend Analysis{% endblock %}
+{% block content %}
+
+{% if not has_data %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No trend data available yet.</p>
+            <p style="font-size:0.85rem;color:var(--gray);margin-top:8px;">
+                Import <a href="{{ url_for('data_import.index') }}">attendance and grade data</a> to see trends across your caseload.
+            </p>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_students }}</div>
+        <div class="stat-label">Active Students</div>
+    </div>
+    <div class="stat-card info">
+        <div class="stat-value">{{ att_rates_by_grade.values()|list|length }}</div>
+        <div class="stat-label">Grades w/ Attendance</div>
+    </div>
+    <div class="stat-card accent">
+        <div class="stat-value">{{ subject_stats|length }}</div>
+        <div class="stat-label">Subjects Tracked</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ risk_counts.values()|sum }}</div>
+        <div class="stat-label">Transcripts</div>
+    </div>
+</div>
+
+<!-- Attendance by Grade -->
+{% if att_rates_by_grade %}
+<div class="card">
+    <div class="card-header">Attendance Rate by Grade (Last 90 Days)</div>
+    <div class="card-body">
+        <div style="display:flex;align-items:flex-end;gap:16px;height:180px;padding:12px 0;">
+            {% for grade, rate in att_rates_by_grade.items() %}
+            <div style="flex:1;text-align:center;">
+                <div style="height:{{ rate * 1.5 }}px;max-height:150px;min-height:20px;
+                    {% if rate >= 95 %}background:#059669;
+                    {% elif rate >= 90 %}background:#d97706;
+                    {% else %}background:#dc2626;{% endif %}
+                    border-radius:4px 4px 0 0;margin:0 auto;width:60%;transition:height 0.3s;">
+                </div>
+                <div style="font-size:0.78rem;font-weight:700;margin-top:4px;">{{ rate }}%</div>
+                <div style="font-size:0.72rem;color:var(--gray);">Grade {{ grade }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="font-size:0.78rem;color:var(--gray);margin-top:8px;">
+            Target: 95%+ attendance | Below 90% = chronic absence zone
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Weekly Attendance Trend -->
+{% if att_weekly_rates %}
+<div class="card">
+    <div class="card-header">Weekly Attendance Trend (Last 90 Days)</div>
+    <div class="card-body">
+        <div style="display:flex;align-items:flex-end;gap:4px;height:120px;padding:12px 0;">
+            {% for week, rate in att_weekly_rates.items() %}
+            <div style="flex:1;text-align:center;position:relative;" title="Week of {{ week }}: {{ rate }}%">
+                <div style="height:{{ [rate - 70, 0]|max * 3.5 }}px;max-height:100px;min-height:4px;
+                    {% if rate >= 95 %}background:#059669;
+                    {% elif rate >= 90 %}background:#d97706;
+                    {% else %}background:#dc2626;{% endif %}
+                    border-radius:2px 2px 0 0;margin:0 auto;width:80%;"></div>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--gray);">
+            {% if att_weekly_rates %}
+            <span>{{ att_weekly_rates.keys()|list|first }}</span>
+            <span>{{ att_weekly_rates.keys()|list|last }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="grid-2">
+    <!-- Grade Distribution by Quarter -->
+    {% if grade_dist_by_quarter %}
+    <div class="card">
+        <div class="card-header">Grade Distribution by Quarter</div>
+        <div class="card-body">
+            <table style="width:100%;font-size:0.84rem;">
+                <thead>
+                    <tr style="background:var(--bg);">
+                        <th style="padding:8px;">Quarter</th>
+                        <th style="padding:8px;text-align:center;">A</th>
+                        <th style="padding:8px;text-align:center;">B</th>
+                        <th style="padding:8px;text-align:center;">C</th>
+                        <th style="padding:8px;text-align:center;">D</th>
+                        <th style="padding:8px;text-align:center;">F</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for quarter, grades in grade_dist_by_quarter.items() %}
+                    {% set total = grades.values()|sum %}
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                        <td style="padding:8px;font-weight:600;">{{ quarter }}</td>
+                        <td style="padding:8px;text-align:center;color:#059669;">{{ grades.get('A', 0) }}</td>
+                        <td style="padding:8px;text-align:center;color:#2563eb;">{{ grades.get('B', 0) }}</td>
+                        <td style="padding:8px;text-align:center;color:#d97706;">{{ grades.get('C', 0) }}</td>
+                        <td style="padding:8px;text-align:center;color:#ea580c;">{{ grades.get('D', 0) }}</td>
+                        <td style="padding:8px;text-align:center;color:#dc2626;font-weight:700;">{{ grades.get('F', 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Subject Pass Rates -->
+    {% if subject_stats %}
+    <div class="card">
+        <div class="card-header">Pass Rate by Subject</div>
+        <div class="card-body">
+            <table style="width:100%;font-size:0.84rem;">
+                <thead>
+                    <tr style="background:var(--bg);">
+                        <th style="padding:8px;">Subject</th>
+                        <th style="padding:8px;text-align:center;">Total</th>
+                        <th style="padding:8px;text-align:center;">Pass Rate</th>
+                        <th style="padding:8px;text-align:center;">Avg GPA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subj, stats in subject_stats.items() %}
+                    <tr style="border-bottom:1px solid #e5e7eb;
+                        {% if stats.pass_rate < 80 %}background:#fff5f5;{% endif %}">
+                        <td style="padding:8px;">{{ subj }}</td>
+                        <td style="padding:8px;text-align:center;">{{ stats.total }}</td>
+                        <td style="padding:8px;text-align:center;font-weight:600;
+                            {% if stats.pass_rate >= 90 %}color:#059669;
+                            {% elif stats.pass_rate >= 80 %}color:#d97706;
+                            {% else %}color:#dc2626;{% endif %}">{{ stats.pass_rate }}%</td>
+                        <td style="padding:8px;text-align:center;">{{ stats.avg_gpa if stats.avg_gpa else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="grid-2">
+    <!-- Graduation Risk Distribution -->
+    {% if risk_counts %}
+    <div class="card">
+        <div class="card-header">Graduation Risk Distribution</div>
+        <div class="card-body">
+            {% set risk_total = risk_counts.values()|sum %}
+            {% for level, count in risk_counts.items() %}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <div style="width:90px;font-size:0.82rem;font-weight:600;
+                    {% if level == 'critical' %}color:#dc2626;
+                    {% elif level == 'at-risk' %}color:#ea580c;
+                    {% elif level == 'warning' %}color:#d97706;
+                    {% elif level == 'on-track' %}color:#059669;
+                    {% else %}color:var(--gray);{% endif %}">{{ level|replace('-', ' ')|title }}</div>
+                <div style="flex:1;height:20px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+                    <div style="height:100%;width:{{ (count / risk_total * 100)|round }}%;border-radius:4px;
+                        {% if level == 'critical' %}background:#dc2626;
+                        {% elif level == 'at-risk' %}background:#ea580c;
+                        {% elif level == 'warning' %}background:#d97706;
+                        {% elif level == 'on-track' %}background:#059669;
+                        {% else %}background:var(--gray);{% endif %}"></div>
+                </div>
+                <div style="width:40px;text-align:right;font-size:0.82rem;font-weight:700;">{{ count }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- a-g Status Distribution -->
+    {% if ag_counts %}
+    <div class="card">
+        <div class="card-header">a-g Eligibility Distribution</div>
+        <div class="card-body">
+            {% set ag_total = ag_counts.values()|sum %}
+            {% for status, count in ag_counts.items() %}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <div style="width:90px;font-size:0.82rem;font-weight:600;
+                    {% if status == 'deficient' %}color:#dc2626;
+                    {% elif status == 'verify' %}color:#d97706;
+                    {% elif status == 'on-track' %}color:#059669;
+                    {% else %}color:var(--gray);{% endif %}">{{ status|replace('-', ' ')|title }}</div>
+                <div style="flex:1;height:20px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+                    <div style="height:100%;width:{{ (count / ag_total * 100)|round }}%;border-radius:4px;
+                        {% if status == 'deficient' %}background:#dc2626;
+                        {% elif status == 'verify' %}background:#d97706;
+                        {% elif status == 'on-track' %}background:#059669;
+                        {% else %}background:var(--gray);{% endif %}"></div>
+                </div>
+                <div style="width:40px;text-align:right;font-size:0.82rem;font-weight:700;">{{ count }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Note Types by Month -->
+{% if note_by_month %}
+<div class="card">
+    <div class="card-header">Counseling Note Types by Month (Last 90 Days)</div>
+    <div class="card-body">
+        <table style="width:100%;font-size:0.84rem;">
+            <thead>
+                <tr style="background:var(--bg);">
+                    <th style="padding:8px;">Month</th>
+                    {% set all_types = [] %}
+                    {% for month, types in note_by_month.items() %}
+                        {% for t in types.keys() %}
+                            {% if t not in all_types %}
+                                {% if all_types.append(t) %}{% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                    {% for t in all_types %}
+                    <th style="padding:8px;text-align:center;font-size:0.78rem;">{{ t|replace('_', ' ')|title }}</th>
+                    {% endfor %}
+                    <th style="padding:8px;text-align:center;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for month, types in note_by_month.items() %}
+                <tr style="border-bottom:1px solid #e5e7eb;">
+                    <td style="padding:8px;font-weight:600;">{{ month }}</td>
+                    {% for t in all_types %}
+                    <td style="padding:8px;text-align:center;{% if t == 'crisis' and types.get(t, 0) > 0 %}color:#dc2626;font-weight:700;{% endif %}">
+                        {{ types.get(t, 0) or '-' }}
+                    </td>
+                    {% endfor %}
+                    <td style="padding:8px;text-align:center;font-weight:700;">{{ types.values()|sum }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- AI Analysis -->
+<div class="card no-print">
+    <div class="card-header">
+        AI Trend Analysis
+        <button class="btn btn-sm btn-primary" onclick="getCohortInsights()" id="cohort-ai-btn">Analyze Trends</button>
+    </div>
+    <div class="card-body">
+        <div id="cohort-ai-placeholder" style="color:var(--gray);font-size:0.85rem;">
+            Click "Analyze Trends" to get AI-powered insights on caseload-wide patterns and recommendations.
+        </div>
+        <div id="cohort-ai-loading" style="display:none;text-align:center;padding:20px;">
+            <div style="display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#4A90D9;border-radius:50%;animation:aispin 0.8s linear infinite;"></div>
+            <p style="margin-top:8px;font-size:0.85rem;color:var(--gray);">Analyzing cohort trends...</p>
+        </div>
+        <div id="cohort-ai-result" style="display:none;line-height:1.7;font-size:0.88rem;white-space:pre-wrap;"></div>
+        <div id="cohort-ai-error" style="display:none;color:#dc2626;font-size:0.85rem;"></div>
+    </div>
+</div>
+<style>@keyframes aispin { to { transform: rotate(360deg); } }</style>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if has_data %}
+<script>
+function getCohortInsights() {
+    var btn = document.getElementById('cohort-ai-btn');
+    var loading = document.getElementById('cohort-ai-loading');
+    var result = document.getElementById('cohort-ai-result');
+    var error = document.getElementById('cohort-ai-error');
+    document.getElementById('cohort-ai-placeholder').style.display = 'none';
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    loading.style.display = 'block';
+    result.style.display = 'none';
+    error.style.display = 'none';
+
+    var trendData = {
+        total_students: {{ total_students }},
+        att_rates_by_grade: {{ att_rates_by_grade|tojson }},
+        subject_stats: {{ subject_stats|tojson }},
+        risk_counts: {{ risk_counts|tojson }},
+        ag_counts: {{ ag_counts|tojson }}
+    };
+
+    fetch('/ai/report-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+        body: JSON.stringify({ report_type: 'cohort_trends', report_data: trendData })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Refresh Analysis';
+        if (data.error) {
+            error.style.display = 'block';
+            error.textContent = data.error.includes('Connection') ?
+                'Could not connect to Ollama. Make sure it is running.' : data.error;
+        } else {
+            result.style.display = 'block';
+            result.textContent = data.insights;
+        }
+    })
+    .catch(function() {
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = 'Could not connect to Ollama.';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    });
+}
+</script>
+{% endif %}
+{% endblock %}

@@ -4,6 +4,16 @@
 {% block content %}
 
 <div class="stats-grid">
+    <a href="{{ url_for('reports.early_warning') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid var(--danger);">
+        <div class="stat-value" style="font-size:1.5rem;">&#9888;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Early Warning</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Automated student risk flags</div>
+    </a>
+    <a href="{{ url_for('reports.cohort_trends') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid var(--primary);">
+        <div class="stat-value" style="font-size:1.5rem;">&#128200;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Cohort Trends</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Caseload-wide patterns & trends</div>
+    </a>
     <a href="{{ url_for('reports.use_of_time') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
         <div class="stat-value" style="font-size:1.5rem;">&#9202;</div>
         <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Use of Time Analysis</div>

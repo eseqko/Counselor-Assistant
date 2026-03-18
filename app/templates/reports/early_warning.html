@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Early Warning Dashboard{% endblock %}
+{% block page_title %}Early Warning Dashboard{% endblock %}
+{% block content %}
+
+<div class="stats-grid">
+    <div class="stat-card danger">
+        <div class="stat-value">{{ critical_count }}</div>
+        <div class="stat-label">Critical</div>
+    </div>
+    <div class="stat-card" style="border-left:4px solid #d97706;">
+        <div class="stat-value" style="color:#d97706;">{{ concern_count }}</div>
+        <div class="stat-label">Concern</div>
+    </div>
+    <div class="stat-card info">
+        <div class="stat-value">{{ watch_count }}</div>
+        <div class="stat-label">Watch</div>
+    </div>
+    <div class="stat-card success">
+        <div class="stat-value">{{ total_students - flagged_students|length }}</div>
+        <div class="stat-label">No Flags</div>
+    </div>
+</div>
+
+{% if not flagged_students %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No early warning flags detected. All students appear on track.</p>
+            <p style="font-size:0.82rem;color:var(--gray);margin-top:8px;">
+                Import <a href="{{ url_for('data_import.index') }}">attendance and grade data</a> to enable more detection.
+            </p>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<!-- Filter tabs -->
+<div class="card">
+    <div class="card-header">
+        Flagged Students ({{ flagged_students|length }} of {{ total_students }})
+        <div class="btn-group">
+            <button class="btn btn-sm btn-danger" onclick="filterSeverity('all')" id="filter-all">All</button>
+            <button class="btn btn-sm btn-outline" onclick="filterSeverity(3)" id="filter-3">Critical</button>
+            <button class="btn btn-sm btn-outline" onclick="filterSeverity(2)" id="filter-2">Concern</button>
+            <button class="btn btn-sm btn-outline" onclick="filterSeverity(1)" id="filter-1">Watch</button>
+        </div>
+    </div>
+    <div class="card-body" style="padding:0;">
+        {% for item in flagged_students %}
+        <div class="ew-student-row" data-severity="{{ item.severity }}" style="padding:14px 20px;border-bottom:1px solid #e5e7eb;
+            {% if item.severity == 3 %}background:#fef2f2;
+            {% elif item.severity == 2 %}background:#fffbeb;
+            {% else %}background:#eff6ff;{% endif %}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <a href="{{ url_for('caseload.view_student', id=item.student.id) }}" style="font-weight:700;font-size:0.95rem;text-decoration:none;color:var(--dark);">
+                            {{ item.student.display_name }}
+                        </a>
+                        <span class="badge badge-{{ 'danger' if item.severity == 3 else 'warning' if item.severity == 2 else 'info' }}">
+                            {{ item.severity_label }}
+                        </span>
+                        <span style="font-size:0.78rem;color:var(--gray);">Grade {{ item.student.grade_level or 'N/A' }} | ID: {{ item.student.student_id_number }}</span>
+                        {% if item.student.iep_status %}<span class="badge badge-warning" style="font-size:0.7rem;">IEP</span>{% endif %}
+                        {% if item.student.section_504 %}<span class="badge badge-info" style="font-size:0.7rem;">504</span>{% endif %}
+                        {% if item.student.el_status and item.student.el_status != 'EO' %}<span class="badge badge-primary" style="font-size:0.7rem;">{{ item.student.el_display }}</span>{% endif %}
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                        {% for flag_name, flag_detail, flag_color in item.flags %}
+                        <div style="font-size:0.82rem;padding:4px 10px;border-radius:4px;
+                            {% if flag_color == 'danger' %}background:#fecaca;color:#991b1b;
+                            {% elif flag_color == 'warning' %}background:#fde68a;color:#92400e;
+                            {% else %}background:#bfdbfe;color:#1e40af;{% endif %}">
+                            <strong>{{ flag_name }}:</strong> {{ flag_detail }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div style="flex-shrink:0;">
+                    <a href="{{ url_for('notes.add_note', student_id=item.student.id) }}" class="btn btn-sm btn-primary">+ Note</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- AI Analysis -->
+<div class="card no-print">
+    <div class="card-header">
+        AI Trend Analysis
+        <button class="btn btn-sm btn-primary" onclick="getEarlyWarningInsights()" id="ew-ai-btn">Analyze Patterns</button>
+    </div>
+    <div class="card-body">
+        <div id="ew-ai-placeholder" style="color:var(--gray);font-size:0.85rem;">
+            Click "Analyze Patterns" to get AI-powered insights on caseload-wide risk trends and intervention priorities.
+        </div>
+        <div id="ew-ai-loading" style="display:none;text-align:center;padding:20px;">
+            <div style="display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#4A90D9;border-radius:50%;animation:aispin 0.8s linear infinite;"></div>
+            <p style="margin-top:8px;font-size:0.85rem;color:var(--gray);">Analyzing early warning patterns...</p>
+        </div>
+        <div id="ew-ai-result" style="display:none;line-height:1.7;font-size:0.88rem;white-space:pre-wrap;"></div>
+        <div id="ew-ai-error" style="display:none;color:#dc2626;font-size:0.85rem;"></div>
+    </div>
+</div>
+<style>@keyframes aispin { to { transform: rotate(360deg); } }</style>
+{% endif %}
+
+<div style="margin-top:16px;font-size:0.82rem;color:var(--gray);">
+    <strong>Detection rules:</strong> Chronic absence (5+ in 30 days), low attendance rate (&lt;90%), failing grades (D/F),
+    low GPA (&lt;2.0), graduation risk (transcript), crisis notes, overdue follow-ups, no contact in 60+ days.
+    <br>Import more data via <a href="{{ url_for('data_import.index') }}">Data Import</a> for better detection.
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterSeverity(level) {
+    document.querySelectorAll('.ew-student-row').forEach(function(row) {
+        row.style.display = (level === 'all' || parseInt(row.dataset.severity) === level) ? '' : 'none';
+    });
+    document.querySelectorAll('[id^="filter-"]').forEach(function(btn) {
+        btn.className = 'btn btn-sm btn-outline';
+    });
+    var activeId = level === 'all' ? 'filter-all' : 'filter-' + level;
+    var activeBtn = document.getElementById(activeId);
+    if (activeBtn) activeBtn.className = 'btn btn-sm btn-danger';
+}
+
+function getEarlyWarningInsights() {
+    var btn = document.getElementById('ew-ai-btn');
+    var placeholder = document.getElementById('ew-ai-placeholder');
+    var loading = document.getElementById('ew-ai-loading');
+    var result = document.getElementById('ew-ai-result');
+    var error = document.getElementById('ew-ai-error');
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    placeholder.style.display = 'none';
+    loading.style.display = 'block';
+    result.style.display = 'none';
+    error.style.display = 'none';
+
+    var summaryData = {
+        total_students: {{ total_students }},
+        critical: {{ critical_count }},
+        concern: {{ concern_count }},
+        watch: {{ watch_count }},
+        flagged: [
+            {% for item in flagged_students[:15] %}
+            {
+                name: '{{ item.student.display_name }}',
+                grade: {{ item.student.grade_level or 0 }},
+                severity: '{{ item.severity_label }}',
+                flags: [{% for fn, fd, fc in item.flags %}'{{ fn }}: {{ fd }}'{% if not loop.last %},{% endif %}{% endfor %}]
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+
+    fetch('/ai/report-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+        body: JSON.stringify({ report_type: 'early_warning', report_data: summaryData })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Refresh Analysis';
+        if (data.error) {
+            error.style.display = 'block';
+            error.textContent = data.error.includes('Connection') ?
+                'Could not connect to Ollama. Make sure it is running.' : data.error;
+        } else {
+            result.style.display = 'block';
+            result.textContent = data.insights;
+        }
+    })
+    .catch(function() {
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = 'Could not connect to Ollama. Make sure it is running (ollama serve).';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    });
+}
+</script>
+{% endblock %}
