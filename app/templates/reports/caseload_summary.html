@@ -68,4 +68,69 @@
     </div>
 </div>
 {% endif %}
+
+<div class="card">
+    <div class="card-header">
+        AI Insights
+        <button class="btn btn-sm btn-primary" onclick="getCaseloadInsights()" id="ai-report-btn">Analyze</button>
+    </div>
+    <div class="card-body">
+        <div id="ai-report-placeholder" style="color:var(--gray);font-size:0.85rem;">
+            Click "Analyze" to get AI-powered equity analysis and support recommendations for your caseload.
+            <br><span style="font-size:0.78rem;">Powered by Ollama — all data stays on this computer.</span>
+        </div>
+        <div id="ai-report-loading" style="display:none;text-align:center;padding:20px;">
+            <div style="display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#4A90D9;border-radius:50%;animation:aispin 0.8s linear infinite;"></div>
+            <p style="margin-top:8px;font-size:0.85rem;color:var(--gray);">Analyzing caseload...</p>
+        </div>
+        <div id="ai-report-result" style="display:none;line-height:1.7;font-size:0.88rem;white-space:pre-wrap;"></div>
+        <div id="ai-report-error" style="display:none;color:#dc2626;font-size:0.85rem;"></div>
+    </div>
+</div>
+<style>@keyframes aispin { to { transform: rotate(360deg); } }</style>
+<script>
+function getCaseloadInsights() {
+    var btn = document.getElementById('ai-report-btn');
+    btn.disabled = true; btn.textContent = 'Analyzing...';
+    document.getElementById('ai-report-placeholder').style.display = 'none';
+    document.getElementById('ai-report-loading').style.display = 'block';
+    document.getElementById('ai-report-result').style.display = 'none';
+    document.getElementById('ai-report-error').style.display = 'none';
+
+    fetch('/ai/report-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+        body: JSON.stringify({
+            report_type: 'caseload_summary',
+            report_data: {
+                total_students: {{ total_students }},
+                by_grade: {{ by_grade|tojson }},
+                by_gender: {{ by_gender|tojson }},
+                by_ethnicity: {{ by_ethnicity|tojson }},
+                iep_count: {{ iep_count }},
+                section_504_count: {{ section_504_count }},
+                ell_count: {{ ell_count }}
+            }
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        document.getElementById('ai-report-loading').style.display = 'none';
+        btn.disabled = false; btn.textContent = 'Refresh';
+        if (data.error) {
+            document.getElementById('ai-report-error').style.display = 'block';
+            document.getElementById('ai-report-error').textContent = data.error;
+        } else {
+            document.getElementById('ai-report-result').style.display = 'block';
+            document.getElementById('ai-report-result').textContent = data.insights;
+        }
+    })
+    .catch(function() {
+        document.getElementById('ai-report-loading').style.display = 'none';
+        document.getElementById('ai-report-error').style.display = 'block';
+        document.getElementById('ai-report-error').textContent = 'Could not connect to Ollama. Make sure it is running.';
+        btn.disabled = false; btn.textContent = 'Retry';
+    });
+}
+</script>
 {% endblock %}

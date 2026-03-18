@@ -69,6 +69,77 @@
 </div>
 
 <div class="card">
+    <div class="card-header">AI Assistant (Ollama)</div>
+    <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--gray);margin-bottom:12px;">
+            AI feedback is powered by a local LLM via <strong>Ollama</strong>. All data stays on this computer — nothing is sent to the cloud.
+        </p>
+        <div id="ollama-status" style="margin-bottom:12px;">
+            <span style="font-size:0.85rem;color:var(--gray);">Checking Ollama status...</span>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="form-group" style="flex:1;min-width:200px;">
+                <label style="font-size:0.82rem;font-weight:600;">Ollama URL</label>
+                <input type="text" id="ollama-url" class="form-control" placeholder="http://localhost:11434"
+                       style="font-size:0.85rem;">
+            </div>
+            <div class="form-group" style="flex:1;min-width:160px;">
+                <label style="font-size:0.82rem;font-weight:600;">Model</label>
+                <input type="text" id="ollama-model" class="form-control" placeholder="llama3.2:3b"
+                       style="font-size:0.85rem;">
+            </div>
+            <div class="form-group">
+                <button class="btn btn-primary btn-sm" onclick="saveOllamaSettings()">Save</button>
+            </div>
+        </div>
+        <div id="ollama-models" style="margin-top:8px;font-size:0.82rem;color:var(--gray);"></div>
+        <details style="margin-top:14px;">
+            <summary style="font-size:0.82rem;color:var(--gray);cursor:pointer;">Setup instructions</summary>
+            <ol style="font-size:0.82rem;color:var(--gray);margin:6px 0 0 16px;line-height:1.8;">
+                <li>Install Ollama: visit <code>ollama.com</code> and download for your OS</li>
+                <li>Open a terminal and run: <code>ollama pull llama3.2:3b</code></li>
+                <li>Start Ollama: <code>ollama serve</code> (runs in background)</li>
+                <li>Come back here and click "Save" — AI features will activate automatically</li>
+            </ol>
+        </details>
+    </div>
+</div>
+<script>
+(function() {
+    fetch('/ai/status')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var el = document.getElementById('ollama-status');
+            document.getElementById('ollama-url').value = data.base_url;
+            document.getElementById('ollama-model').value = data.model;
+            if (data.available) {
+                el.innerHTML = '<span class="badge badge-success">Connected</span> <span style="font-size:0.82rem;color:var(--gray);">Model: ' + data.model + '</span>';
+                if (data.models && data.models.length > 0) {
+                    document.getElementById('ollama-models').textContent = 'Available models: ' + data.models.join(', ');
+                }
+            } else {
+                el.innerHTML = '<span class="badge badge-gray">Not Connected</span> <span style="font-size:0.82rem;color:var(--gray);">Install Ollama and run <code>ollama serve</code></span>';
+            }
+        })
+        .catch(function() {
+            document.getElementById('ollama-status').innerHTML = '<span class="badge badge-gray">Not Connected</span>';
+        });
+})();
+
+function saveOllamaSettings() {
+    var url = document.getElementById('ollama-url').value.trim();
+    var model = document.getElementById('ollama-model').value.trim();
+    fetch('/ai/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+        body: JSON.stringify({ base_url: url, model: model })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function() { location.reload(); });
+}
+</script>
+
+<div class="card">
     <div class="card-header">About</div>
     <div class="card-body">
         <p><strong>Counselor Assistant</strong> - All-in-One School Counselor Management Tool</p>
