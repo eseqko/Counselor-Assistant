@@ -18,6 +18,7 @@
         <div style="margin-bottom:12px; padding:8px 12px; background:#fce4ec; border-radius:4px; font-size:13px; display:flex; align-items:center; gap:8px;">
             <span style="color:#c62828;">Google Calendar connected</span>
             <form method="POST" action="{{ url_for('calendar.external_ical') }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size:12px;">Disconnect</button>
             </form>
         </div>
@@ -56,6 +57,7 @@
         <h5>Import Google Calendar</h5>
         <p style="font-size:14px; color:#666;">Paste your Google Calendar's <strong>secret address in iCal format</strong> to see those events here.</p>
         <form method="POST" action="{{ url_for('calendar.external_ical') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="display:flex; gap:8px;">
                 <input type="url" name="external_ical_url" placeholder="https://calendar.google.com/calendar/ical/...basic.ics"
                     value="{{ current_user.external_ical_url or '' }}"
