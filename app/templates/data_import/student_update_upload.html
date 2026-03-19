@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Bulk Update Student Info{% endblock %}
+{% block page_title %}Bulk Update Student Info{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Step 1: Download Current Data</div>
+        <div class="card-body">
+            <p style="margin-bottom:12px;font-size:0.9rem;">Download a spreadsheet pre-filled with your caseload's current info. Edit any fields, then upload.</p>
+            <a href="{{ url_for('data_import.student_update_template') }}" class="btn btn-primary">Download Student Info Spreadsheet</a>
+            <div style="margin-top:16px;font-size:0.82rem;color:var(--gray);">
+                <strong>Editable fields:</strong>
+                <ul style="margin-top:4px;padding-left:20px;">
+                    <li>Name, Grade, Gender, Ethnicity, DOB</li>
+                    <li>Advisory, Email, Phone</li>
+                    <li>Parent/Guardian, Parent Phone, Parent Email</li>
+                    <li>Address, EL Status, EL Level, IEP, 504</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Step 2: Upload Changes</div>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>Select File (.xlsx or .csv)</label>
+                    <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required style="padding:8px;">
+                </div>
+                <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
+                    <strong>How it works:</strong>
+                    <ul style="margin-top:4px;padding-left:20px;">
+                        <li>Students are matched by Student ID # &mdash; do not change that column</li>
+                        <li>Only changed fields are updated; blank cells are left as-is</li>
+                        <li>To clear a field, enter a single dash (<code>-</code>)</li>
+                        <li>Only students on your caseload are updated</li>
+                    </ul>
+                </div>
+                <button type="submit" class="btn btn-success">Upload & Update</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if updated or skipped %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Update Results</div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card success">
+                <div class="stat-value">{{ updated }}</div>
+                <div class="stat-label">Students Updated</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value">{{ skipped }}</div>
+                <div class="stat-label">Already Up to Date</div>
+            </div>
+            {% if errors %}
+            <div class="stat-card danger">
+                <div class="stat-value">{{ errors|length }}</div>
+                <div class="stat-label">Errors</div>
+            </div>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('data_import.index') }}" class="btn btn-primary">Back to Data Import</a>
+    </div>
+</div>
+{% endif %}
+
+{% if errors %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header" style="color:var(--danger);">Update Errors</div>
+    <div class="card-body">
+        <table>
+            <thead><tr><th>Error</th></tr></thead>
+            <tbody>
+                {% for err in errors %}
+                <tr><td style="font-size:0.85rem;color:var(--danger);">{{ err }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
