@@ -192,11 +192,12 @@ def index():
     non_minutes = sum(a.duration_minutes or 0 for a in week_activities
                       if a.service_type == 'non_counseling')
 
-    # Follow-ups due
+    # Follow-ups due (exclude completed ones)
     follow_ups = Note.query.filter(
         Note.author_id == current_user.id,
         Note.follow_up_needed == True,
-        Note.follow_up_date <= today + timedelta(days=7)
+        Note.follow_up_date <= today + timedelta(days=7),
+        db.or_(Note.follow_up_completed == False, Note.follow_up_completed.is_(None))
     ).order_by(Note.follow_up_date).limit(10).all()
 
     # Recent service records
@@ -223,6 +224,18 @@ def index():
         non_minutes=non_minutes,
         week_activities=week_activities,
     )
+
+
+@dashboard_bp.route('/follow-up/<int:note_id>/toggle-complete', methods=['POST'])
+@login_required
+def toggle_follow_up_complete(note_id):
+    """Toggle a follow-up note between completed and pending."""
+    note = Note.query.get_or_404(note_id)
+    if note.author_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    note.follow_up_completed = not note.follow_up_completed
+    db.session.commit()
+    return jsonify({'completed': note.follow_up_completed})
 
 
 @dashboard_bp.route('/event/<int:event_id>/toggle-complete', methods=['POST'])

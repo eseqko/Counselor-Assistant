@@ -172,6 +172,7 @@ def export_data():
             'follow_up_needed': n.follow_up_needed,
             'follow_up_date': _serialize_date(n.follow_up_date),
             'follow_up_notes': n.follow_up_notes,
+            'follow_up_completed': n.follow_up_completed,
             'is_confidential': n.is_confidential,
             'restricted_access': n.restricted_access,
             'created_at': _serialize_date(n.created_at),
@@ -366,18 +367,32 @@ def import_data():
 
         db.session.flush()
 
-        # --- Notes ---
+        # --- Notes (deduplicate by student + session_date + note_type + title) ---
         for n_data in data.get('notes', []):
             sid = n_data.get('student_id_number')
             if not sid or sid not in student_map:
                 continue
+            student_db_id = student_map[sid].id
+            session_date = _parse_date(n_data.get('session_date'))
+            # Check for existing note to avoid duplicates on re-import
+            existing = Note.query.filter_by(
+                student_id=student_db_id,
+                session_date=session_date,
+                note_type=n_data.get('note_type', 'individual'),
+                title=n_data.get('title'),
+            ).first()
+            if existing:
+                # Update follow_up_completed state from import
+                if 'follow_up_completed' in n_data:
+                    existing.follow_up_completed = n_data['follow_up_completed']
+                continue
             note = Note(
-                student_id=student_map[sid].id,
+                student_id=student_db_id,
                 author_id=current_user.id,
                 note_type=n_data.get('note_type', 'individual'),
                 title=n_data.get('title'),
                 content=n_data.get('content', ''),
-                session_date=_parse_date(n_data.get('session_date')),
+                session_date=session_date,
                 duration_minutes=n_data.get('duration_minutes'),
                 asca_domain=n_data.get('asca_domain'),
                 asca_standard=n_data.get('asca_standard'),
@@ -386,21 +401,32 @@ def import_data():
                 follow_up_needed=n_data.get('follow_up_needed', False),
                 follow_up_date=_parse_date(n_data.get('follow_up_date')),
                 follow_up_notes=n_data.get('follow_up_notes'),
+                follow_up_completed=n_data.get('follow_up_completed', False),
                 is_confidential=n_data.get('is_confidential', True),
                 restricted_access=n_data.get('restricted_access', False),
             )
             db.session.add(note)
             counts['notes'] += 1
 
-        # --- Service Records ---
+        # --- Service Records (deduplicate by student + date + service_type + topic) ---
         for sr_data in data.get('service_records', []):
             sid = sr_data.get('student_id_number')
             if not sid or sid not in student_map:
                 continue
+            student_db_id = student_map[sid].id
+            sr_date = _parse_date(sr_data.get('date')) or date.today()
+            existing = ServiceRecord.query.filter_by(
+                student_id=student_db_id,
+                date=sr_date,
+                service_type=sr_data.get('service_type', 'individual_counseling'),
+                topic=sr_data.get('topic'),
+            ).first()
+            if existing:
+                continue
             sr = ServiceRecord(
-                student_id=student_map[sid].id,
+                student_id=student_db_id,
                 counselor_id=current_user.id,
-                date=_parse_date(sr_data.get('date')) or date.today(),
+                date=sr_date,
                 service_type=sr_data.get('service_type', 'individual_counseling'),
                 topic=sr_data.get('topic'),
                 description=sr_data.get('description'),
@@ -418,10 +444,17 @@ def import_data():
             db.session.add(sr)
             counts['service_records'] += 1
 
-        # --- Transcript Records ---
+        # --- Transcript Records (deduplicate by student + quarter) ---
         for tr_data in data.get('transcript_records', []):
             sid = tr_data.get('student_id_number')
             if not sid or sid not in student_map:
+                continue
+            student_db_id = student_map[sid].id
+            existing = TranscriptRecord.query.filter_by(
+                student_id=student_db_id,
+                quarter=tr_data.get('quarter'),
+            ).first()
+            if existing:
                 continue
             tr = TranscriptRecord(
                 student_id=student_map[sid].id,
