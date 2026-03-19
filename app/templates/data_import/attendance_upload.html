@@ -16,7 +16,7 @@
                 <ul style="margin-top:4px;padding-left:20px;">
                     <li>Student ID # (required, must match caseload)</li>
                     <li>Date (required, MM/DD/YYYY)</li>
-                    <li>Period (1-4, optional)</li>
+                    <li>Period (0-10, optional &mdash; 1-4 core, 5 extracurricular, 6 advisory)</li>
                     <li>Status (required: Present, Absent, Tardy, Excused)</li>
                     <li>Course Name (optional)</li>
                     <li>Reason (optional)</li>
@@ -37,9 +37,18 @@
                 <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
                     <strong>What happens on upload:</strong>
                     <ul style="margin-top:4px;padding-left:20px;">
-                        <li>Records are matched to students by Student ID #</li>
+                        <li>Records are matched to students by Student ID # / Perm ID</li>
                         <li>Duplicate entries (same student+date+period) are skipped</li>
                         <li>Invalid rows are reported</li>
+                    </ul>
+                </div>
+                <div style="background:#e8f4e8;border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
+                    <strong>Synergy SIS compatible:</strong>
+                    <ul style="margin-top:4px;padding-left:20px;">
+                        <li>Upload the Synergy attendance report directly &mdash; no reformatting needed</li>
+                        <li>The format is auto-detected (looks for Period 0, Period 1, &hellip; columns)</li>
+                        <li>Only students on your caseload are imported; the rest are skipped</li>
+                        <li>Synergy codes (Illness, Cut, Activity, etc.) are mapped automatically</li>
                     </ul>
                 </div>
                 <button type="submit" class="btn btn-success">Upload & Import</button>

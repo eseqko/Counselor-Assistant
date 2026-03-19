@@ -11,7 +11,7 @@ class AttendanceRecord(db.Model):
 
     # Period-level attendance
     date = db.Column(db.Date, nullable=False)
-    period = db.Column(db.Integer)  # 1-4 for 4x4 schedule
+    period = db.Column(db.Integer)  # 0-10 (Synergy periods; 1-4 core, 5 extracurricular, 6 advisory)
     status = db.Column(db.String(20), nullable=False)  # present, absent, tardy, excused
 
     # Optional detail
