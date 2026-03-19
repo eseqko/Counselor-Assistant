@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
+import json
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import login_required, current_user
 from app import db
 from app.models.course import Course, Department, GraduationRequirement
 from app.utils.audit import log_action
@@ -129,3 +130,26 @@ def add_requirement():
     db.session.commit()
     flash('Graduation requirement added.', 'success')
     return redirect(url_for('course_catalog.requirements'))
+
+
+@course_catalog_bp.route('/api/school-config', methods=['GET'])
+@login_required
+def get_school_config():
+    """Return the server-stored school config for the current user."""
+    raw = current_user.school_config_json
+    if raw:
+        try:
+            return jsonify(json.loads(raw))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return jsonify({})
+
+
+@course_catalog_bp.route('/api/school-config', methods=['POST'])
+@login_required
+def save_school_config():
+    """Persist the school config to the database so it survives device transfers."""
+    data = request.get_json(silent=True) or {}
+    current_user.school_config_json = json.dumps(data, ensure_ascii=False)
+    db.session.commit()
+    return jsonify({'ok': True})

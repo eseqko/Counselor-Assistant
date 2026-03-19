@@ -71,12 +71,41 @@
       } catch {
         this._cache = { ...DEFAULTS };
       }
+      // If localStorage had no config, try loading from server (async, populates for next use)
+      if (!localStorage.getItem(LS_KEY)) {
+        this._loadFromServer();
+      }
       return this._cache;
+    },
+
+    _loadFromServer() {
+      var self = this;
+      try {
+        fetch('/course-catalog/api/school-config')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data && data.setupComplete) {
+              self._cache = { ...DEFAULTS, ...data };
+              localStorage.setItem(LS_KEY, JSON.stringify(self._cache));
+              // Re-apply theme and identity now that we have the config
+              self.applyTheme();
+              self.applyIdentity();
+            }
+          }).catch(function() {});
+      } catch (e) { /* ignore */ }
     },
 
     save(config) {
       this._cache = { ...DEFAULTS, ...config };
       localStorage.setItem(LS_KEY, JSON.stringify(this._cache));
+      // Persist to server so it transfers between devices
+      try {
+        fetch('/course-catalog/api/school-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this._cache)
+        }).catch(function() {});
+      } catch (e) { /* ignore if offline */ }
     },
 
     get(key) {

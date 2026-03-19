@@ -120,6 +120,13 @@ def export_data():
         'exported_by': current_user.display_name or current_user.username,
     }
 
+    # --- School Config (catalog setup: name, colors, mascot) ---
+    if current_user.school_config_json:
+        try:
+            data['school_config'] = json.loads(current_user.school_config_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     # --- Tags ---
     data['tags'] = [
         {'name': t.name, 'color': t.color}
@@ -173,6 +180,7 @@ def export_data():
             'follow_up_date': _serialize_date(n.follow_up_date),
             'follow_up_notes': n.follow_up_notes,
             'follow_up_completed': n.follow_up_completed,
+            'follow_up_completed_date': _serialize_date(n.follow_up_completed_date),
             'is_confidential': n.is_confidential,
             'restricted_access': n.restricted_access,
             'created_at': _serialize_date(n.created_at),
@@ -319,6 +327,10 @@ def import_data():
               'graduation_requirements': 0, 'tags': 0}
 
     try:
+        # --- School Config ---
+        if 'school_config' in data:
+            current_user.school_config_json = json.dumps(data['school_config'], ensure_ascii=False)
+
         # --- Tags ---
         tag_map = {}
         for t_data in data.get('tags', []):
@@ -385,6 +397,7 @@ def import_data():
                 # Update follow_up_completed state from import
                 if 'follow_up_completed' in n_data:
                     existing.follow_up_completed = n_data['follow_up_completed']
+                    existing.follow_up_completed_date = _parse_date(n_data.get('follow_up_completed_date'))
                 continue
             note = Note(
                 student_id=student_db_id,
@@ -402,6 +415,7 @@ def import_data():
                 follow_up_date=_parse_date(n_data.get('follow_up_date')),
                 follow_up_notes=n_data.get('follow_up_notes'),
                 follow_up_completed=n_data.get('follow_up_completed', False),
+                follow_up_completed_date=_parse_date(n_data.get('follow_up_completed_date')),
                 is_confidential=n_data.get('is_confidential', True),
                 restricted_access=n_data.get('restricted_access', False),
             )
