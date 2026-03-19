@@ -61,28 +61,45 @@
         <div class="card-body">
             {% if todays_events or external_events %}
             {% for event in todays_events %}
-            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <strong>{{ event.title }}</strong>
-                    <div style="font-size:0.82rem;color:var(--gray);">
-                        {{ event.start_datetime.strftime('%I:%M %p') }} - {{ event.end_datetime.strftime('%I:%M %p') }}
-                        {% if event.location %}| {{ event.location }}{% endif %}
+            <div class="schedule-item{% if event.status == 'completed' %} completed{% endif %}" data-event-id="{{ event.id }}" data-event-type="local">
+                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+                    <input type="checkbox" class="schedule-check" data-id="{{ event.id }}" data-source="local"
+                           {% if event.status == 'completed' %}checked{% endif %}
+                           title="Mark as done">
+                    <div style="min-width:0;">
+                        <strong class="schedule-title">{{ event.title }}</strong>
+                        <div class="schedule-time">
+                            {{ event.start_datetime.strftime('%I:%M %p') }} - {{ event.end_datetime.strftime('%I:%M %p') }}
+                            {% if event.location %}| {{ event.location }}{% endif %}
+                        </div>
                     </div>
                 </div>
-                <span class="badge badge-{{ 'success' if event.status == 'completed' else 'primary' }}">{{ event.event_type }}</span>
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                    <span class="badge badge-{{ 'success' if event.status == 'completed' else 'primary' }}">{{ event.event_type }}</span>
+                    <button class="sched-btn" onclick="window.open('https://calendar.google.com/calendar/r/eventedit','_blank')" title="Reschedule">&#128197;</button>
+                    <button class="sched-btn" onclick="window.open('https://mail.google.com/mail/?view=cm&fs=1','_blank')" title="Email">&#9993;</button>
+                </div>
             </div>
             {% endfor %}
             {% for event in external_events %}
-            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <strong>{{ event.title }}</strong>
-                    <div style="font-size:0.82rem;color:var(--gray);">
-                        {% if event.is_all_day %}All Day
-                        {% else %}{{ event.start_datetime.strftime('%I:%M %p') }} - {{ event.end_datetime.strftime('%I:%M %p') }}{% endif %}
-                        {% if event.location %}| {{ event.location }}{% endif %}
+            <div class="schedule-item" data-event-id="ext-{{ loop.index }}" data-event-type="external">
+                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+                    <input type="checkbox" class="schedule-check" data-id="ext-{{ loop.index }}" data-source="external"
+                           title="Mark as done">
+                    <div style="min-width:0;">
+                        <strong class="schedule-title">{{ event.title }}</strong>
+                        <div class="schedule-time">
+                            {% if event.is_all_day %}All Day
+                            {% else %}{{ event.start_datetime.strftime('%I:%M %p') }} - {{ event.end_datetime.strftime('%I:%M %p') }}{% endif %}
+                            {% if event.location %}| {{ event.location }}{% endif %}
+                        </div>
                     </div>
                 </div>
-                <span class="badge" style="background:#DB443720;color:#DB4437;">Google</span>
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                    <span class="badge" style="background:#DB443720;color:#DB4437;">Google</span>
+                    <button class="sched-btn" onclick="window.open('https://calendar.google.com/calendar/r/eventedit','_blank')" title="Reschedule">&#128197;</button>
+                    <button class="sched-btn" onclick="window.open('https://mail.google.com/mail/?view=cm&fs=1','_blank')" title="Email">&#9993;</button>
+                </div>
             </div>
             {% endfor %}
             {% else %}
@@ -177,4 +194,92 @@
     </div>
 </div>
 
+<style>
+.schedule-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #E8ECF0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.3s;
+}
+.schedule-item.completed {
+    opacity: 0.5;
+}
+.schedule-item.completed .schedule-title {
+    text-decoration: line-through;
+    color: var(--gray);
+}
+.schedule-item.completed .schedule-time {
+    text-decoration: line-through;
+}
+.schedule-time {
+    font-size: 0.82rem;
+    color: var(--gray);
+}
+.schedule-check {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--success);
+    flex-shrink: 0;
+}
+.sched-btn {
+    background: none;
+    border: 1px solid #E8ECF0;
+    border-radius: 4px;
+    padding: 3px 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    transition: background 0.15s;
+}
+.sched-btn:hover {
+    background: #f0f2f5;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Restore checked state for external events from localStorage
+    var stored = JSON.parse(localStorage.getItem('checkedExternalEvents_{{ today.isoformat() }}') || '{}');
+    document.querySelectorAll('.schedule-check[data-source="external"]').forEach(function(cb) {
+        if (stored[cb.dataset.id]) {
+            cb.checked = true;
+            cb.closest('.schedule-item').classList.add('completed');
+        }
+    });
+
+    // Handle checkbox clicks
+    document.querySelectorAll('.schedule-check').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var item = this.closest('.schedule-item');
+            var source = this.dataset.source;
+            var id = this.dataset.id;
+
+            if (this.checked) {
+                item.classList.add('completed');
+            } else {
+                item.classList.remove('completed');
+            }
+
+            if (source === 'local') {
+                fetch('/dashboard/event/' + id + '/toggle-complete', {method: 'POST'})
+                    .then(function(r) { return r.json(); })
+                    .catch(function() {});
+            } else {
+                var key = 'checkedExternalEvents_{{ today.isoformat() }}';
+                var data = JSON.parse(localStorage.getItem(key) || '{}');
+                if (cb.checked) {
+                    data[id] = true;
+                } else {
+                    delete data[id];
+                }
+                localStorage.setItem(key, JSON.stringify(data));
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

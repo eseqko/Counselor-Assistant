@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student
@@ -8,9 +8,80 @@ from app.models.activity import Activity
 from app.models.service_record import ServiceRecord
 from datetime import datetime, date, timedelta, timezone
 import requests as http_requests
+import pytz
 import re
 
 dashboard_bp = Blueprint('dashboard', __name__)
+
+
+def _extract_ical_timezone(ics_text):
+    """Extract the calendar-level timezone from X-WR-TIMEZONE or first VTIMEZONE."""
+    m = re.search(r'X-WR-TIMEZONE:(.*)', ics_text)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r'BEGIN:VTIMEZONE.*?TZID:(.*?)[\r\n]', ics_text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _parse_ical_dt_with_tz(raw_value, full_key, cal_tz):
+    """Parse an iCal datetime and convert to the calendar's local timezone.
+
+    Returns (naive_local_datetime, is_all_day).
+    - TZID on property: time is already in that timezone, convert to cal_tz
+    - Z suffix: time is UTC, convert to cal_tz
+    - VALUE=DATE: all-day event, return date-only
+    - No timezone info: floating time, assume already local
+    """
+    if not raw_value:
+        return None, False
+
+    clean = raw_value.replace('Z', '')
+
+    # All-day event
+    if 'VALUE=DATE' in full_key or (len(clean) == 8 and 'T' not in clean):
+        try:
+            return datetime.strptime(clean[:8], '%Y%m%d'), True
+        except ValueError:
+            return None, False
+
+    # Parse the naive datetime
+    try:
+        naive = datetime.strptime(clean, '%Y%m%dT%H%M%S')
+    except ValueError:
+        return None, False
+
+    target_tz = None
+    if cal_tz:
+        try:
+            target_tz = pytz.timezone(cal_tz)
+        except pytz.exceptions.UnknownTimeZoneError:
+            pass
+
+    # Check for TZID on this specific property
+    tzid_match = re.search(r'TZID=([^;:]+)', full_key)
+    if tzid_match:
+        prop_tz_name = tzid_match.group(1)
+        try:
+            prop_tz = pytz.timezone(prop_tz_name)
+            aware = prop_tz.localize(naive)
+            if target_tz and prop_tz_name != cal_tz:
+                aware = aware.astimezone(target_tz)
+            return aware.replace(tzinfo=None), False
+        except (pytz.exceptions.UnknownTimeZoneError, Exception):
+            return naive, False
+
+    # UTC (Z suffix)
+    if raw_value.endswith('Z'):
+        utc_dt = pytz.utc.localize(naive)
+        if target_tz:
+            local_dt = utc_dt.astimezone(target_tz)
+            return local_dt.replace(tzinfo=None), False
+        return naive, False
+
+    # Floating time — already local
+    return naive, False
 
 
 def _fetch_todays_external_events(user):
@@ -26,16 +97,19 @@ def _fetch_todays_external_events(user):
     today = date.today()
     events = []
     ics_text = re.sub(r'\r?\n[ \t]', '', resp.text)
+    cal_tz = _extract_ical_timezone(ics_text)
     blocks = re.split(r'BEGIN:VEVENT', ics_text)
 
     for block in blocks[1:]:
         block = block.split('END:VEVENT')[0]
         props = {}
+        full_keys = {}
         for line in block.strip().splitlines():
             if ':' in line:
                 key, _, value = line.partition(':')
                 base_key = key.split(';')[0].strip()
                 props[base_key] = value.strip()
+                full_keys[base_key] = key.strip()
 
         title = props.get('SUMMARY', '').replace('\\,', ',').replace('\\n', ' ')
         start_val = props.get('DTSTART', '')
@@ -45,46 +119,25 @@ def _fetch_todays_external_events(user):
         if not start_val:
             continue
 
-        # Parse the start datetime
-        clean = start_val.replace('Z', '')
-        start_dt = None
-        is_all_day = False
-        try:
-            if len(clean) == 8:
-                start_dt = datetime.strptime(clean, '%Y%m%d')
-                is_all_day = True
-            elif 'T' in clean:
-                start_dt = datetime.strptime(clean, '%Y%m%dT%H%M%S')
-        except ValueError:
-            continue
+        start_key = full_keys.get('DTSTART', '')
+        end_key = full_keys.get('DTEND', '')
 
+        start_dt, is_all_day = _parse_ical_dt_with_tz(start_val, start_key, cal_tz)
         if not start_dt:
             continue
 
         # Check if event is today
         if start_dt.date() != today:
-            # For all-day events, also check if today falls within the range
             if is_all_day and end_val:
-                try:
-                    end_dt = datetime.strptime(end_val.replace('Z', ''), '%Y%m%d')
-                    if not (start_dt.date() <= today < end_dt.date()):
-                        continue
-                except ValueError:
+                end_dt, _ = _parse_ical_dt_with_tz(end_val, end_key, cal_tz)
+                if end_dt and start_dt.date() <= today < end_dt.date():
+                    pass  # multi-day all-day event spanning today
+                else:
                     continue
             else:
                 continue
 
-        # Parse end datetime
-        end_dt = None
-        if end_val:
-            end_clean = end_val.replace('Z', '')
-            try:
-                if len(end_clean) == 8:
-                    end_dt = datetime.strptime(end_clean, '%Y%m%d')
-                elif 'T' in end_clean:
-                    end_dt = datetime.strptime(end_clean, '%Y%m%dT%H%M%S')
-            except ValueError:
-                pass
+        end_dt, _ = _parse_ical_dt_with_tz(end_val, end_key, cal_tz)
 
         events.append({
             'title': title,
@@ -170,3 +223,15 @@ def index():
         non_minutes=non_minutes,
         week_activities=week_activities,
     )
+
+
+@dashboard_bp.route('/event/<int:event_id>/toggle-complete', methods=['POST'])
+@login_required
+def toggle_event_complete(event_id):
+    """Toggle an internal calendar event between scheduled and completed."""
+    event = CalendarEvent.query.get_or_404(event_id)
+    if event.owner_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    event.status = 'scheduled' if event.status == 'completed' else 'completed'
+    db.session.commit()
+    return jsonify({'status': event.status})
