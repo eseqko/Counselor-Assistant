@@ -186,6 +186,14 @@ def attendance_upload():
         skipped = 0
         not_on_caseload = 0
         errors = []
+        BATCH_SIZE = 200
+
+        # Pre-load student lookup cache to avoid per-row DB queries
+        student_cache = {
+            s.student_id_number: s.id
+            for s in Student.query.with_entities(
+                Student.student_id_number, Student.id).all()
+        }
 
         for row_idx, row in enumerate(rows, start=2):
             if len(row) < 4:
@@ -228,9 +236,9 @@ def attendance_upload():
                     errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
-            student = Student.query.filter_by(
-                student_id_number=str(student_id_str).strip()).first()
-            if not student:
+            sid_clean = str(student_id_str).strip()
+            student_db_id = student_cache.get(sid_clean)
+            if not student_db_id:
                 # For Synergy whole-school reports, silently skip non-caseload students
                 if is_synergy:
                     not_on_caseload += 1
@@ -240,13 +248,13 @@ def attendance_upload():
 
             # Skip duplicates
             existing = AttendanceRecord.query.filter_by(
-                student_id=student.id, date=att_date, period=period_val).first()
+                student_id=student_db_id, date=att_date, period=period_val).first()
             if existing:
                 skipped += 1
                 continue
 
             record = AttendanceRecord(
-                student_id=student.id,
+                student_id=student_db_id,
                 date=att_date,
                 period=period_val,
                 status=status_clean,
@@ -256,6 +264,10 @@ def attendance_upload():
             )
             db.session.add(record)
             added += 1
+
+            # Batch commit to avoid holding SQLite lock too long
+            if added % BATCH_SIZE == 0:
+                db.session.commit()
 
         db.session.commit()
         log_action('import', 'attendance',
