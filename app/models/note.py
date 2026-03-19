@@ -32,6 +32,7 @@ class Note(db.Model):
     follow_up_needed = db.Column(db.Boolean, default=False)
     follow_up_date = db.Column(db.Date)
     follow_up_notes = db.Column(db.Text)
+    follow_up_completed = db.Column(db.Boolean, default=False)
 
     # Confidentiality
     is_confidential = db.Column(db.Boolean, default=True)

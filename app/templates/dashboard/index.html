@@ -17,7 +17,7 @@
         <div class="stat-label">Hours This Week</div>
     </div>
     <div class="stat-card danger">
-        <div class="stat-value">{{ follow_ups|length }}</div>
+        <div class="stat-value" id="follow-up-count">{{ follow_ups|length }}</div>
         <div class="stat-label">Follow-Ups Due</div>
     </div>
 </div>
@@ -114,8 +114,9 @@
         <div class="card-body">
             {% if follow_ups %}
             {% for note in follow_ups %}
-            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;">
-                <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);">
+            <div id="followup-{{ note.id }}" style="padding:8px 0;border-bottom:1px solid #E8ECF0;display:flex;align-items:flex-start;gap:8px;">
+                <input type="checkbox" style="margin-top:4px;cursor:pointer;" onclick="toggleFollowUp({{ note.id }}, this)" title="Mark as completed">
+                <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);flex:1;">
                     <strong>{{ note.student.display_name }}</strong> - {{ note.title or note.note_type }}
                     <div style="font-size:0.82rem;color:var(--gray);">
                         Due: {{ note.follow_up_date.strftime('%m/%d/%Y') if note.follow_up_date else 'No date' }}
@@ -123,6 +124,29 @@
                 </a>
             </div>
             {% endfor %}
+            <script>
+            function toggleFollowUp(noteId, checkbox) {
+                var row = document.getElementById('followup-' + noteId);
+                var link = row.querySelector('a');
+                fetch('/dashboard/follow-up/' + noteId + '/toggle-complete', {method: 'POST'})
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.completed) {
+                            link.style.textDecoration = 'line-through';
+                            link.style.opacity = '0.5';
+                            // Update the follow-ups due count
+                            var countEl = document.getElementById('follow-up-count');
+                            if (countEl) {
+                                var current = parseInt(countEl.textContent) || 0;
+                                countEl.textContent = data.completed ? Math.max(0, current - 1) : current + 1;
+                            }
+                        } else {
+                            link.style.textDecoration = 'none';
+                            link.style.opacity = '1';
+                        }
+                    });
+            }
+            </script>
             {% else %}
             <div class="empty-state"><p>No follow-ups due this week.</p></div>
             {% endif %}
