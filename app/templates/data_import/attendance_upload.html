@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Upload Attendance{% endblock %}
+{% block page_title %}Upload Attendance{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Step 1: Download Template</div>
+        <div class="card-body">
+            <p style="margin-bottom:12px;font-size:0.9rem;">Download the template, fill it with attendance data from your SIS, then upload.</p>
+            <a href="{{ url_for('data_import.attendance_template') }}" class="btn btn-primary">Download Excel Template</a>
+            <div style="margin-top:16px;font-size:0.82rem;color:var(--gray);">
+                <strong>Template columns:</strong>
+                <ul style="margin-top:4px;padding-left:20px;">
+                    <li>Student ID # (required, must match caseload)</li>
+                    <li>Date (required, MM/DD/YYYY)</li>
+                    <li>Period (1-4, optional)</li>
+                    <li>Status (required: Present, Absent, Tardy, Excused)</li>
+                    <li>Course Name (optional)</li>
+                    <li>Reason (optional)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Step 2: Upload Data</div>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>Select File (.xlsx or .csv)</label>
+                    <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required style="padding:8px;">
+                </div>
+                <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
+                    <strong>What happens on upload:</strong>
+                    <ul style="margin-top:4px;padding-left:20px;">
+                        <li>Records are matched to students by Student ID #</li>
+                        <li>Duplicate entries (same student+date+period) are skipped</li>
+                        <li>Invalid rows are reported</li>
+                    </ul>
+                </div>
+                <button type="submit" class="btn btn-success">Upload & Import</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if added or skipped %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Import Results</div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card success">
+                <div class="stat-value">{{ added }}</div>
+                <div class="stat-label">Records Added</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value">{{ skipped }}</div>
+                <div class="stat-label">Duplicates Skipped</div>
+            </div>
+            {% if errors %}
+            <div class="stat-card danger">
+                <div class="stat-value">{{ errors|length }}</div>
+                <div class="stat-label">Errors</div>
+            </div>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('data_import.index') }}" class="btn btn-primary">Back to Data Import</a>
+    </div>
+</div>
+{% endif %}
+
+{% if errors %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header" style="color:var(--danger);">Import Errors</div>
+    <div class="card-body">
+        <table>
+            <thead><tr><th>Error</th></tr></thead>
+            <tbody>
+                {% for err in errors %}
+                <tr><td style="font-size:0.85rem;color:var(--danger);">{{ err }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

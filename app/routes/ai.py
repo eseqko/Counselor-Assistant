@@ -1,4 +1,5 @@
 """AI Assistant routes — powered by local Ollama LLM (FERPA safe)."""
+import json
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 from app import db
@@ -6,6 +7,10 @@ from app.models.note import Note
 from app.models.student import Student
 from app.models.service_record import ServiceRecord
 from app.models.activity import Activity
+from app.models.attendance import AttendanceRecord
+from app.models.grade import GradeRecord
+from app.models.transcript import TranscriptRecord
+from app.models.course import Course, Department, GraduationRequirement
 from app.utils import ollama_client
 from app.utils.audit import log_action
 from collections import defaultdict
@@ -180,13 +185,55 @@ def student_insights():
         Note.follow_up_date < date.today()
     ).count()
 
+    # --- Attendance data ---
+    thirty_days_ago = date.today() - timedelta(days=30)
+    absences_30 = AttendanceRecord.query.filter(
+        AttendanceRecord.student_id == student.id,
+        AttendanceRecord.date >= thirty_days_ago,
+        AttendanceRecord.status == 'absent'
+    ).count()
+    tardies_30 = AttendanceRecord.query.filter(
+        AttendanceRecord.student_id == student.id,
+        AttendanceRecord.date >= thirty_days_ago,
+        AttendanceRecord.status == 'tardy'
+    ).count()
+    total_att = AttendanceRecord.query.filter(
+        AttendanceRecord.student_id == student.id,
+        AttendanceRecord.date >= thirty_days_ago
+    ).count()
+    att_context = ""
+    if total_att > 0:
+        present = total_att - absences_30 - tardies_30
+        att_rate = round(present / total_att * 100, 1)
+        att_context = f"\n\nATTENDANCE (Last 30 days): {total_att} records | {absences_30} absences, {tardies_30} tardies | Rate: {att_rate}%"
+
+    # --- Grades data ---
+    recent_grades = GradeRecord.query.filter_by(
+        student_id=student.id
+    ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).limit(8).all()
+    grades_context = ""
+    if recent_grades:
+        grade_lines = []
+        for g in recent_grades:
+            grade_lines.append(f"  {g.course_name}: {g.letter_grade or 'N/A'} (Q{g.quarter or '?'} {g.school_year or ''})")
+        failing = [g for g in recent_grades if g.letter_grade in ('F', 'D', 'D-', 'D+', 'NP')]
+        gpa_vals = [g.gpa_points for g in recent_grades if g.gpa_points is not None]
+        avg_gpa = round(sum(gpa_vals) / len(gpa_vals), 2) if gpa_vals else 'N/A'
+        grades_context = f"\n\nGRADES (Most Recent): Avg GPA: {avg_gpa} | Failing: {len(failing)}\n" + "\n".join(grade_lines)
+
+    # --- Transcript context ---
+    transcript_context = ""
+    latest_tr = student.transcript_records.first()
+    if latest_tr:
+        transcript_context = f"\n\nTRANSCRIPT: {int(latest_tr.total_completed)}/225 credits | Risk: {latest_tr.risk_level} | a-g: {latest_tr.ag_areas_met}/7 met ({latest_tr.ag_status}) | CTE: {latest_tr.cte_level}"
+
     prompt = f"""Analyze this student's counseling history and provide support recommendations.
 
 STUDENT PROFILE: {profile}
 Total notes: {len(notes)} | Total services: {len(services)}
 Note types used: {dict(note_types)}
 ASCA domains covered: {dict(domains)}
-Overdue follow-ups: {overdue}
+Overdue follow-ups: {overdue}{att_context}{grades_context}{transcript_context}
 
 RECENT NOTES:{notes_summary or ' None'}
 
@@ -195,7 +242,7 @@ RECENT SERVICES:{services_summary or ' None'}
 Please provide:
 1. **Patterns & Observations** — What themes or patterns do you notice in this student's counseling history?
 2. **Gaps in Service** — Are any ASCA domains underserved? Any missing service types that might benefit this student?
-3. **Risk Indicators** — Based on the notes, are there any concerns that should be flagged?
+3. **Risk Indicators** — Based on the notes, attendance, and grades, are there any concerns that should be flagged?
 4. **Recommended Next Steps** — Specific, actionable interventions or follow-ups to consider.
 {"5. **Overdue Follow-ups** — There are " + str(overdue) + " overdue follow-ups. Please flag this as urgent." if overdue else ""}
 
@@ -226,6 +273,10 @@ def report_insights():
         prompt = _build_caseload_prompt(report_data)
     elif report_type == 'topic_delivery':
         prompt = _build_topic_delivery_prompt(report_data)
+    elif report_type == 'early_warning':
+        prompt = _build_early_warning_prompt(report_data)
+    elif report_type == 'cohort_trends':
+        prompt = _build_cohort_trends_prompt(report_data)
     else:
         return jsonify({'error': f'Unsupported report type: {report_type}'}), 400
 
@@ -301,3 +352,206 @@ Please provide:
 2. **Gaps** — What important counseling topics appear to be missing or underrepresented?
 3. **Student Reach** — Are sessions reaching enough students? Any topics where small-group or classroom delivery might increase impact?
 4. **Suggestions** — Recommend 2-3 topics or activities to add based on common school counseling needs."""
+
+
+def _build_early_warning_prompt(data):
+    flagged = data.get('flagged', [])
+    flagged_lines = ""
+    for f in flagged:
+        flagged_lines += f"\n- {f.get('name', '?')} (Grade {f.get('grade', '?')}, {f.get('severity', '?')}): {', '.join(f.get('flags', []))}"
+
+    return f"""Analyze this early warning report and provide intervention recommendations.
+
+CASELOAD: {data.get('total_students', 0)} total students
+FLAGGED: {data.get('critical', 0)} Critical, {data.get('concern', 0)} Concern, {data.get('watch', 0)} Watch
+
+FLAGGED STUDENTS:{flagged_lines or ' None'}
+
+Please provide:
+1. **Priority Triage** — Which students need immediate intervention? Rank by urgency.
+2. **Pattern Analysis** — Do you see any common themes (attendance, grades, crisis) across flagged students?
+3. **Intervention Strategies** — For each severity level (Critical, Concern, Watch), suggest specific counselor actions.
+4. **Systemic Issues** — Are there grade-level or demographic patterns that suggest a systemic issue needing schoolwide intervention?
+5. **Next Steps** — Top 3 actions the counselor should take this week.
+
+Be specific and actionable. Reference ASCA and MTSS frameworks where appropriate."""
+
+
+def _build_cohort_trends_prompt(data):
+    att_by_grade = data.get('att_rates_by_grade', {})
+    subject_stats = data.get('subject_stats', {})
+    risk_counts = data.get('risk_counts', {})
+    ag_counts = data.get('ag_counts', {})
+
+    att_lines = "\n".join(f"  Grade {g}: {r}%" for g, r in att_by_grade.items())
+    subj_lines = "\n".join(
+        f"  {s}: {d.get('pass_rate', 0)}% pass rate, GPA {d.get('avg_gpa', 'N/A')}, {d.get('failing', 0)} failing"
+        for s, d in subject_stats.items()
+    )
+
+    return f"""Analyze these cohort-wide trends and provide strategic recommendations.
+
+CASELOAD: {data.get('total_students', 0)} students
+
+ATTENDANCE RATES BY GRADE (last 90 days):
+{att_lines or '  No data'}
+
+ACADEMIC PERFORMANCE BY SUBJECT:
+{subj_lines or '  No data'}
+
+GRADUATION RISK: {dict(risk_counts)}
+A-G STATUS: {dict(ag_counts)}
+
+Please provide:
+1. **Key Findings** — What are the most significant trends or concerns?
+2. **Grade-Level Patterns** — Which grade levels need the most support? Why?
+3. **Subject Area Concerns** — Which subjects have the lowest pass rates and what interventions might help?
+4. **Equity Lens** — Are certain student populations likely being underserved based on these patterns?
+5. **Schoolwide Recommendations** — 3-5 data-driven strategies for improving outcomes across the caseload.
+6. **Data Gaps** — What additional data would help paint a clearer picture?
+
+Ground your analysis in ASCA and MTSS frameworks."""
+
+
+# =====================================================================
+#  AI COURSE RECOMMENDATIONS (4x4 Schedule)
+# =====================================================================
+
+@ai_bp.route('/course-recommendations', methods=['POST'])
+@login_required
+def course_recommendations():
+    """Generate AI-powered course recommendations for next year based on transcript and grades."""
+    data = request.get_json()
+    student_id = data.get('student_id')
+    if not student_id:
+        return jsonify({'error': 'Missing student_id'}), 400
+
+    student = Student.query.get_or_404(student_id)
+
+    # Gather transcript data
+    latest_transcript = student.transcript_records.first()
+    transcript_info = "No transcript data available."
+    credits_detail = ""
+    ag_detail = ""
+    if latest_transcript:
+        transcript_info = (
+            f"Credits: {int(latest_transcript.total_completed)}/225 completed"
+            f" | WIP: {int(latest_transcript.total_wip or 0)}"
+            f" | Risk: {latest_transcript.risk_level}"
+            f" | a-g: {latest_transcript.ag_areas_met}/7 met ({latest_transcript.ag_status})"
+            f" | CTE: {latest_transcript.cte_completed} credits ({latest_transcript.cte_level})"
+        )
+        if latest_transcript.credits_json:
+            try:
+                creds = json.loads(latest_transcript.credits_json)
+                lines = []
+                for subj, d in creds.items():
+                    req = d.get('required', 0) or 0
+                    comp = d.get('completed', 0) or 0
+                    need = max(0, req - comp)
+                    if need > 0:
+                        lines.append(f"  {subj}: need {int(need)} more credits ({int(comp)}/{int(req)})")
+                if lines:
+                    credits_detail = "\n\nGRADUATION CREDIT GAPS:\n" + "\n".join(lines)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if latest_transcript.ag_json:
+            try:
+                ag = json.loads(latest_transcript.ag_json)
+                lines = []
+                for area, d in ag.items():
+                    if not d.get('isMet', False):
+                        need = d.get('needed', 0)
+                        label = d.get('label', area)
+                        lines.append(f"  Area {area} ({label}): need {int(need)} more")
+                if lines:
+                    ag_detail = "\n\na-g DEFICIENCIES:\n" + "\n".join(lines)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # Gather recent grades
+    recent_grades = GradeRecord.query.filter_by(
+        student_id=student.id
+    ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
+
+    grade_lines = ""
+    completed_courses = set()
+    failed_courses = []
+    for g in recent_grades:
+        completed_courses.add(g.course_name)
+        status = g.letter_grade or 'N/A'
+        grade_lines += f"\n  {g.course_name} ({g.subject_area or 'N/A'}): {status} — Q{g.quarter or '?'} {g.school_year or ''}"
+        if g.letter_grade in ('F', 'NP', 'I', 'W'):
+            failed_courses.append(g.course_name)
+
+    failed_info = ""
+    if failed_courses:
+        failed_info = f"\n\nFAILED/INCOMPLETE COURSES (may need to retake):\n  " + "\n  ".join(set(failed_courses))
+
+    # Gather available courses from catalog
+    courses = Course.query.filter_by(is_active=True).order_by(Course.title).all()
+    catalog_info = ""
+    if courses:
+        dept_courses = defaultdict(list)
+        for c in courses:
+            dept = c.department.name if c.department else 'Other'
+            grade_levels = c.grade_levels or ''
+            meets = c.meets_requirement or ''
+            ctype = c.course_type or ''
+            dept_courses[dept].append(
+                f"    {c.title} ({c.course_number}) — {ctype}, grades: {grade_levels}, satisfies: {meets}"
+            )
+        catalog_lines = []
+        for dept, clist in sorted(dept_courses.items()):
+            catalog_lines.append(f"\n  [{dept}]")
+            catalog_lines.extend(clist[:15])  # Limit per department
+        catalog_info = "\n\nAVAILABLE COURSES (from Course Catalog):" + "\n".join(catalog_lines)
+
+    # Graduation requirements
+    grad_reqs = GraduationRequirement.query.order_by(GraduationRequirement.sort_order).all()
+    req_info = ""
+    if grad_reqs:
+        req_lines = [f"  {r.name}: {r.credits_required} credits" for r in grad_reqs]
+        req_info = "\n\nGRADUATION REQUIREMENTS:\n" + "\n".join(req_lines)
+
+    prompt = f"""You are helping a school counselor plan next year's schedule for a student.
+
+IMPORTANT: This school uses a 4x4 BELL SCHEDULE:
+- 4 classes per quarter, each worth 5 credits
+- Quarters 1 & 2 = Term 1 (Semester 1 classes)
+- Quarters 3 & 4 = Term 2 (Semester 2 classes)
+- Students take 8 different classes per year (4 per term)
+- Classes change after Quarter 2
+
+STUDENT: {student.display_name}, Grade {student.grade_level or 'N/A'} (will be Grade {(student.grade_level or 9) + 1} next year)
+Designations: {'IEP' if student.iep_status else ''} {'504' if student.section_504 else ''} {student.el_display if student.el_status != 'EO' else ''}
+
+TRANSCRIPT SUMMARY: {transcript_info}{credits_detail}{ag_detail}
+
+COURSE HISTORY:{grade_lines or ' No grades on file'}{failed_info}{req_info}{catalog_info}
+
+Based on this student's transcript gaps, a-g deficiencies, failed courses, and graduation requirements, recommend a full 8-class schedule for next year.
+
+Please provide:
+1. **TERM 1 (Q1-Q2): 4 Courses**
+   - For each: Course name, why it's recommended, what requirement it fills
+   - Prioritize: failed course retakes, graduation gaps, a-g deficiencies
+
+2. **TERM 2 (Q3-Q4): 4 Courses**
+   - For each: Course name, why it's recommended, what requirement it fills
+
+3. **Priority Explanation** — Why these courses in this order? What's at stake if not taken?
+
+4. **Alternative Options** — For each term, suggest 1-2 swap options if a course is unavailable.
+
+5. **Counselor Notes** — Any flags the counselor should discuss with the student/family (e.g., course load concerns, need for summer school, etc.)
+
+Be specific. Reference actual credit gaps and graduation requirements. If the student has failed courses, prioritize retakes."""
+
+    try:
+        response = ollama_client.generate(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+        log_action('ai_feedback', 'student', student.id,
+                   'Generated AI course recommendations')
+        return jsonify({'recommendations': response})
+    except Exception as e:
+        return jsonify({'error': f'AI generation failed: {str(e)}'}), 500

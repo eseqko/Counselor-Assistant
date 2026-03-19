@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Data Import{% endblock %}
+{% block page_title %}Data Import{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
+
+<div class="stats-grid">
+    <div class="stat-card info">
+        <div class="stat-value">{{ attendance_count }}</div>
+        <div class="stat-label">Attendance Records</div>
+    </div>
+    <div class="stat-card accent">
+        <div class="stat-value">{{ grade_count }}</div>
+        <div class="stat-label">Grade Records</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Attendance -->
+    <div class="card">
+        <div class="card-header">Attendance Data</div>
+        <div class="card-body">
+            <p style="font-size:0.9rem;margin-bottom:12px;">
+                Import attendance records from your SIS (Synergy, Aeries, PowerSchool, etc.) to enable early warning detection and trend analysis.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+                <a href="{{ url_for('data_import.attendance_template') }}" class="btn btn-outline">Download Template</a>
+                <a href="{{ url_for('data_import.attendance_upload') }}" class="btn btn-primary">Upload Attendance</a>
+            </div>
+            <div style="font-size:0.82rem;color:var(--gray);">
+                <strong>Accepted formats:</strong> .xlsx, .csv<br>
+                <strong>Columns:</strong> Student ID #, Date, Period, Status, Course Name, Reason
+            </div>
+            {% if attendance_count > 0 %}
+            <form method="POST" action="{{ url_for('data_import.clear_attendance') }}" style="margin-top:12px;"
+                  data-confirm="Are you sure? This will delete all {{ attendance_count }} attendance records.">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Clear All Attendance Data</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Grades -->
+    <div class="card">
+        <div class="card-header">Grades Data</div>
+        <div class="card-body">
+            <p style="font-size:0.9rem;margin-bottom:12px;">
+                Import quarterly grades to track academic progress, identify failing students, and get AI-powered course recommendations.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+                <a href="{{ url_for('data_import.grades_template') }}" class="btn btn-outline">Download Template</a>
+                <a href="{{ url_for('data_import.grades_upload') }}" class="btn btn-primary">Upload Grades</a>
+            </div>
+            <div style="font-size:0.82rem;color:var(--gray);">
+                <strong>Accepted formats:</strong> .xlsx, .csv<br>
+                <strong>Columns:</strong> Student ID #, School Year, Quarter, Semester, Period, Course Name, Course #, Subject, Letter Grade, Percent, Credits, a-g?, Honors/AP?, CTE?<br>
+                <strong>Schedule:</strong> 4x4 bell (4 classes/quarter, 5 credits each)
+            </div>
+            {% if grade_count > 0 %}
+            <form method="POST" action="{{ url_for('data_import.clear_grades') }}" style="margin-top:12px;"
+                  data-confirm="Are you sure? This will delete all {{ grade_count }} grade records.">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Clear All Grade Data</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- What the data enables -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">What This Data Enables</div>
+    <div class="card-body">
+        <div class="grid-2" style="gap:16px;">
+            <div>
+                <strong style="color:var(--primary);">Early Warning System</strong>
+                <p style="font-size:0.85rem;color:var(--gray);margin-top:4px;">
+                    Automatically flags students with chronic absences, failing grades, missing credits, or crisis note patterns.
+                    See <a href="{{ url_for('reports.early_warning') }}">Early Warning Report</a>.
+                </p>
+            </div>
+            <div>
+                <strong style="color:var(--primary);">Cohort Trend Analysis</strong>
+                <p style="font-size:0.85rem;color:var(--gray);margin-top:4px;">
+                    Spot patterns across your caseload — attendance trends by grade, grade distributions by quarter, seasonal patterns.
+                    See <a href="{{ url_for('reports.cohort_trends') }}">Cohort Trends Report</a>.
+                </p>
+            </div>
+            <div>
+                <strong style="color:var(--primary);">AI Course Recommendations</strong>
+                <p style="font-size:0.85rem;color:var(--gray);margin-top:4px;">
+                    The AI analyzes each student's transcript, grades, and graduation gaps to suggest courses for next year's 4x4 schedule.
+                </p>
+            </div>
+            <div>
+                <strong style="color:var(--primary);">Enhanced Student Insights</strong>
+                <p style="font-size:0.85rem;color:var(--gray);margin-top:4px;">
+                    The "Analyze Student" AI button now includes attendance patterns and grade trends in its analysis.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

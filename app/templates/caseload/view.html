@@ -489,6 +489,73 @@ function getStudentInsights() {
 }
 </script>
 
+<!-- AI Course Recommendations -->
+<div class="card no-print">
+    <div class="card-header">
+        AI Course Recommendations (4x4 Schedule)
+        <button class="btn btn-sm btn-primary" onclick="getCourseRecs()" id="ai-recs-btn">Recommend Courses</button>
+    </div>
+    <div class="card-body" id="ai-recs-body">
+        <div id="ai-recs-placeholder" style="color:var(--gray);font-size:0.85rem;">
+            Click "Recommend Courses" to get AI-powered course suggestions for next year based on transcript gaps, grades, and graduation requirements.
+            <br><span style="font-size:0.78rem;">4x4 schedule: 4 classes per quarter, 5 credits each, 8 classes per year.</span>
+        </div>
+        <div id="ai-recs-loading" style="display:none;text-align:center;padding:20px;">
+            <div style="display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#4A90D9;border-radius:50%;animation:aispin 0.8s linear infinite;"></div>
+            <p style="margin-top:8px;font-size:0.85rem;color:var(--gray);">Analyzing transcript and building schedule recommendations...</p>
+        </div>
+        <div id="ai-recs-result" style="display:none;line-height:1.7;font-size:0.88rem;white-space:pre-wrap;"></div>
+        <div id="ai-recs-error" style="display:none;color:#dc2626;font-size:0.85rem;"></div>
+    </div>
+</div>
+<script>
+function getCourseRecs() {
+    var btn = document.getElementById('ai-recs-btn');
+    var placeholder = document.getElementById('ai-recs-placeholder');
+    var loading = document.getElementById('ai-recs-loading');
+    var result = document.getElementById('ai-recs-result');
+    var error = document.getElementById('ai-recs-error');
+
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    placeholder.style.display = 'none';
+    loading.style.display = 'block';
+    result.style.display = 'none';
+    error.style.display = 'none';
+
+    fetch('/ai/course-recommendations', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ student_id: {{ student.id }} })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Refresh Recommendations';
+        if (data.error) {
+            error.style.display = 'block';
+            error.textContent = data.error.includes('Connection') ?
+                'Could not connect to Ollama. Make sure it is running (ollama serve).' :
+                data.error;
+        } else {
+            result.style.display = 'block';
+            result.textContent = data.recommendations;
+        }
+    })
+    .catch(function(err) {
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = 'Could not connect to Ollama. Make sure it is running (ollama serve).';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    });
+}
+</script>
+
 <div style="margin-top:20px;">
     <form method="POST" action="{{ url_for('caseload.delete_student', id=student.id) }}" data-confirm="Are you sure you want to remove this student? This cannot be undone." style="display:inline;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
