@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.models.note import Note
@@ -181,4 +181,26 @@ def delete_note(id):
     db.session.delete(note)
     db.session.commit()
     flash('Note deleted.', 'warning')
+    return redirect(url_for('notes.index'))
+
+
+@notes_bp.route('/batch-delete', methods=['POST'])
+@login_required
+def batch_delete():
+    """Delete multiple notes at once."""
+    note_ids = request.form.getlist('note_ids')
+    if not note_ids:
+        flash('No notes selected.', 'warning')
+        return redirect(url_for('notes.index'))
+
+    count = 0
+    for nid in note_ids:
+        note = Note.query.get(int(nid))
+        if note and note.author_id == current_user.id:
+            db.session.delete(note)
+            count += 1
+
+    db.session.commit()
+    log_action('delete', 'note', details=f'Batch deleted {count} notes')
+    flash(f'Deleted {count} notes.', 'warning')
     return redirect(url_for('notes.index'))

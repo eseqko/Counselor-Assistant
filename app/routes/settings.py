@@ -17,6 +17,38 @@ from config import Config
 settings_bp = Blueprint('settings', __name__)
 
 
+def _cleanup_duplicate_notes():
+    """Remove duplicate notes, keeping the oldest (lowest id) for each unique combination."""
+    from sqlalchemy import func
+
+    # Find groups with duplicates: same student + note_type + title + content
+    dupes = db.session.query(
+        Note.student_id, Note.note_type, Note.title, Note.content,
+        func.min(Note.id).label('keep_id'),
+        func.count(Note.id).label('cnt')
+    ).group_by(
+        Note.student_id, Note.note_type, Note.title, Note.content
+    ).having(func.count(Note.id) > 1).all()
+
+    total_removed = 0
+    for row in dupes:
+        # Delete all but the one with lowest id
+        extras = Note.query.filter(
+            Note.student_id == row.student_id,
+            Note.note_type == row.note_type,
+            Note.title == row.title,
+            Note.content == row.content,
+            Note.id != row.keep_id
+        ).all()
+        for note in extras:
+            db.session.delete(note)
+        total_removed += len(extras)
+
+    if total_removed:
+        db.session.commit()
+    return total_removed
+
+
 @settings_bp.route('/')
 @login_required
 def index():
@@ -559,6 +591,9 @@ def import_data():
 
         db.session.commit()
 
+        # Clean up any duplicate notes (from prior imports without dedup)
+        dupes_removed = _cleanup_duplicate_notes()
+
         # Build summary
         parts = []
         if counts['students']:
@@ -578,6 +613,9 @@ def import_data():
         if counts['graduation_requirements']:
             parts.append(f"{counts['graduation_requirements']} grad requirements")
 
+        if dupes_removed:
+            parts.append(f"{dupes_removed} duplicate notes cleaned up")
+
         if parts:
             summary = 'Imported: ' + ', '.join(parts) + '.'
         else:
@@ -590,4 +628,17 @@ def import_data():
         db.session.rollback()
         flash(f'Import failed: {str(e)}', 'danger')
 
+    return redirect(url_for('settings.index'))
+
+
+@settings_bp.route('/cleanup-duplicates', methods=['POST'])
+@login_required
+def cleanup_duplicates():
+    """Remove duplicate notes from the database."""
+    removed = _cleanup_duplicate_notes()
+    if removed:
+        log_action('cleanup', 'notes', details=f'Removed {removed} duplicate notes')
+        flash(f'Cleaned up {removed} duplicate notes.', 'success')
+    else:
+        flash('No duplicate notes found.', 'info')
     return redirect(url_for('settings.index'))
