@@ -13,6 +13,7 @@ from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from datetime import date, timedelta
 from collections import defaultdict
+from sqlalchemy import func
 
 reports_bp = Blueprint('reports', __name__)
 
@@ -211,27 +212,90 @@ def early_warning():
     sixty_days_ago = today - timedelta(days=60)
     ninety_days_ago = today - timedelta(days=90)
 
+    student_ids = [s.id for s in students]
+
+    # ── Bulk pre-fetch: attendance counts by student+status (1 query) ──
+    att_counts_raw = db.session.query(
+        AttendanceRecord.student_id,
+        AttendanceRecord.status,
+        func.count(AttendanceRecord.id)
+    ).filter(
+        AttendanceRecord.student_id.in_(student_ids),
+        AttendanceRecord.date >= thirty_days_ago
+    ).group_by(AttendanceRecord.student_id, AttendanceRecord.status).all()
+
+    att_counts = defaultdict(lambda: defaultdict(int))  # {sid: {status: count}}
+    att_totals = defaultdict(int)
+    for sid, status, cnt in att_counts_raw:
+        att_counts[sid][status] = cnt
+        att_totals[sid] += cnt
+
+    # ── Bulk pre-fetch: recent grades per student (1 query) ──
+    all_recent_grades = GradeRecord.query.filter(
+        GradeRecord.student_id.in_(student_ids)
+    ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
+
+    grades_by_student = defaultdict(list)
+    for g in all_recent_grades:
+        if len(grades_by_student[g.student_id]) < 8:
+            grades_by_student[g.student_id].append(g)
+
+    # ── Bulk pre-fetch: latest transcript per student (1 query) ──
+    all_transcripts = TranscriptRecord.query.filter(
+        TranscriptRecord.student_id.in_(student_ids)
+    ).order_by(TranscriptRecord.analyzed_at.desc()).all()
+
+    transcripts_by_student = {}
+    for tr in all_transcripts:
+        if tr.student_id not in transcripts_by_student:
+            transcripts_by_student[tr.student_id] = tr
+
+    # ── Bulk pre-fetch: crisis note counts (1 query) ──
+    crisis_raw = db.session.query(
+        Note.student_id, func.count(Note.id)
+    ).filter(
+        Note.student_id.in_(student_ids),
+        Note.note_type == 'crisis',
+        Note.session_date >= thirty_days_ago
+    ).group_by(Note.student_id).all()
+    crisis_counts = dict(crisis_raw)
+
+    # ── Bulk pre-fetch: overdue follow-up counts (1 query) ──
+    overdue_raw = db.session.query(
+        Note.student_id, func.count(Note.id)
+    ).filter(
+        Note.student_id.in_(student_ids),
+        Note.follow_up_needed == True,
+        Note.follow_up_date < today
+    ).group_by(Note.student_id).all()
+    overdue_counts = dict(overdue_raw)
+
+    # ── Bulk pre-fetch: last note date per student (1 query) ──
+    last_note_raw = db.session.query(
+        Note.student_id, func.max(Note.session_date)
+    ).filter(
+        Note.student_id.in_(student_ids)
+    ).group_by(Note.student_id).all()
+    last_note_dates = dict(last_note_raw)
+
+    # ── Bulk pre-fetch: last service date per student (1 query) ──
+    last_svc_raw = db.session.query(
+        ServiceRecord.student_id, func.max(ServiceRecord.date)
+    ).filter(
+        ServiceRecord.student_id.in_(student_ids)
+    ).group_by(ServiceRecord.student_id).all()
+    last_svc_dates = dict(last_svc_raw)
+
     flagged_students = []
 
     for s in students:
         flags = []
         severity = 0  # 0=none, 1=watch, 2=concern, 3=critical
 
-        # --- Attendance flags ---
-        absences_30 = AttendanceRecord.query.filter(
-            AttendanceRecord.student_id == s.id,
-            AttendanceRecord.date >= thirty_days_ago,
-            AttendanceRecord.status == 'absent'
-        ).count()
-        tardies_30 = AttendanceRecord.query.filter(
-            AttendanceRecord.student_id == s.id,
-            AttendanceRecord.date >= thirty_days_ago,
-            AttendanceRecord.status == 'tardy'
-        ).count()
-        total_att_30 = AttendanceRecord.query.filter(
-            AttendanceRecord.student_id == s.id,
-            AttendanceRecord.date >= thirty_days_ago
-        ).count()
+        # --- Attendance flags (from pre-fetched counts) ---
+        absences_30 = att_counts[s.id].get('absent', 0)
+        tardies_30 = att_counts[s.id].get('tardy', 0)
+        total_att_30 = att_totals[s.id]
 
         if absences_30 >= 5:
             flags.append(('Chronic Absence', f'{absences_30} absences in 30 days', 'danger'))
@@ -246,20 +310,14 @@ def early_warning():
 
         # Attendance rate
         if total_att_30 > 0:
-            present_30 = AttendanceRecord.query.filter(
-                AttendanceRecord.student_id == s.id,
-                AttendanceRecord.date >= thirty_days_ago,
-                AttendanceRecord.status == 'present'
-            ).count()
+            present_30 = att_counts[s.id].get('present', 0)
             att_rate = round(present_30 / total_att_30 * 100, 1)
             if att_rate < 90:
                 flags.append(('Low Attendance Rate', f'{att_rate}% (below 90% threshold)', 'danger'))
                 severity = max(severity, 3)
 
-        # --- Grade flags ---
-        recent_grades = GradeRecord.query.filter(
-            GradeRecord.student_id == s.id
-        ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).limit(8).all()
+        # --- Grade flags (from pre-fetched grades) ---
+        recent_grades = grades_by_student.get(s.id, [])
 
         failing_courses = [g for g in recent_grades if g.letter_grade in ('F', 'D', 'D-', 'D+', 'NP')]
         f_grades = [g for g in recent_grades if g.letter_grade in ('F', 'NP')]
@@ -287,8 +345,8 @@ def early_warning():
                 flags.append(('Low GPA', f'{avg_gpa:.2f} GPA (below 2.0)', 'warning'))
                 severity = max(severity, 2)
 
-        # --- Transcript/graduation flags ---
-        latest_transcript = s.transcript_records.first()
+        # --- Transcript/graduation flags (from pre-fetched transcripts) ---
+        latest_transcript = transcripts_by_student.get(s.id)
         if latest_transcript:
             if latest_transcript.risk_level == 'critical':
                 flags.append(('Graduation Critical', f'{int(latest_transcript.total_completed)}/225 credits', 'danger'))
@@ -300,12 +358,8 @@ def early_warning():
                 flags.append(('a-g Deficient', f'{latest_transcript.ag_areas_met}/7 areas met', 'warning'))
                 severity = max(severity, 2)
 
-        # --- Counseling note flags ---
-        crisis_notes_30 = Note.query.filter(
-            Note.student_id == s.id,
-            Note.note_type == 'crisis',
-            Note.session_date >= thirty_days_ago
-        ).count()
+        # --- Counseling note flags (from pre-fetched counts) ---
+        crisis_notes_30 = crisis_counts.get(s.id, 0)
         if crisis_notes_30 >= 2:
             flags.append(('Multiple Crisis Notes', f'{crisis_notes_30} crisis notes in 30 days', 'danger'))
             severity = max(severity, 3)
@@ -314,11 +368,7 @@ def early_warning():
             severity = max(severity, 2)
 
         # Overdue follow-ups
-        overdue = Note.query.filter(
-            Note.student_id == s.id,
-            Note.follow_up_needed == True,
-            Note.follow_up_date < today
-        ).count()
+        overdue = overdue_counts.get(s.id, 0)
         if overdue >= 2:
             flags.append(('Overdue Follow-ups', f'{overdue} overdue follow-ups', 'warning'))
             severity = max(severity, 2)
@@ -327,16 +377,11 @@ def early_warning():
             severity = max(severity, 1)
 
         # No contact in 60+ days
-        last_note = Note.query.filter_by(student_id=s.id).order_by(
-            Note.session_date.desc()).first()
-        last_service = ServiceRecord.query.filter_by(student_id=s.id).order_by(
-            ServiceRecord.date.desc()).first()
-        last_contact = None
-        if last_note and last_note.session_date:
-            last_contact = last_note.session_date
-        if last_service and last_service.date:
-            if not last_contact or last_service.date > last_contact:
-                last_contact = last_service.date
+        last_note_date = last_note_dates.get(s.id)
+        last_svc_date = last_svc_dates.get(s.id)
+        last_contact = last_note_date
+        if last_svc_date and (not last_contact or last_svc_date > last_contact):
+            last_contact = last_svc_date
         if last_contact and (today - last_contact).days > 60:
             days_since = (today - last_contact).days
             flags.append(('No Recent Contact', f'{days_since} days since last contact', 'info'))
@@ -388,35 +433,34 @@ def cohort_trends():
     today = date.today()
     ninety_days_ago = today - timedelta(days=90)
 
-    # --- Attendance trends by grade ---
-    attendance_by_grade = defaultdict(lambda: {'total': 0, 'absent': 0, 'tardy': 0, 'present': 0})
-    for s in students:
-        grade = s.grade_level or 0
-        records = AttendanceRecord.query.filter(
-            AttendanceRecord.student_id == s.id,
-            AttendanceRecord.date >= ninety_days_ago
-        ).all()
-        for r in records:
-            attendance_by_grade[grade]['total'] += 1
-            attendance_by_grade[grade][r.status] += 1
+    # --- Attendance trends by grade (single bulk query) ---
+    # Map student_id → grade_level for bucketing
+    grade_map = {s.id: (s.grade_level or 0) for s in students}
 
-    # Attendance rate by grade
+    all_att = AttendanceRecord.query.filter(
+        AttendanceRecord.student_id.in_(student_ids),
+        AttendanceRecord.date >= ninety_days_ago
+    ).with_entities(
+        AttendanceRecord.student_id, AttendanceRecord.status, AttendanceRecord.date
+    ).all()
+
+    attendance_by_grade = defaultdict(lambda: {'total': 0, 'absent': 0, 'tardy': 0, 'present': 0})
+    att_by_week = defaultdict(lambda: {'total': 0, 'absent': 0})
+
+    for sid, status, att_date in all_att:
+        grade = grade_map.get(sid, 0)
+        attendance_by_grade[grade]['total'] += 1
+        attendance_by_grade[grade][status] += 1
+
+        week_start = att_date - timedelta(days=att_date.weekday())
+        att_by_week[week_start.isoformat()]['total'] += 1
+        if status == 'absent':
+            att_by_week[week_start.isoformat()]['absent'] += 1
+
     att_rates_by_grade = {}
     for grade, data in sorted(attendance_by_grade.items()):
         if data['total'] > 0:
             att_rates_by_grade[grade] = round(data['present'] / data['total'] * 100, 1)
-
-    # --- Attendance trend by week ---
-    att_by_week = defaultdict(lambda: {'total': 0, 'absent': 0})
-    all_att = AttendanceRecord.query.filter(
-        AttendanceRecord.student_id.in_(student_ids),
-        AttendanceRecord.date >= ninety_days_ago
-    ).all()
-    for r in all_att:
-        week_start = r.date - timedelta(days=r.date.weekday())
-        att_by_week[week_start.isoformat()]['total'] += 1
-        if r.status == 'absent':
-            att_by_week[week_start.isoformat()]['absent'] += 1
 
     att_weekly_rates = {}
     for week, data in sorted(att_by_week.items()):
@@ -470,12 +514,16 @@ def cohort_trends():
         month_key = n.session_date.strftime('%Y-%m')
         note_by_month[month_key][n.note_type] += 1
 
-    # --- Transcript risk summary ---
+    # --- Transcript risk summary (single bulk query) ---
     risk_counts = defaultdict(int)
     ag_counts = defaultdict(int)
-    for s in students:
-        tr = s.transcript_records.first()
-        if tr:
+    all_transcripts = TranscriptRecord.query.filter(
+        TranscriptRecord.student_id.in_(student_ids)
+    ).order_by(TranscriptRecord.analyzed_at.desc()).all()
+    seen_transcript_sids = set()
+    for tr in all_transcripts:
+        if tr.student_id not in seen_transcript_sids:
+            seen_transcript_sids.add(tr.student_id)
             risk_counts[tr.risk_level or 'unknown'] += 1
             ag_counts[tr.ag_status or 'unknown'] += 1
 

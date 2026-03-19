@@ -53,8 +53,8 @@ SYNERGY_STATUS_MAP = {
 def index():
     """Data import hub page."""
     # Count existing records
-    student_ids = [s.id for s in Student.query.filter_by(
-        assigned_counselor_id=current_user.id).all()]
+    student_ids = [row[0] for row in Student.query.filter_by(
+        assigned_counselor_id=current_user.id).with_entities(Student.id).all()]
     attendance_count = AttendanceRecord.query.filter(
         AttendanceRecord.student_id.in_(student_ids)).count() if student_ids else 0
     grade_count = GradeRecord.query.filter(
@@ -195,6 +195,15 @@ def attendance_upload():
                 Student.student_id_number, Student.id).all()
         }
 
+        # Pre-load existing attendance keys to avoid per-row duplicate checks
+        caseload_ids = list(student_cache.values())
+        existing_keys = set()
+        if caseload_ids:
+            for sid, att_date, period in db.session.query(
+                AttendanceRecord.student_id, AttendanceRecord.date, AttendanceRecord.period
+            ).filter(AttendanceRecord.student_id.in_(caseload_ids)).all():
+                existing_keys.add((sid, att_date, period))
+
         for row_idx, row in enumerate(rows, start=2):
             if len(row) < 4:
                 row.extend([''] * (6 - len(row)))
@@ -246,12 +255,12 @@ def attendance_upload():
                 errors.append(f'Row {row_idx}: Student ID {student_id_str} not found')
                 continue
 
-            # Skip duplicates
-            existing = AttendanceRecord.query.filter_by(
-                student_id=student_db_id, date=att_date, period=period_val).first()
-            if existing:
+            # Skip duplicates (check in-memory set instead of DB query)
+            att_key = (student_db_id, att_date, period_val)
+            if att_key in existing_keys:
                 skipped += 1
                 continue
+            existing_keys.add(att_key)  # Track newly added records too
 
             record = AttendanceRecord(
                 student_id=student_db_id,
@@ -448,6 +457,14 @@ def grades_upload():
         added = 0
         updated = 0
         errors = []
+        BATCH_SIZE = 200
+
+        # Pre-load student lookup cache
+        student_cache = {
+            s.student_id_number: s.id
+            for s in Student.query.with_entities(
+                Student.student_id_number, Student.id).all()
+        }
 
         for row_idx, row in enumerate(rows, start=2):
             if len(row) < 14:
@@ -518,9 +535,9 @@ def grades_upload():
                 errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
-            student = Student.query.filter_by(
-                student_id_number=str(student_id_str).strip()).first()
-            if not student:
+            sid_clean = str(student_id_str).strip()
+            student_db_id = student_cache.get(sid_clean)
+            if not student_db_id:
                 errors.append(f'Row {row_idx}: Student ID {student_id_str} not found')
                 continue
 
@@ -528,7 +545,7 @@ def grades_upload():
             course_name_clean = str(course_name).strip()
             school_year_clean = str(school_year or '').strip()
             existing = GradeRecord.query.filter_by(
-                student_id=student.id,
+                student_id=student_db_id,
                 school_year=school_year_clean,
                 quarter=quarter_val,
                 course_name=course_name_clean,
@@ -547,7 +564,7 @@ def grades_upload():
                 updated += 1
             else:
                 record = GradeRecord(
-                    student_id=student.id,
+                    student_id=student_db_id,
                     school_year=school_year_clean,
                     quarter=quarter_val,
                     course_name=course_name_clean,
@@ -566,6 +583,10 @@ def grades_upload():
                 )
                 db.session.add(record)
                 added += 1
+
+            # Batch commit to avoid holding SQLite lock too long
+            if (added + updated) % BATCH_SIZE == 0:
+                db.session.commit()
 
         db.session.commit()
         log_action('import', 'grades',
@@ -888,8 +909,8 @@ def student_update_upload():
 @login_required
 def clear_attendance():
     """Clear all attendance records for current counselor's students."""
-    student_ids = [s.id for s in Student.query.filter_by(
-        assigned_counselor_id=current_user.id).all()]
+    student_ids = [row[0] for row in Student.query.filter_by(
+        assigned_counselor_id=current_user.id).with_entities(Student.id).all()]
     count = AttendanceRecord.query.filter(
         AttendanceRecord.student_id.in_(student_ids)).delete(synchronize_session=False)
     db.session.commit()
@@ -902,8 +923,8 @@ def clear_attendance():
 @login_required
 def clear_grades():
     """Clear all grade records for current counselor's students."""
-    student_ids = [s.id for s in Student.query.filter_by(
-        assigned_counselor_id=current_user.id).all()]
+    student_ids = [row[0] for row in Student.query.filter_by(
+        assigned_counselor_id=current_user.id).with_entities(Student.id).all()]
     count = GradeRecord.query.filter(
         GradeRecord.student_id.in_(student_ids)).delete(synchronize_session=False)
     db.session.commit()
