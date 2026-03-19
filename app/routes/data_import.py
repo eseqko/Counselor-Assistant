@@ -26,6 +26,23 @@ VALID_ATTENDANCE = {'present', 'absent', 'tardy', 'excused'}
 VALID_GRADES = {'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-',
                 'D+', 'D', 'D-', 'F', 'P', 'NP', 'I', 'W'}
 
+# Synergy SIS attendance code → (status, reason)
+SYNERGY_STATUS_MAP = {
+    '':                 ('present', ''),
+    'activity':         ('excused', 'Activity'),
+    'illness':          ('excused', 'Illness'),
+    'excused':          ('excused', 'Excused'),
+    'counseling':       ('excused', 'Counseling'),
+    'testing':          ('excused', 'Testing'),
+    'office excused':   ('excused', 'Office Excused'),
+    'office ex':        ('excused', 'Office Excused'),
+    'cut':              ('absent', 'Cut'),
+    'unverified':       ('absent', 'Unverified'),
+    'parent unexcused': ('absent', 'Parent Unexcused'),
+    'tardy':            ('tardy', 'Tardy'),
+    'unexcused tardy':  ('tardy', 'Unexcused Tardy'),
+}
+
 
 # =====================================================================
 #  MAIN IMPORT HUB
@@ -96,11 +113,11 @@ def attendance_template():
     status_dv.sqref = 'D2:D5000'
     ws.add_data_validation(status_dv)
 
-    # Period validation (1-4 for 4x4)
+    # Period validation (0-10 to support Synergy periods)
     period_dv = DataValidation(
-        type='list', formula1='"1,2,3,4"', allow_blank=True,
+        type='list', formula1='"0,1,2,3,4,5,6,7,8,9,10"', allow_blank=True,
         showErrorMessage=True, errorTitle='Invalid Period',
-        error='Enter period 1-4'
+        error='Enter period 0-10'
     )
     period_dv.sqref = 'C2:C5000'
     ws.add_data_validation(period_dv)
@@ -114,7 +131,7 @@ def attendance_template():
         ('Column', 'Instructions'),
         ('Student ID #', 'Required. Must match a student in your caseload.'),
         ('Date', 'Required. Format: MM/DD/YYYY or YYYY-MM-DD'),
-        ('Period', 'Optional. Class period 1-4 (4x4 bell schedule).'),
+        ('Period', 'Optional. Class period 0-10. (1-4 core, 5 extracurricular, 6 advisory)'),
         ('Status', 'Required. Present, Absent, Tardy, or Excused.'),
         ('Course Name', 'Optional. Name of the class.'),
         ('Reason', 'Optional. Reason for absence/tardy.'),
@@ -153,12 +170,21 @@ def attendance_upload():
             flash('Please select a file.', 'danger')
             return redirect(url_for('data_import.attendance_upload'))
 
-        rows = _parse_upload_file(file)
-        if rows is None:
+        header, rows = _parse_upload_file(file)
+        if header is None:
             return redirect(url_for('data_import.attendance_upload'))
+
+        # Auto-detect Synergy format and convert to standard rows
+        is_synergy = _is_synergy_format(header)
+        if is_synergy:
+            rows = _convert_synergy_rows(header, rows)
+            if rows is None:
+                flash('Could not parse Synergy file. Check that it has Perm ID, Date, and Period columns.', 'danger')
+                return redirect(url_for('data_import.attendance_upload'))
 
         added = 0
         skipped = 0
+        not_on_caseload = 0
         errors = []
 
         for row_idx, row in enumerate(rows, start=2):
@@ -179,6 +205,7 @@ def attendance_upload():
             if not status_str:
                 row_errors.append('Status required')
 
+            # Synergy rows already have clean status; template rows need validation
             status_clean = str(status_str or '').strip().lower()
             if status_clean and status_clean not in VALID_ATTENDANCE:
                 row_errors.append(f'Invalid status: {status_str}')
@@ -190,19 +217,24 @@ def attendance_upload():
             period_val = None
             if period_str:
                 try:
-                    period_val = int(period_str)
-                    if period_val < 1 or period_val > 8:
-                        row_errors.append(f'Period must be 1-8, got {period_val}')
+                    period_val = int(float(period_str))
+                    if period_val < 0 or period_val > 10:
+                        row_errors.append(f'Period must be 0-10, got {period_val}')
                 except (ValueError, TypeError):
                     row_errors.append(f'Invalid period: {period_str}')
 
             if row_errors:
-                errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
+                if not is_synergy:
+                    errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
             student = Student.query.filter_by(
                 student_id_number=str(student_id_str).strip()).first()
             if not student:
+                # For Synergy whole-school reports, silently skip non-caseload students
+                if is_synergy:
+                    not_on_caseload += 1
+                    continue
                 errors.append(f'Row {row_idx}: Student ID {student_id_str} not found')
                 continue
 
@@ -227,12 +259,23 @@ def attendance_upload():
 
         db.session.commit()
         log_action('import', 'attendance',
-                   details=f'Imported attendance: {added} added, {skipped} skipped')
+                   details=f'Imported attendance: {added} added, {skipped} skipped'
+                           + (f', {not_on_caseload} not on caseload' if not_on_caseload else ''))
 
-        if errors:
-            flash(f'Imported with issues: {added} added, {skipped} duplicates skipped, {len(errors)} errors.', 'warning')
+        if is_synergy:
+            fmt_msg = f'Synergy import: {added} records added, {skipped} duplicates skipped.'
+            if not_on_caseload:
+                fmt_msg += f' {not_on_caseload} records skipped (students not on your caseload).'
+            if errors:
+                fmt_msg += f' {len(errors)} errors.'
+                flash(fmt_msg, 'warning')
+            else:
+                flash(fmt_msg, 'success')
         else:
-            flash(f'Attendance imported: {added} records added, {skipped} duplicates skipped.', 'success')
+            if errors:
+                flash(f'Imported with issues: {added} added, {skipped} duplicates skipped, {len(errors)} errors.', 'warning')
+            else:
+                flash(f'Attendance imported: {added} records added, {skipped} duplicates skipped.', 'success')
 
         return render_template('data_import/attendance_upload.html',
                                added=added, skipped=skipped, errors=errors)
@@ -386,7 +429,7 @@ def grades_upload():
             flash('Please select a file.', 'danger')
             return redirect(url_for('data_import.grades_upload'))
 
-        rows = _parse_upload_file(file)
+        _header, rows = _parse_upload_file(file)
         if rows is None:
             return redirect(url_for('data_import.grades_upload'))
 
@@ -565,7 +608,11 @@ def clear_grades():
 # =====================================================================
 
 def _parse_upload_file(file):
-    """Parse either CSV or Excel file, return list of rows (no header)."""
+    """Parse CSV or Excel file, return (header_row, data_rows).
+
+    Returns (None, None) on error.  header_row is a list of strings
+    (the first row), data_rows is a list-of-lists for the remaining rows.
+    """
     filename = file.filename.lower()
 
     if filename.endswith('.csv'):
@@ -574,26 +621,122 @@ def _parse_upload_file(file):
             reader = csv.reader(text.splitlines())
             rows = list(reader)
             if rows:
-                rows = rows[1:]  # skip header
-            return rows
+                return rows[0], rows[1:]
+            return [], []
         except Exception as e:
             flash(f'Could not read CSV: {str(e)}', 'danger')
-            return None
+            return None, None
 
     elif filename.endswith(('.xlsx', '.xls')):
         if not HAS_OPENPYXL:
             flash('Excel support requires openpyxl.', 'danger')
-            return None
+            return None, None
         try:
             wb = load_workbook(file, data_only=True)
             ws = wb.active
+            header = []
             rows = []
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                rows.append([str(c) if c is not None else '' for c in row])
-            return rows
+            for idx, row in enumerate(ws.iter_rows(values_only=True)):
+                str_row = [str(c) if c is not None else '' for c in row]
+                if idx == 0:
+                    header = str_row
+                else:
+                    rows.append(str_row)
+            return header, rows
         except Exception as e:
             flash(f'Could not read Excel file: {str(e)}', 'danger')
-            return None
+            return None, None
     else:
         flash('Please upload a .csv or .xlsx file.', 'danger')
+        return None, None
+
+
+def _is_synergy_format(header):
+    """Detect if the header row matches a Synergy attendance export."""
+    if not header:
+        return False
+    header_lower = [h.strip().lower() for h in header]
+    # Synergy reports have "period 0", "period 1", … as column headers
+    return 'period 0' in header_lower or ('period 1' in header_lower and 'perm id' in header_lower)
+
+
+def _convert_synergy_rows(header, rows):
+    """Convert Synergy pivot-format rows into standard flat attendance rows.
+
+    Synergy format: Student Name | Perm ID | Grd | Date | Period 0 | Period 1 | … | Period N | Relation cols…
+    Output rows:    [student_id, date, period, status, course_name, reason]
+
+    Student name/ID/grade may be blank on continuation rows — they carry
+    forward from the most recent row that had them.
+    """
+    header_lower = [h.strip().lower() for h in header]
+
+    # Find column indices
+    period_cols = {}  # period_number -> column_index
+    for idx, h in enumerate(header_lower):
+        if h.startswith('period '):
+            try:
+                period_num = int(h.split(' ', 1)[1])
+                period_cols[period_num] = idx
+            except (ValueError, IndexError):
+                pass
+
+    # Find key columns by name
+    def find_col(names):
+        for name in names:
+            if name in header_lower:
+                return header_lower.index(name)
         return None
+
+    id_col = find_col(['perm id', 'student id', 'student id #'])
+    date_col = find_col(['date'])
+    name_col = find_col(['student name', 'name'])
+    grade_col = find_col(['grd', 'grade'])
+
+    if id_col is None or date_col is None or not period_cols:
+        return None  # Not a valid Synergy file
+
+    flat_rows = []
+    # Carry-forward state for grouped student rows
+    current_id = ''
+    current_name = ''
+
+    for row in rows:
+        # Pad short rows
+        if len(row) < len(header):
+            row.extend([''] * (len(header) - len(row)))
+
+        # Carry forward student info when blank
+        row_id = row[id_col].strip() if id_col is not None else ''
+        row_name = row[name_col].strip() if name_col is not None else ''
+
+        if row_id:
+            current_id = row_id
+            current_name = row_name
+        elif not row_id and current_id:
+            row_id = current_id
+            row_name = current_name
+
+        date_str = row[date_col].strip() if date_col is not None else ''
+
+        if not row_id or not date_str:
+            continue
+
+        # Create one record per period column
+        for period_num, col_idx in sorted(period_cols.items()):
+            cell_value = row[col_idx].strip() if col_idx < len(row) else ''
+            cell_lower = cell_value.lower()
+
+            status, reason = SYNERGY_STATUS_MAP.get(
+                cell_lower, ('absent', cell_value))
+
+            flat_rows.append([
+                row_id,       # student_id
+                date_str,     # date
+                str(period_num),  # period
+                status,       # status (already lowercase)
+                '',           # course_name
+                reason,       # reason (original Synergy value)
+            ])
+
+    return flat_rows
