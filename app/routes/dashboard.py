@@ -192,6 +192,21 @@ def index():
     non_minutes = sum(a.duration_minutes or 0 for a in week_activities
                       if a.service_type == 'non_counseling')
 
+    # Auto-delete follow-ups completed more than 5 days ago
+    five_days_ago = today - timedelta(days=5)
+    expired_followups = Note.query.filter(
+        Note.author_id == current_user.id,
+        Note.follow_up_completed == True,
+        Note.follow_up_completed_date != None,
+        Note.follow_up_completed_date <= five_days_ago
+    ).all()
+    for note in expired_followups:
+        note.follow_up_needed = False
+        note.follow_up_completed = False
+        note.follow_up_completed_date = None
+    if expired_followups:
+        db.session.commit()
+
     # Follow-ups due (exclude completed ones)
     follow_ups = Note.query.filter(
         Note.author_id == current_user.id,
@@ -199,6 +214,15 @@ def index():
         Note.follow_up_date <= today + timedelta(days=7),
         db.or_(Note.follow_up_completed == False, Note.follow_up_completed.is_(None))
     ).order_by(Note.follow_up_date).limit(10).all()
+
+    # Archived (completed) follow-ups still within 5-day window
+    archived_follow_ups = Note.query.filter(
+        Note.author_id == current_user.id,
+        Note.follow_up_needed == True,
+        Note.follow_up_completed == True,
+        Note.follow_up_completed_date != None,
+        Note.follow_up_completed_date > five_days_ago
+    ).order_by(Note.follow_up_completed_date.desc()).all()
 
     # Recent service records
     recent_services = ServiceRecord.query.filter_by(
@@ -217,6 +241,7 @@ def index():
         recent_notes=recent_notes,
         recent_services=recent_services,
         follow_ups=follow_ups,
+        archived_follow_ups=archived_follow_ups,
         total_minutes=total_minutes,
         direct_minutes=direct_minutes,
         indirect_minutes=indirect_minutes,
@@ -234,6 +259,7 @@ def toggle_follow_up_complete(note_id):
     if note.author_id != current_user.id:
         return jsonify({'error': 'Unauthorized'}), 403
     note.follow_up_completed = not note.follow_up_completed
+    note.follow_up_completed_date = date.today() if note.follow_up_completed else None
     db.session.commit()
     return jsonify({'completed': note.follow_up_completed})
 

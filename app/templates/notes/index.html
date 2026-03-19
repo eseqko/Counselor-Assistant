@@ -44,30 +44,80 @@
 </div>
 
 <div class="card">
-    <div class="card-header">
-        Notes ({{ notes|length }})
-        <a href="{{ url_for('notes.add_note') }}" class="btn btn-sm btn-primary">+ New Note</a>
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span>Notes ({{ notes|length }})</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <button type="button" id="batchDeleteBtn" class="btn btn-sm btn-danger" style="display:none;"
+                    onclick="submitBatchDelete()">Delete Selected (<span id="selectedCount">0</span>)</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="toggleSelectMode()"
+                    id="selectModeBtn">Select</button>
+            <a href="{{ url_for('notes.add_note') }}" class="btn btn-sm btn-primary">+ New Note</a>
+        </div>
     </div>
-    <div class="table-responsive">
-        <table>
-            <thead><tr><th>Date</th><th>Student</th><th>Type</th><th>Title</th><th>Domain</th><th>Follow-Up</th><th>Actions</th></tr></thead>
-            <tbody>
-                {% for note in notes %}
-                <tr>
-                    <td>{{ note.session_date.strftime('%m/%d/%Y') }}</td>
-                    <td><a href="{{ url_for('caseload.view_student', id=note.student.id) }}">{{ note.student.display_name }}</a></td>
-                    <td><span class="badge badge-info">{{ note.note_type }}</span></td>
-                    <td><a href="{{ url_for('notes.view_note', id=note.id) }}">{{ note.title or 'View' }}</a></td>
-                    <td>{{ note.asca_domain or '-' }}</td>
-                    <td>{% if note.follow_up_needed %}<span class="badge badge-warning">{{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'Yes' }}</span>{% endif %}</td>
-                    <td><a href="{{ url_for('notes.edit_note', id=note.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
-                </tr>
-                {% endfor %}
-                {% if not notes %}
-                <tr><td colspan="7"><div class="empty-state"><p>No notes found.</p></div></td></tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
+    <form id="batchDeleteForm" method="POST" action="{{ url_for('notes.batch_delete') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="table-responsive">
+            <table>
+                <thead><tr>
+                    <th style="width:30px;display:none;" class="select-col"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
+                    <th>Date</th><th>Student</th><th>Type</th><th>Title</th><th>Domain</th><th>Follow-Up</th><th>Actions</th>
+                </tr></thead>
+                <tbody>
+                    {% for note in notes %}
+                    <tr>
+                        <td style="display:none;" class="select-col"><input type="checkbox" name="note_ids" value="{{ note.id }}" onclick="updateCount()"></td>
+                        <td>{{ note.session_date.strftime('%m/%d/%Y') }}</td>
+                        <td><a href="{{ url_for('caseload.view_student', id=note.student.id) }}">{{ note.student.display_name }}</a></td>
+                        <td><span class="badge badge-info">{{ note.note_type }}</span></td>
+                        <td><a href="{{ url_for('notes.view_note', id=note.id) }}">{{ note.title or 'View' }}</a></td>
+                        <td>{{ note.asca_domain or '-' }}</td>
+                        <td>{% if note.follow_up_needed %}<span class="badge badge-warning">{{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'Yes' }}</span>{% endif %}</td>
+                        <td><a href="{{ url_for('notes.edit_note', id=note.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
+                    </tr>
+                    {% endfor %}
+                    {% if not notes %}
+                    <tr><td colspan="8"><div class="empty-state"><p>No notes found.</p></div></td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </form>
 </div>
+
+<script>
+var selectMode = false;
+function toggleSelectMode() {
+    selectMode = !selectMode;
+    var cols = document.querySelectorAll('.select-col');
+    var btn = document.getElementById('selectModeBtn');
+    for (var i = 0; i < cols.length; i++) {
+        cols[i].style.display = selectMode ? '' : 'none';
+    }
+    btn.textContent = selectMode ? 'Cancel' : 'Select';
+    if (!selectMode) {
+        // Uncheck all
+        var boxes = document.querySelectorAll('input[name="note_ids"]');
+        for (var j = 0; j < boxes.length; j++) boxes[j].checked = false;
+        document.getElementById('selectAll').checked = false;
+        document.getElementById('batchDeleteBtn').style.display = 'none';
+    }
+}
+function toggleAll(master) {
+    var boxes = document.querySelectorAll('input[name="note_ids"]');
+    for (var i = 0; i < boxes.length; i++) boxes[i].checked = master.checked;
+    updateCount();
+}
+function updateCount() {
+    var boxes = document.querySelectorAll('input[name="note_ids"]:checked');
+    var count = boxes.length;
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('batchDeleteBtn').style.display = count > 0 ? '' : 'none';
+}
+function submitBatchDelete() {
+    var count = document.querySelectorAll('input[name="note_ids"]:checked').length;
+    if (count > 0 && confirm('Delete ' + count + ' selected notes? This cannot be undone.')) {
+        document.getElementById('batchDeleteForm').submit();
+    }
+}
+</script>
 {% endblock %}

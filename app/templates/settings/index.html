@@ -40,11 +40,21 @@
                 <button type="submit" class="btn btn-outline">Import Data</button>
             </form>
         </div>
+        <div style="margin-top:12px;">
+            <form method="POST" action="{{ url_for('settings.cleanup_duplicates') }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline btn-sm"
+                        onclick="return confirm('This will remove duplicate notes from the database. Continue?')">
+                    Clean Up Duplicate Notes
+                </button>
+            </form>
+            <span style="font-size:0.8rem;color:var(--gray);margin-left:8px;">Remove notes duplicated by prior imports</span>
+        </div>
         <details style="margin-top:14px;">
             <summary style="font-size:0.82rem;color:var(--gray);cursor:pointer;">What's included?</summary>
             <ul style="font-size:0.82rem;color:var(--gray);margin:6px 0 0 16px;line-height:1.7;">
-                <li><strong>Caseload:</strong> Students, tags, counselor notes, service records, transcript records</li>
-                <li><strong>Course Catalog:</strong> Departments, courses, graduation requirements</li>
+                <li><strong>Caseload:</strong> Students, tags, counselor notes (including follow-up completion status), service records, transcript records</li>
+                <li><strong>Course Catalog:</strong> School setup (name, colors, mascot), departments, courses, graduation requirements</li>
                 <li>Existing students are matched by Student ID &mdash; duplicates are updated, not created twice</li>
                 <li>Courses are matched by course number &mdash; existing courses are skipped</li>
             </ul>
