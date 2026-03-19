@@ -69,6 +69,25 @@
     </div>
 </div>
 
+<!-- Student Info Bulk Update -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Student Info &mdash; Bulk Update</div>
+    <div class="card-body">
+        <p style="font-size:0.9rem;margin-bottom:12px;">
+            Download a spreadsheet pre-filled with your caseload's current data (gender, ethnicity, advisory, parent info, etc.).
+            Edit any fields in Excel, then upload to update all student profiles at once.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+            <a href="{{ url_for('data_import.student_update_template') }}" class="btn btn-outline">Download Current Data</a>
+            <a href="{{ url_for('data_import.student_update_upload') }}" class="btn btn-primary">Upload Changes</a>
+        </div>
+        <div style="font-size:0.82rem;color:var(--gray);">
+            <strong>Updatable fields:</strong> Name, Grade, Gender, Ethnicity, DOB, Advisory, Email, Phone, Parent/Guardian info, Address, EL Status, IEP, 504<br>
+            <strong>How it works:</strong> Students are matched by Student ID #. Only changed cells are updated. Blank cells are left as-is.
+        </div>
+    </div>
+</div>
+
 <!-- What the data enables -->
 <div class="card" style="margin-top:20px;">
     <div class="card-header">What This Data Enables</div>
