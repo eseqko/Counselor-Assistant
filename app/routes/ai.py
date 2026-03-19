@@ -221,11 +221,53 @@ def student_insights():
         avg_gpa = round(sum(gpa_vals) / len(gpa_vals), 2) if gpa_vals else 'N/A'
         grades_context = f"\n\nGRADES (Most Recent): Avg GPA: {avg_gpa} | Failing: {len(failing)}\n" + "\n".join(grade_lines)
 
-    # --- Transcript context ---
+    # --- Transcript context (detailed) ---
     transcript_context = ""
     latest_tr = student.transcript_records.first()
     if latest_tr:
         transcript_context = f"\n\nTRANSCRIPT: {int(latest_tr.total_completed)}/225 credits | Risk: {latest_tr.risk_level} | a-g: {latest_tr.ag_areas_met}/7 met ({latest_tr.ag_status}) | CTE: {latest_tr.cte_level}"
+        if latest_tr.cte_is_completer:
+            transcript_context += " (CTE Completer)"
+        elif latest_tr.cte_completed:
+            transcript_context += f" ({int(latest_tr.cte_completed)} CTE credits)"
+
+        # Credit breakdown by subject area
+        if latest_tr.credits_json:
+            try:
+                creds = json.loads(latest_tr.credits_json)
+                credit_lines = []
+                total_deficit = 0
+                for subj, d in creds.items():
+                    req = d.get('required', 0) or 0
+                    comp = d.get('completed', 0) or 0
+                    wip = d.get('wip', 0) or 0
+                    need = max(0, req - comp)
+                    status = 'MET' if need == 0 else f'NEED {int(need)} more'
+                    credit_lines.append(f"  {subj}: {int(comp)}/{int(req)} credits ({status})" + (f" [WIP: {int(wip)}]" if wip else ""))
+                    total_deficit += need
+                if credit_lines:
+                    transcript_context += f"\n\nCREDIT BREAKDOWN (Total deficit: {int(total_deficit)} credits):\n" + "\n".join(credit_lines)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # a-g area details
+        if latest_tr.ag_json:
+            try:
+                ag = json.loads(latest_tr.ag_json)
+                met_areas = []
+                deficient_areas = []
+                for area, d in ag.items():
+                    label = d.get('label', area)
+                    if d.get('isMet', False):
+                        met_areas.append(f"  Area {area} ({label}): MET")
+                    else:
+                        need = d.get('needed', 0)
+                        deficient_areas.append(f"  Area {area} ({label}): DEFICIENT — need {int(need)} more")
+                if deficient_areas or met_areas:
+                    transcript_context += f"\n\na-g REQUIREMENTS ({len(met_areas)}/7 met):\n"
+                    transcript_context += "\n".join(deficient_areas + met_areas)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
     prompt = f"""Analyze this student's counseling history and provide support recommendations.
 
@@ -243,8 +285,9 @@ Please provide:
 1. **Patterns & Observations** — What themes or patterns do you notice in this student's counseling history?
 2. **Gaps in Service** — Are any ASCA domains underserved? Any missing service types that might benefit this student?
 3. **Risk Indicators** — Based on the notes, attendance, and grades, are there any concerns that should be flagged?
-4. **Recommended Next Steps** — Specific, actionable interventions or follow-ups to consider.
-{"5. **Overdue Follow-ups** — There are " + str(overdue) + " overdue follow-ups. Please flag this as urgent." if overdue else ""}
+4. **Transcript & Graduation Analysis** — Based on the credit breakdown, a-g status, and CTE pathway, is this student on track to graduate? What specific credit gaps or a-g deficiencies need immediate attention? What courses should be prioritized?
+5. **Recommended Next Steps** — Specific, actionable interventions or follow-ups to consider, including academic planning based on transcript gaps.
+{"6. **Overdue Follow-ups** — There are " + str(overdue) + " overdue follow-ups. Please flag this as urgent." if overdue else ""}
 
 Keep recommendations practical and ASCA-aligned."""
 
