@@ -186,14 +186,6 @@ def attendance_upload():
         skipped = 0
         not_on_caseload = 0
         errors = []
-        BATCH_SIZE = 200
-
-        # Pre-load student lookup cache to avoid per-row DB queries
-        student_cache = {
-            s.student_id_number: s.id
-            for s in Student.query.with_entities(
-                Student.student_id_number, Student.id).all()
-        }
 
         # Pre-load existing attendance keys to avoid per-row duplicate checks
         caseload_ids = list(student_cache.values())
@@ -245,9 +237,9 @@ def attendance_upload():
                     errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
-            sid_clean = str(student_id_str).strip()
-            student_db_id = student_cache.get(sid_clean)
-            if not student_db_id:
+            student = Student.query.filter_by(
+                student_id_number=str(student_id_str).strip()).first()
+            if not student:
                 # For Synergy whole-school reports, silently skip non-caseload students
                 if is_synergy:
                     not_on_caseload += 1
@@ -256,14 +248,14 @@ def attendance_upload():
                 continue
 
             # Skip duplicates (check in-memory set instead of DB query)
-            att_key = (student_db_id, att_date, period_val)
+            att_key = (student.id, att_date, period_val)
             if att_key in existing_keys:
                 skipped += 1
                 continue
             existing_keys.add(att_key)  # Track newly added records too
 
             record = AttendanceRecord(
-                student_id=student_db_id,
+                student_id=student.id,
                 date=att_date,
                 period=period_val,
                 status=status_clean,
@@ -273,10 +265,6 @@ def attendance_upload():
             )
             db.session.add(record)
             added += 1
-
-            # Batch commit to avoid holding SQLite lock too long
-            if added % BATCH_SIZE == 0:
-                db.session.commit()
 
         db.session.commit()
         log_action('import', 'attendance',
