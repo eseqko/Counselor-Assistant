@@ -547,8 +547,10 @@ def course_recommendations():
         catalog_lines = []
         for dept, clist in sorted(dept_courses.items()):
             catalog_lines.append(f"\n  [{dept}]")
-            catalog_lines.extend(clist[:15])  # Limit per department
-        catalog_info = "\n\nAVAILABLE COURSES (from Course Catalog):" + "\n".join(catalog_lines)
+            catalog_lines.extend(clist)
+        catalog_info = "\n\nAVAILABLE COURSES (from Course Catalog) — ONLY recommend from this list:" + "\n".join(catalog_lines)
+    else:
+        catalog_info = "\n\nWARNING: No courses found in the course catalog. Ask the counselor to add courses to the catalog before generating recommendations."
 
     # Graduation requirements
     grad_reqs = GraduationRequirement.query.order_by(GraduationRequirement.sort_order).all()
@@ -566,6 +568,12 @@ IMPORTANT: This school uses a 4x4 BELL SCHEDULE:
 - Students take 8 different classes per year (4 per term)
 - Classes change after Quarter 2
 
+CRITICAL RULE: You MUST ONLY recommend courses that appear in the AVAILABLE COURSES list below.
+- Use the EXACT course title and course number from the catalog. Do NOT invent, rename, or generalize courses.
+- If a course is not in the catalog, the school does NOT offer it — do not recommend it.
+- Match courses to student needs by their "satisfies" field and department.
+- If no catalog course fits a particular need, say so explicitly rather than making one up.
+
 STUDENT: {student.display_name}, Grade {student.grade_level or 'N/A'} (will be Grade {(student.grade_level or 9) + 1} next year)
 Designations: {'IEP' if student.iep_status else ''} {'504' if student.section_504 else ''} {student.el_display if student.el_status != 'EO' else ''}
 
@@ -574,22 +582,24 @@ TRANSCRIPT SUMMARY: {transcript_info}{credits_detail}{ag_detail}
 COURSE HISTORY:{grade_lines or ' No grades on file'}{failed_info}{req_info}{catalog_info}
 
 Based on this student's transcript gaps, a-g deficiencies, failed courses, and graduation requirements, recommend a full 8-class schedule for next year.
+ONLY use courses from the AVAILABLE COURSES list above. Use exact course titles and course numbers.
 
 Please provide:
 1. **TERM 1 (Q1-Q2): 4 Courses**
-   - For each: Course name, why it's recommended, what requirement it fills
+   - For each: Exact course title (course number), why it's recommended, what requirement it fills
    - Prioritize: failed course retakes, graduation gaps, a-g deficiencies
 
 2. **TERM 2 (Q3-Q4): 4 Courses**
-   - For each: Course name, why it's recommended, what requirement it fills
+   - For each: Exact course title (course number), why it's recommended, what requirement it fills
 
 3. **Priority Explanation** — Why these courses in this order? What's at stake if not taken?
 
-4. **Alternative Options** — For each term, suggest 1-2 swap options if a course is unavailable.
+4. **Alternative Options** — For each term, suggest 1-2 swap options from the catalog if a course is unavailable.
 
 5. **Counselor Notes** — Any flags the counselor should discuss with the student/family (e.g., course load concerns, need for summer school, etc.)
 
-Be specific. Reference actual credit gaps and graduation requirements. If the student has failed courses, prioritize retakes."""
+Be specific. Reference actual credit gaps and graduation requirements. If the student has failed courses, prioritize retakes.
+REMINDER: Every recommended course MUST come from the AVAILABLE COURSES list with its exact title and course number."""
 
     try:
         response = ollama_client.generate(prompt, system=COUNSELOR_SYSTEM_PROMPT)
