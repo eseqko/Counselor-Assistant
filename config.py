@@ -21,6 +21,9 @@ class Config:
     SECRET_KEY = SECRET_KEY
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(DATA_DIR, "counselor.db")}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'connect_args': {'timeout': 30},  # SQLite lock timeout (seconds)
+    }
     WTF_CSRF_ENABLED = True
 
     # FERPA Compliance settings
