@@ -557,9 +557,34 @@ function getCourseRecs() {
 </script>
 
 <div style="margin-top:20px;">
-    <form method="POST" action="{{ url_for('caseload.delete_student', id=student.id) }}" data-confirm="Are you sure you want to remove this student? This cannot be undone." style="display:inline;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-danger">Remove Student</button>
-    </form>
+    <button type="button" class="btn btn-sm btn-danger" onclick="document.getElementById('removeModal').style.display='flex'">Remove Student</button>
+</div>
+
+<!-- Remove Student Modal -->
+<div id="removeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:8px;padding:24px;max-width:460px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <h3 style="margin:0 0 4px 0;color:var(--dark);">Remove Student</h3>
+        <p style="color:var(--gray);margin:0 0 16px 0;font-size:0.9rem;">{{ student.display_name }} will be moved off your active caseload. Their records will be preserved.</p>
+        <form method="POST" action="{{ url_for('caseload.delete_student', id=student.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="margin-bottom:12px;">
+                <label style="font-weight:600;display:block;margin-bottom:4px;">Reason for Removal *</label>
+                <select name="exit_reason" class="form-control" required>
+                    <option value="">-- Select a reason --</option>
+                    {% for value, label in exit_reasons %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-weight:600;display:block;margin-bottom:4px;">Notes <span style="font-weight:normal;color:var(--gray);">(optional)</span></label>
+                <textarea name="exit_notes" class="form-control" rows="2" placeholder="Additional context..."></textarea>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button type="button" class="btn btn-sm" style="background:#E8ECF0;" onclick="document.getElementById('removeModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-danger">Remove Student</button>
+            </div>
+        </form>
+    </div>
 </div>
 {% endblock %}

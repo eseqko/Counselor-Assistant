@@ -34,6 +34,9 @@ class Student(db.Model):
     # Status
     status = db.Column(db.String(20), default='active')  # active, inactive, transferred, graduated
     enrollment_date = db.Column(db.Date)
+    exit_reason = db.Column(db.String(50))   # reason for removal from caseload
+    exit_date = db.Column(db.Date)           # date student was removed
+    exit_notes = db.Column(db.Text)          # optional additional context
     iep_status = db.Column(db.Boolean, default=False)
     section_504 = db.Column(db.Boolean, default=False)
 
@@ -60,6 +63,17 @@ class Student(db.Model):
                            order_by='Note.created_at.desc()')
     service_records = db.relationship('ServiceRecord', backref='student', lazy='dynamic',
                                      order_by='ServiceRecord.date.desc()')
+
+    EXIT_REASONS = [
+        ('graduated', 'Graduated'),
+        ('transferred_in_district', 'Transferred (In-District)'),
+        ('transferred_out_district', 'Transferred (Out of District)'),
+        ('dropped_out', 'Dropped Out'),
+        ('aged_out', 'Aged Out'),
+        ('counselor_change', 'Reassigned to Another Counselor'),
+        ('expelled', 'Expelled'),
+        ('other', 'Other'),
+    ]
 
     EL_STATUSES = [
         ('EO', 'EO - English Only'),

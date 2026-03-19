@@ -1,5 +1,6 @@
 import io
 import json
+from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify
 from flask_login import login_required, current_user
 from app import db
@@ -150,7 +151,8 @@ def view_student(id):
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,
         credits_total_shortfall=credits_total_shortfall,
-        credits_all_met=credits_all_met)
+        credits_all_met=credits_all_met,
+        exit_reasons=Student.EXIT_REASONS)
 
 
 @caseload_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
@@ -194,11 +196,30 @@ def edit_student(id):
 @login_required
 def delete_student(id):
     student = Student.query.get_or_404(id)
-    name = student.full_name
-    log_action('delete', 'student', student.id, f'Deleted student {name}')
-    db.session.delete(student)
+    exit_reason = request.form.get('exit_reason', 'other')
+    exit_notes = request.form.get('exit_notes', '').strip()
+
+    # Map exit reason to a status
+    status_map = {
+        'graduated': 'graduated',
+        'transferred_in_district': 'transferred',
+        'transferred_out_district': 'transferred',
+        'counselor_change': 'transferred',
+        'dropped_out': 'inactive',
+        'aged_out': 'inactive',
+        'expelled': 'inactive',
+        'other': 'inactive',
+    }
+    student.status = status_map.get(exit_reason, 'inactive')
+    student.exit_reason = exit_reason
+    student.exit_date = date.today()
+    student.exit_notes = exit_notes or None
+
+    reason_label = dict(Student.EXIT_REASONS).get(exit_reason, exit_reason)
+    log_action('remove', 'student', student.id,
+               f'Removed student {student.full_name} — Reason: {reason_label}')
     db.session.commit()
-    flash(f'Student {name} removed from caseload.', 'warning')
+    flash(f'{student.full_name} removed from caseload ({reason_label}).', 'warning')
     return redirect(url_for('caseload.index'))
 
 
