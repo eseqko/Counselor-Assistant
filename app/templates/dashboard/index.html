@@ -9,7 +9,7 @@
         <div class="stat-label">Active Students</div>
     </div>
     <div class="stat-card accent">
-        <div class="stat-value">{{ todays_events|length }}</div>
+        <div class="stat-value">{{ all_event_count }}</div>
         <div class="stat-label">Today's Events</div>
     </div>
     <div class="stat-card info">
@@ -59,7 +59,7 @@
             <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary">+ Add Event</a>
         </div>
         <div class="card-body">
-            {% if todays_events %}
+            {% if todays_events or external_events %}
             {% for event in todays_events %}
             <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;display:flex;justify-content:space-between;align-items:center;">
                 <div>
@@ -70,6 +70,19 @@
                     </div>
                 </div>
                 <span class="badge badge-{{ 'success' if event.status == 'completed' else 'primary' }}">{{ event.event_type }}</span>
+            </div>
+            {% endfor %}
+            {% for event in external_events %}
+            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <strong>{{ event.title }}</strong>
+                    <div style="font-size:0.82rem;color:var(--gray);">
+                        {% if event.is_all_day %}All Day
+                        {% else %}{{ event.start_datetime.strftime('%I:%M %p') }} - {{ event.end_datetime.strftime('%I:%M %p') }}{% endif %}
+                        {% if event.location %}| {{ event.location }}{% endif %}
+                    </div>
+                </div>
+                <span class="badge" style="background:#DB443720;color:#DB4437;">Google</span>
             </div>
             {% endfor %}
             {% else %}
