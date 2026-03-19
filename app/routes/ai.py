@@ -471,140 +471,210 @@ def course_recommendations():
 
     student = Student.query.get_or_404(student_id)
 
-    # Gather transcript data
+    # --- Gather student needs ---
     latest_transcript = student.transcript_records.first()
-    transcript_info = "No transcript data available."
-    credits_detail = ""
-    ag_detail = ""
+    credit_gaps = {}   # subject -> credits needed
+    ag_deficiencies = {}  # area letter -> {label, needed}
     if latest_transcript:
-        transcript_info = (
-            f"Credits: {int(latest_transcript.total_completed)}/225 completed"
-            f" | WIP: {int(latest_transcript.total_wip or 0)}"
-            f" | Risk: {latest_transcript.risk_level}"
-            f" | a-g: {latest_transcript.ag_areas_met}/7 met ({latest_transcript.ag_status})"
-            f" | CTE: {latest_transcript.cte_completed} credits ({latest_transcript.cte_level})"
-        )
         if latest_transcript.credits_json:
             try:
                 creds = json.loads(latest_transcript.credits_json)
-                lines = []
                 for subj, d in creds.items():
                     req = d.get('required', 0) or 0
                     comp = d.get('completed', 0) or 0
                     need = max(0, req - comp)
                     if need > 0:
-                        lines.append(f"  {subj}: need {int(need)} more credits ({int(comp)}/{int(req)})")
-                if lines:
-                    credits_detail = "\n\nGRADUATION CREDIT GAPS:\n" + "\n".join(lines)
+                        credit_gaps[subj.lower().strip()] = need
             except (json.JSONDecodeError, TypeError):
                 pass
         if latest_transcript.ag_json:
             try:
                 ag = json.loads(latest_transcript.ag_json)
-                lines = []
                 for area, d in ag.items():
                     if not d.get('isMet', False):
-                        need = d.get('needed', 0)
-                        label = d.get('label', area)
-                        lines.append(f"  Area {area} ({label}): need {int(need)} more")
-                if lines:
-                    ag_detail = "\n\na-g DEFICIENCIES:\n" + "\n".join(lines)
+                        ag_deficiencies[area] = {
+                            'label': d.get('label', area),
+                            'needed': d.get('needed', 0)
+                        }
             except (json.JSONDecodeError, TypeError):
                 pass
 
-    # Gather recent grades
+    # Gather failed courses
     recent_grades = GradeRecord.query.filter_by(
         student_id=student.id
     ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
 
-    grade_lines = ""
-    completed_courses = set()
-    failed_courses = []
+    completed_course_names = set()
+    failed_course_names = set()
     for g in recent_grades:
-        completed_courses.add(g.course_name)
-        status = g.letter_grade or 'N/A'
-        grade_lines += f"\n  {g.course_name} ({g.subject_area or 'N/A'}): {status} — Q{g.quarter or '?'} {g.school_year or ''}"
+        completed_course_names.add((g.course_name or '').lower().strip())
         if g.letter_grade in ('F', 'NP', 'I', 'W'):
-            failed_courses.append(g.course_name)
+            failed_course_names.add((g.course_name or '').strip())
 
-    failed_info = ""
-    if failed_courses:
-        failed_info = f"\n\nFAILED/INCOMPLETE COURSES (may need to retake):\n  " + "\n  ".join(set(failed_courses))
-
-    # Gather available courses from catalog
-    courses = Course.query.filter_by(is_active=True).order_by(Course.title).all()
-    catalog_info = ""
-    if courses:
-        dept_courses = defaultdict(list)
-        for c in courses:
-            dept = c.department.name if c.department else 'Other'
-            grade_levels = c.grade_levels or ''
-            meets = c.meets_requirement or ''
-            ctype = c.course_type or ''
-            dept_courses[dept].append(
-                f"    {c.title} ({c.course_number}) — {ctype}, grades: {grade_levels}, satisfies: {meets}"
-            )
-        catalog_lines = []
-        for dept, clist in sorted(dept_courses.items()):
-            catalog_lines.append(f"\n  [{dept}]")
-            catalog_lines.extend(clist)
-        catalog_info = "\n\nAVAILABLE COURSES (from Course Catalog) — ONLY recommend from this list:" + "\n".join(catalog_lines)
-    else:
-        catalog_info = "\n\nWARNING: No courses found in the course catalog. Ask the counselor to add courses to the catalog before generating recommendations."
-
-    # Graduation requirements
+    # --- Load catalog and graduation requirements ---
+    all_courses = Course.query.filter_by(is_active=True).order_by(Course.title).all()
     grad_reqs = GraduationRequirement.query.order_by(GraduationRequirement.sort_order).all()
-    req_info = ""
-    if grad_reqs:
-        req_lines = [f"  {r.name}: {r.credits_required} credits" for r in grad_reqs]
-        req_info = "\n\nGRADUATION REQUIREMENTS:\n" + "\n".join(req_lines)
 
-    prompt = f"""You are helping a school counselor plan next year's schedule for a student.
+    if not all_courses:
+        return jsonify({
+            'recommendations': (
+                "**No courses found in the Course Catalog.**\n\n"
+                "Please add courses to the Course Catalog (Settings > Course Catalog) "
+                "before generating recommendations. The AI needs real course data to "
+                "make accurate suggestions."
+            )
+        })
 
-IMPORTANT: This school uses a 4x4 BELL SCHEDULE:
-- 4 classes per quarter, each worth 5 credits
-- Quarters 1 & 2 = Term 1 (Semester 1 classes)
-- Quarters 3 & 4 = Term 2 (Semester 2 classes)
-- Students take 8 different classes per year (4 per term)
-- Classes change after Quarter 2
+    # Build lookup: subject/department keywords -> courses
+    next_grade = (student.grade_level or 9) + 1
 
-CRITICAL RULE: You MUST ONLY recommend courses that appear in the AVAILABLE COURSES list below.
-- Use the EXACT course title and course number from the catalog. Do NOT invent, rename, or generalize courses.
-- If a course is not in the catalog, the school does NOT offer it — do not recommend it.
-- Match courses to student needs by their "satisfies" field and department.
-- If no catalog course fits a particular need, say so explicitly rather than making one up.
+    def course_fits_grade(course):
+        if not course.grade_levels:
+            return True
+        return str(next_grade) in course.grade_levels
 
-STUDENT: {student.display_name}, Grade {student.grade_level or 'N/A'} (will be Grade {(student.grade_level or 9) + 1} next year)
-Designations: {'IEP' if student.iep_status else ''} {'504' if student.section_504 else ''} {student.el_display if student.el_status != 'EO' else ''}
+    def course_matches_subject(course, subject_keyword):
+        """Check if a course matches a subject keyword by department, subject_area, meets_requirement, or title."""
+        keyword = subject_keyword.lower().strip()
+        fields = [
+            (course.department.name if course.department else ''),
+            (course.subject_area or ''),
+            (course.meets_requirement or ''),
+            (course.title or ''),
+        ]
+        return any(keyword in f.lower() for f in fields)
 
-TRANSCRIPT SUMMARY: {transcript_info}{credits_detail}{ag_detail}
+    # --- Score and rank courses by student needs ---
+    # Priority 1: Retakes of failed courses (match by title)
+    # Priority 2: Courses filling credit gaps
+    # Priority 3: Courses filling a-g deficiencies
+    # Priority 4: Required courses for grade level
+    # Priority 5: Electives
 
-COURSE HISTORY:{grade_lines or ' No grades on file'}{failed_info}{req_info}{catalog_info}
+    scored_courses = []  # list of (score, reason, course)
 
-Based on this student's transcript gaps, a-g deficiencies, failed courses, and graduation requirements, recommend a full 8-class schedule for next year.
-ONLY use courses from the AVAILABLE COURSES list above. Use exact course titles and course numbers.
+    for c in all_courses:
+        if not course_fits_grade(c):
+            continue
 
-Please provide:
-1. **TERM 1 (Q1-Q2): 4 Courses**
-   - For each: Exact course title (course number), why it's recommended, what requirement it fills
-   - Prioritize: failed course retakes, graduation gaps, a-g deficiencies
+        score = 0
+        reasons = []
 
-2. **TERM 2 (Q3-Q4): 4 Courses**
-   - For each: Exact course title (course number), why it's recommended, what requirement it fills
+        # Check if this is a retake of a failed course
+        for failed in failed_course_names:
+            if failed.lower() in (c.title or '').lower() or (c.title or '').lower() in failed.lower():
+                score += 100
+                reasons.append(f"Retake of failed course: {failed}")
+                break
 
-3. **Priority Explanation** — Why these courses in this order? What's at stake if not taken?
+        # Check if it fills a credit gap
+        for gap_subject, credits_needed in credit_gaps.items():
+            if course_matches_subject(c, gap_subject):
+                score += 50 + credits_needed  # Higher need = higher priority
+                reasons.append(f"Fills {gap_subject} credit gap ({int(credits_needed)} credits needed)")
+                break
 
-4. **Alternative Options** — For each term, suggest 1-2 swap options from the catalog if a course is unavailable.
+        # Check if it fills an a-g deficiency
+        for area, info in ag_deficiencies.items():
+            area_label = info['label'].lower()
+            if course_matches_subject(c, area_label):
+                score += 40
+                reasons.append(f"Addresses a-g Area {area} ({info['label']}) deficiency")
+                break
 
-5. **Counselor Notes** — Any flags the counselor should discuss with the student/family (e.g., course load concerns, need for summer school, etc.)
+        # Boost required courses
+        if c.course_type == 'required':
+            score += 20
+            if not reasons:
+                reasons.append("Required course")
 
-Be specific. Reference actual credit gaps and graduation requirements. If the student has failed courses, prioritize retakes.
-REMINDER: Every recommended course MUST come from the AVAILABLE COURSES list with its exact title and course number."""
+        # Boost courses that meet graduation requirements
+        if c.meets_requirement:
+            score += 10
+            if not reasons:
+                reasons.append(f"Meets graduation requirement: {c.meets_requirement}")
+
+        # Small boost for electives if nothing else matched
+        if score == 0:
+            score = 1
+            reasons.append("Elective option")
+
+        scored_courses.append((score, reasons, c))
+
+    # Sort by score descending, take top candidates
+    scored_courses.sort(key=lambda x: x[0], reverse=True)
+
+    # Pick top 8 for the schedule, plus extras as alternates
+    selected = scored_courses[:8]
+    alternates = scored_courses[8:12]
+
+    # --- Build the schedule output ---
+    term1 = selected[:4]
+    term2 = selected[4:8]
+
+    def format_course_line(rank, item):
+        score, reasons, c = item
+        dept = c.department.name if c.department else 'N/A'
+        credits = int(c.credits) if c.credits else 5
+        reason_str = reasons[0] if reasons else ''
+        return f"* **{dept}: {c.title} ({c.course_number})** — {credits} credits\n    + Why it's recommended: {reason_str}"
+
+    lines = []
+    lines.append(f"Here's a recommended 8-class schedule for {student.display_name}:\n")
+    lines.append("**TERM 1 (Q1-Q2): 4 Courses**\n")
+    for i, item in enumerate(term1):
+        lines.append(format_course_line(i + 1, item))
+    lines.append("\n**TERM 2 (Q3-Q4): 4 Courses**\n")
+    for i, item in enumerate(term2):
+        lines.append(format_course_line(i + 5, item))
+
+    if alternates:
+        lines.append("\n**Alternative Options:**\n")
+        for item in alternates:
+            _, reasons, c = item
+            dept = c.department.name if c.department else 'N/A'
+            lines.append(f"* {dept}: {c.title} ({c.course_number}) — {reasons[0] if reasons else 'Elective'}")
+
+    schedule_text = "\n".join(lines)
+
+    # --- Build context for AI to add explanations ---
+    transcript_summary = "No transcript data available."
+    if latest_transcript:
+        transcript_summary = (
+            f"Credits: {int(latest_transcript.total_completed)}/225 completed"
+            f" | a-g: {latest_transcript.ag_areas_met}/7 met ({latest_transcript.ag_status})"
+            f" | Risk: {latest_transcript.risk_level}"
+        )
+    credit_gap_lines = "\n".join(
+        f"  {subj}: need {int(need)} more credits"
+        for subj, need in credit_gaps.items()
+    ) if credit_gaps else "  None"
+    failed_lines = "\n  ".join(failed_course_names) if failed_course_names else "None"
+
+    prompt = f"""You are a school counselor assistant. I have already selected courses from the school's actual catalog for a student. Your job is to write a brief Priority Explanation and Counselor Notes section ONLY.
+
+Do NOT list courses or suggest different courses. The courses have already been chosen. Just explain the priority reasoning and add counselor notes.
+
+STUDENT: {student.display_name}, Grade {student.grade_level or 'N/A'} (will be Grade {next_grade} next year)
+Transcript: {transcript_summary}
+Credit Gaps:
+{credit_gap_lines}
+Failed Courses: {failed_lines}
+
+SELECTED SCHEDULE:
+{schedule_text}
+
+Write exactly two sections:
+1. **Priority Explanation** — 2-3 sentences on why these courses are prioritized in this order and what's at stake.
+2. **Counselor Notes** — 2-3 bullet points of flags for the counselor to discuss with the student/family."""
 
     try:
-        response = ollama_client.generate(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+        ai_notes = ollama_client.generate(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+        # Combine the code-generated schedule with AI explanations
+        full_response = schedule_text + "\n\n" + ai_notes
         log_action('ai_feedback', 'student', student.id,
                    'Generated AI course recommendations')
-        return jsonify({'recommendations': response})
+        return jsonify({'recommendations': full_response})
     except Exception as e:
-        return jsonify({'error': f'AI generation failed: {str(e)}'}), 500
+        # If AI fails, still return the code-generated schedule
+        return jsonify({'recommendations': schedule_text + "\n\n*AI explanation unavailable.*"})
