@@ -26,7 +26,6 @@ if __name__ == '__main__':
     print("  No data leaves this computer.")
     print()
     print("  Open your browser to: http://127.0.0.1:5000")
-    print("  From other devices on your network: http://<your-computer-ip>:5000")
     print()
     print("  Default Login:")
     print("    Username: counselor")
@@ -35,4 +34,4 @@ if __name__ == '__main__':
     print("  Press Ctrl+C to stop the server.")
     print("=" * 60)
     print()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=True)
