@@ -1252,9 +1252,19 @@ function saveCourse() {
 /* ═══════════════════════════════════════════════════
    EXPORT — builds updated index.html (courses + info)
 ═══════════════════════════════════════════════════ */
+function triggerDownload(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
 function downloadCatalog() {
   fetch('index.html')
-    .then(r => r.text())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
     .then(html => {
       // Patch COURSES array
       const newCourses = 'const COURSES = ' + JSON.stringify(courses, null, 2) + ';';
@@ -1263,20 +1273,14 @@ function downloadCatalog() {
       const newInfo = '/* INFO_SEED_START */\nconst INFO = ' + JSON.stringify(infoData, null, 2) + ';\n/* INFO_SEED_END */';
       updated = updated.replace(/\/\* INFO_SEED_START \*\/[\s\S]*?\/\* INFO_SEED_END \*\//, newInfo);
       const blob = new Blob([updated], {type: 'text/html'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'index.html';
-      a.click();
-      showToast('⬇ Downloaded! Replace your index.html file.', 'success');
+      triggerDownload(blob, 'index.html');
+      showToast('⬇ Downloaded index.html to your Downloads folder.', 'success');
       closeExport();
     })
     .catch(() => {
       const blob = new Blob([JSON.stringify({courses, info: infoData}, null, 2)], {type:'application/json'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'catalog_data.json';
-      a.click();
-      showToast('⬇ Downloaded data as JSON.', 'warn');
+      triggerDownload(blob, 'catalog_data.json');
+      showToast('⬇ Downloaded data as JSON to your Downloads folder.', 'warn');
       closeExport();
     });
 }
