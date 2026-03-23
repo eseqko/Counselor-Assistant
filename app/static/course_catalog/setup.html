@@ -663,6 +663,24 @@ input[type="color"] {
       }
     }
 
+    // Auto-sync to database for AI recommendations
+    try {
+      var token = '';
+      try {
+        var meta = window.parent.document.querySelector('meta[name="csrf-token"]');
+        if (meta) token = meta.getAttribute('content');
+      } catch(e) {}
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) headers['X-CSRFToken'] = token;
+      var info = null;
+      try { info = JSON.parse(localStorage.getItem('jhs_catalog_info')); } catch(e) {}
+      fetch('/course-catalog/api/sync-courses', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ courses: courses, info: info })
+      }).catch(function() {});
+    } catch(e) {}
+
     showStatus('Imported ' + courses.length + ' courses successfully!', 'success');
     document.getElementById('reviewSection').style.display = 'none';
   };
