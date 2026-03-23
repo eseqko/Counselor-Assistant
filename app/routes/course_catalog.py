@@ -226,8 +226,10 @@ def _do_sync_courses(courses_data, info_data):
             # Update existing course
             course = existing
         else:
-            course = Course(course_number=code)
+            course = Course(course_number=code, title=name)
             db.session.add(course)
+
+        course.title = name
 
         # Map department
         dept_code = c.get('dept', '')
@@ -235,8 +237,6 @@ def _do_sync_courses(courses_data, info_data):
             dept = _get_or_create_dept(dept_code)
             course.department_id = dept.id
             course.subject_area = dept.name
-
-        course.title = name
         course.description = c.get('desc', '')
 
         # Credits: localStorage stores as string like "10" or "5"
