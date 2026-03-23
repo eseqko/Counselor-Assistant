@@ -7,6 +7,9 @@ from app import db
 from app.models.student import Student
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
+from app.models.note import Note
+from app.models.activity import Activity
+from app.models.service_record import ServiceRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from datetime import date
@@ -883,6 +886,150 @@ def clear_grades():
     log_action('delete', 'grades', details=f'Cleared {count} grade records')
     flash(f'Cleared {count} grade records.', 'warning')
     return redirect(url_for('data_import.index'))
+
+
+# =====================================================================
+#  NOTES → SESSIONS CONVERSION
+# =====================================================================
+
+# Note type → Activity (service_type, category, delivery_type)
+_NOTE_TO_ACTIVITY = {
+    'individual':      ('direct_student', 'individual_counseling', 'individual'),
+    'group':           ('direct_student', 'group_counseling', 'small_group'),
+    'parent_contact':  ('indirect_student', 'parent_outreach', 'individual'),
+    'teacher_consult': ('indirect_student', 'consultation', 'individual'),
+    'crisis':          ('direct_student', 'crisis_response', 'individual'),
+    'follow_up':       ('direct_student', 'individual_counseling', 'individual'),
+    'referral':        ('indirect_student', 'referrals', 'individual'),
+    'observation':     ('direct_student', 'appraisal', 'individual'),
+    'classroom':       ('direct_student', 'classroom_instruction', 'classroom'),
+    'college_career':  ('direct_student', 'advisement', 'individual'),
+    'assessment':      ('direct_student', 'appraisal', 'individual'),
+}
+
+# Note type → ServiceRecord service_type
+_NOTE_TO_SERVICE = {
+    'individual':      'individual_counseling',
+    'group':           'group_counseling',
+    'parent_contact':  'parent_conference',
+    'teacher_consult': 'consultation',
+    'crisis':          'crisis_intervention',
+    'follow_up':       'follow_up',
+    'referral':        'referral',
+    'observation':     'observation',
+    'classroom':       'classroom_lesson',
+    'college_career':  'college_career',
+    'assessment':      'assessment',
+}
+
+# Note delivery_method → ServiceRecord setting
+_DELIVERY_TO_SETTING = {
+    'in_person': 'office',
+    'phone':     'phone',
+    'email':     'email',
+    'virtual':   'virtual',
+}
+
+
+@data_import_bp.route('/convert-notes', methods=['GET', 'POST'])
+@login_required
+def convert_notes():
+    """Convert existing Counseling Notes into Activity Log + Service Record entries."""
+    # Count notes that haven't been converted yet
+    my_notes = Note.query.filter_by(author_id=current_user.id).all()
+    total_notes = len(my_notes)
+
+    if request.method == 'GET':
+        return render_template('data_import/convert_notes.html',
+                               total_notes=total_notes,
+                               converted=None, skipped=None, errors=None)
+
+    # POST — run the conversion
+    activities_created = 0
+    services_created = 0
+    skipped = 0
+    errors = []
+
+    for note in my_notes:
+        try:
+            # --- Create Activity entry (use-of-time) ---
+            svc_type, category, delivery_type = _NOTE_TO_ACTIVITY.get(
+                note.note_type, ('direct_student', 'individual_counseling', 'individual'))
+
+            # Check for duplicate activity (same counselor + date + title)
+            title = note.title or f'{note.note_type.replace("_", " ").title()} Session'
+            existing_activity = Activity.query.filter_by(
+                counselor_id=current_user.id,
+                date=note.session_date,
+                title=title,
+            ).first()
+
+            if existing_activity:
+                skipped += 1
+                continue
+
+            activity = Activity(
+                counselor_id=current_user.id,
+                title=title,
+                description=note.content[:500] if note.content else None,
+                date=note.session_date,
+                duration_minutes=note.duration_minutes or 30,
+                service_type=svc_type,
+                category=category,
+                topic=note.topic_category,
+                delivery_type=delivery_type,
+                num_students=1 if note.note_type != 'classroom' else 0,
+            )
+            db.session.add(activity)
+            activities_created += 1
+
+            # --- Create ServiceRecord (per-student service log) ---
+            svc_record_type = _NOTE_TO_SERVICE.get(
+                note.note_type, 'individual_counseling')
+
+            existing_service = ServiceRecord.query.filter_by(
+                student_id=note.student_id,
+                counselor_id=current_user.id,
+                date=note.session_date,
+                service_type=svc_record_type,
+                topic=note.topic_category,
+            ).first()
+
+            if not existing_service:
+                service = ServiceRecord(
+                    student_id=note.student_id,
+                    counselor_id=current_user.id,
+                    date=note.session_date,
+                    service_type=svc_record_type,
+                    topic=note.topic_category,
+                    description=note.content[:500] if note.content else None,
+                    duration_minutes=note.duration_minutes or 30,
+                    asca_domain=note.asca_domain,
+                    delivery_method=note.delivery_method,
+                    setting=_DELIVERY_TO_SETTING.get(note.delivery_method, 'office'),
+                    follow_up_required=note.follow_up_needed,
+                    follow_up_date=note.follow_up_date,
+                    referral_made=(note.note_type == 'referral'),
+                )
+                db.session.add(service)
+                services_created += 1
+
+        except Exception as e:
+            errors.append(f'Note #{note.id}: {str(e)}')
+
+    db.session.commit()
+    log_action('convert', 'notes_to_sessions',
+               details=f'Converted notes: {activities_created} activities, {services_created} service records, {skipped} skipped')
+
+    if errors:
+        flash(f'Converted with issues: {activities_created} activities, {services_created} service records, {skipped} skipped, {len(errors)} errors.', 'warning')
+    else:
+        flash(f'Converted {activities_created} activities and {services_created} service records from {total_notes} notes. {skipped} duplicates skipped.', 'success')
+
+    return render_template('data_import/convert_notes.html',
+                           total_notes=total_notes,
+                           converted={'activities': activities_created, 'services': services_created},
+                           skipped=skipped, errors=errors)
 
 
 # =====================================================================
