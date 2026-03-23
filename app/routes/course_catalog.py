@@ -1,7 +1,7 @@
 import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from app import db
+from app import db, csrf
 from app.models.course import Course, Department, GraduationRequirement
 from app.utils.audit import log_action
 
@@ -181,6 +181,7 @@ def _get_or_create_dept(dept_code):
 
 
 @course_catalog_bp.route('/api/sync-courses', methods=['POST'])
+@csrf.exempt
 @login_required
 def sync_courses():
     """Sync courses from browser localStorage into the database."""
@@ -315,6 +316,7 @@ def get_school_config():
 
 
 @course_catalog_bp.route('/api/school-config', methods=['POST'])
+@csrf.exempt
 @login_required
 def save_school_config():
     """Persist the school config to the database so it survives device transfers."""
