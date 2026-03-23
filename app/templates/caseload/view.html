@@ -543,9 +543,22 @@ function getCourseRecs() {
                 data.error;
         } else if (data.empty_catalog) {
             result.style.display = 'block';
-            result.innerHTML = '<strong>No courses found in the Course Catalog.</strong><br><br>' +
-                '<span>' + (data.empty_message || '') + '</span><br><br>' +
-                '<a href="/course-catalog/" class="btn btn-sm btn-primary">Open Course Catalog</a>';
+            // Check if browser has courses in localStorage that can be synced
+            var lsCourses = [];
+            try {
+                var raw = localStorage.getItem('jhs_catalog_courses');
+                if (raw) lsCourses = JSON.parse(raw);
+            } catch(e) {}
+
+            if (lsCourses.length > 0) {
+                result.innerHTML = '<strong>Your Course Catalog has ' + lsCourses.length + ' courses, but they haven\'t been synced to the database yet.</strong><br><br>' +
+                    'The AI needs courses in the database to generate recommendations.<br><br>' +
+                    '<button class="btn btn-sm" style="background:#16a34a;color:#fff;" onclick="syncAndRetry()">Sync ' + lsCourses.length + ' Courses Now</button>';
+            } else {
+                result.innerHTML = '<strong>No courses found in the Course Catalog.</strong><br><br>' +
+                    '<span>' + (data.empty_message || '') + '</span><br><br>' +
+                    '<a href="/course-catalog/" class="btn btn-sm btn-primary">Open Course Catalog</a>';
+            }
         } else {
             result.style.display = 'block';
             result.textContent = data.recommendations;
@@ -557,6 +570,42 @@ function getCourseRecs() {
         error.textContent = 'Could not connect to Ollama. Make sure it is running (ollama serve).';
         btn.disabled = false;
         btn.textContent = 'Retry';
+    });
+}
+
+function syncAndRetry() {
+    var result = document.getElementById('ai-recs-result');
+    var courses = [];
+    var info = null;
+    try {
+        var raw = localStorage.getItem('jhs_catalog_courses');
+        if (raw) courses = JSON.parse(raw);
+        var rawInfo = localStorage.getItem('jhs_catalog_info');
+        if (rawInfo) info = JSON.parse(rawInfo);
+    } catch(e) {}
+
+    result.innerHTML = '<strong>Syncing ' + courses.length + ' courses to database...</strong>';
+
+    fetch('/course-catalog/api/sync-courses', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ courses: courses, info: info })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            result.innerHTML = '<strong style="color:#16a34a;">Synced ' + data.synced + ' courses!</strong> Now generating recommendations...';
+            // Auto-retry recommendations
+            setTimeout(getCourseRecs, 500);
+        } else {
+            result.innerHTML = '<strong style="color:#dc2626;">Sync failed:</strong> ' + (data.error || 'Unknown error');
+        }
+    })
+    .catch(function(err) {
+        result.innerHTML = '<strong style="color:#dc2626;">Sync failed:</strong> ' + err.message;
     });
 }
 </script>

@@ -132,6 +132,167 @@ def add_requirement():
     return redirect(url_for('course_catalog.requirements'))
 
 
+DEPT_CODE_MAP = {
+    'social-science': 'Social Science',
+    'english': 'English',
+    'mathematics': 'Mathematics',
+    'science': 'Science',
+    'lote': 'Languages (LOTE)',
+    'vpa': 'Visual & Performing Arts',
+    'cte': 'Career Technical Ed',
+    'pe': 'PE & Health',
+    'electives': 'Interdisciplinary Electives',
+    'special-ed': 'Special Ed',
+}
+
+TYPE_MAP = {
+    'cp': 'required',
+    'ap': 'ap',
+    'eld': 'elective',
+    'sp': 'elective',
+}
+
+
+def _expand_grade_range(grade_str):
+    """Convert '9-12' or '11-12' to '9,10,11,12' format."""
+    if not grade_str:
+        return ''
+    grade_str = grade_str.strip()
+    if '-' in grade_str:
+        parts = grade_str.split('-')
+        try:
+            start, end = int(parts[0]), int(parts[1])
+            return ','.join(str(g) for g in range(start, end + 1))
+        except (ValueError, IndexError):
+            pass
+    # Already a single grade or comma-separated
+    return grade_str.replace(' ', '')
+
+
+def _get_or_create_dept(dept_code):
+    """Get or create a Department from a localStorage dept code."""
+    name = DEPT_CODE_MAP.get(dept_code, dept_code.replace('-', ' ').title())
+    dept = Department.query.filter_by(name=name).first()
+    if not dept:
+        dept = Department(name=name)
+        db.session.add(dept)
+        db.session.flush()
+    return dept
+
+
+@course_catalog_bp.route('/api/sync-courses', methods=['POST'])
+@login_required
+def sync_courses():
+    """Sync courses from browser localStorage into the database."""
+    data = request.get_json(silent=True) or {}
+    courses_data = data.get('courses', [])
+    info_data = data.get('info')
+
+    if not courses_data:
+        return jsonify({'ok': False, 'error': 'No courses provided'}), 400
+
+    synced = 0
+    skipped = 0
+
+    for c in courses_data:
+        # Skip inactive courses
+        if c.get('inactive'):
+            skipped += 1
+            continue
+
+        name = (c.get('name') or '').strip()
+        if not name:
+            skipped += 1
+            continue
+
+        # Use course code as course_number, or generate from id
+        code = (c.get('code') or c.get('id') or '').strip()
+        if not code:
+            skipped += 1
+            continue
+
+        # Check if course already exists by code
+        existing = Course.query.filter_by(course_number=code).first()
+        if existing:
+            # Update existing course
+            course = existing
+        else:
+            course = Course(course_number=code)
+            db.session.add(course)
+
+        # Map department
+        dept_code = c.get('dept', '')
+        if dept_code:
+            dept = _get_or_create_dept(dept_code)
+            course.department_id = dept.id
+            course.subject_area = dept.name
+
+        course.title = name
+        course.description = c.get('desc', '')
+
+        # Credits: localStorage stores as string like "10" or "5"
+        try:
+            course.credits = float(c.get('credits', 10))
+        except (ValueError, TypeError):
+            course.credits = 10.0
+
+        course.grade_levels = _expand_grade_range(c.get('grade', ''))
+        course.prerequisites = c.get('prereq', '') if c.get('prereq', 'None') != 'None' else ''
+
+        # Course type mapping
+        ls_type = c.get('type', 'cp')
+        course.course_type = TYPE_MAP.get(ls_type, 'elective')
+        if ls_type == 'ap':
+            course.is_weighted = True
+            course.weight = 1.0
+
+        # a-g requirement
+        ag = c.get('ag', '')
+        if ag:
+            course.meets_requirement = 'a-g:' + ag
+
+        # Full year
+        course.semesters = 2 if c.get('fullYear') else 1
+        course.is_active = True
+
+        synced += 1
+
+    # Sync graduation requirements from info data
+    grad_synced = 0
+    if info_data and info_data.get('gradReqs'):
+        for i, req in enumerate(info_data['gradReqs']):
+            area = req.get('subject', req.get('area', ''))
+            if not area:
+                continue
+            existing_req = GraduationRequirement.query.filter_by(name=area).first()
+            if existing_req:
+                gr = existing_req
+            else:
+                gr = GraduationRequirement(name=area)
+                db.session.add(gr)
+
+            # Parse credits from strings like "30 credits"
+            juhsd_str = req.get('juhsd', '')
+            try:
+                cr = float(''.join(ch for ch in juhsd_str if ch.isdigit() or ch == '.'))
+            except ValueError:
+                cr = 0
+            gr.credits_required = cr
+            gr.description = req.get('note', '')
+            gr.sort_order = i
+            grad_synced += 1
+
+    db.session.commit()
+    log_action('sync', 'course_catalog', None)
+
+    return jsonify({
+        'ok': True,
+        'synced': synced,
+        'skipped': skipped,
+        'grad_requirements': grad_synced,
+    })
+
+
 @course_catalog_bp.route('/api/school-config', methods=['GET'])
 @login_required
 def get_school_config():
