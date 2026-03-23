@@ -1011,6 +1011,34 @@ function loadCourses() {
 }
 function saveCourses() {
   localStorage.setItem(LS_KEY, JSON.stringify(courses));
+  // Auto-sync to database so AI recommendations stay current
+  _syncToDatabase();
+}
+
+function _syncToDatabase() {
+  try {
+    // Get CSRF token from parent Jinja page (iframe is same-origin)
+    var token = '';
+    try {
+      var meta = window.parent.document.querySelector('meta[name="csrf-token"]');
+      if (meta) token = meta.getAttribute('content');
+    } catch(e) {}
+
+    var info = null;
+    try {
+      var rawInfo = localStorage.getItem('jhs_catalog_info');
+      if (rawInfo) info = JSON.parse(rawInfo);
+    } catch(e) {}
+
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['X-CSRFToken'] = token;
+
+    fetch('/course-catalog/api/sync-courses', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ courses: courses, info: info })
+    }).catch(function() {});
+  } catch(e) { /* silent — database sync is best-effort */ }
 }
 function resetToSeed() {
   if (!confirm('Reset all courses back to the original catalog? All your edits will be lost.')) return;
