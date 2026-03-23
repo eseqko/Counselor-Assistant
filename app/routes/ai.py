@@ -517,11 +517,12 @@ def course_recommendations():
 
     if not all_courses:
         return jsonify({
-            'recommendations': (
-                "**No courses found in the Course Catalog.**\n\n"
-                "Please add courses to the Course Catalog (Settings > Course Catalog) "
-                "before generating recommendations. The AI needs real course data to "
-                "make accurate suggestions."
+            'recommendations': '',
+            'empty_catalog': True,
+            'empty_message': (
+                'No courses found in the Course Catalog. '
+                'Please add courses before generating recommendations. '
+                'The AI needs real course data to make accurate suggestions.'
             )
         })
 
