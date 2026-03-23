@@ -317,20 +317,24 @@ def grades_template():
     )
 
     columns = [
-        ('Student ID #', 16),
-        ('School Year', 12),
-        ('Quarter', 8),
-        ('Semester', 10),
+        ('School Year', 14),
+        ('Perm ID', 12),
+        ('Grade Level', 12),
+        ('Grade', 8),
+        ('Mark Order', 12),
+        ('Mark Name', 14),
+        ('Course Title', 30),
+        ('Course ID', 12),
         ('Period', 8),
-        ('Course Name', 30),
-        ('Course Number', 14),
-        ('Subject Area', 20),
-        ('Letter Grade', 12),
-        ('Percent', 10),
-        ('Credits Earned', 14),
-        ('a-g?', 8),
-        ('Honors/AP?', 12),
-        ('CTE?', 8),
+        ('C1', 6),
+        ('C2', 6),
+        ('C3', 6),
+        ('Staff Name', 20),
+        ('Audit Class', 12),
+        ('Student Name', 22),
+        ('SPED', 8),
+        ('SigDis', 8),
+        ('SLE', 8),
     ]
 
     for col_idx, (name, width) in enumerate(columns, 1):
@@ -342,70 +346,48 @@ def grades_template():
         ws.column_dimensions[get_column_letter(col_idx)].width = width
 
     # Validations
-    quarter_dv = DataValidation(
-        type='list', formula1='"1,2,3,4"', allow_blank=True,
-        showErrorMessage=True, errorTitle='Invalid Quarter', error='Enter 1-4')
-    quarter_dv.sqref = 'C2:C5000'
-    ws.add_data_validation(quarter_dv)
-
-    semester_dv = DataValidation(
-        type='list', formula1='"1,2"', allow_blank=True,
-        showErrorMessage=True, errorTitle='Invalid Semester', error='Enter 1 or 2')
-    semester_dv.sqref = 'D2:D5000'
-    ws.add_data_validation(semester_dv)
-
     grade_dv = DataValidation(
         type='list',
         formula1='"A+,A,A-,B+,B,B-,C+,C,C-,D+,D,D-,F,P,NP,I,W"',
         allow_blank=True, showErrorMessage=True, errorTitle='Invalid Grade',
         error='Enter a valid letter grade')
-    grade_dv.sqref = 'I2:I5000'
+    grade_dv.sqref = 'D2:D5000'
     ws.add_data_validation(grade_dv)
 
-    subject_dv = DataValidation(
-        type='list',
-        formula1='"English,Math,Science,History/Social Science,Fine Arts/LOTE,CTE,PE,Health,Electives"',
-        allow_blank=True, showErrorMessage=True, errorTitle='Invalid Subject',
-        error='Choose a valid subject area')
-    subject_dv.sqref = 'H2:H5000'
-    ws.add_data_validation(subject_dv)
-
-    yesno_dv = DataValidation(
-        type='list', formula1='"Yes"', allow_blank=True)
-    for col_letter in ['L', 'M', 'N']:
-        dv = DataValidation(type='list', formula1='"Yes"', allow_blank=True)
-        dv.sqref = f'{col_letter}2:{col_letter}5000'
-        ws.add_data_validation(dv)
+    audit_dv = DataValidation(
+        type='list', formula1='"N,Y"', allow_blank=True)
+    audit_dv.sqref = 'N2:N5000'
+    ws.add_data_validation(audit_dv)
 
     # Instructions
     instr = wb.create_sheet('Instructions')
     instr.sheet_properties.tabColor = 'E8A838'
     instructions = [
-        ('GRADES IMPORT TEMPLATE — 4x4 BELL SCHEDULE', ''),
+        ('GRADES IMPORT TEMPLATE — SYNERGY FORMAT', ''),
         ('', ''),
-        ('Your school runs a 4x4 bell schedule:', ''),
-        ('', '4 classes per quarter, 5 credits each'),
-        ('', 'Semester 1 & 2 classes per term, classes change after Q2'),
-        ('', '8 total classes per year (4 per term)'),
+        ('This template matches the Synergy SIS grade export.', ''),
+        ('Export from Synergy and paste or upload directly.', ''),
         ('', ''),
         ('Column', 'Instructions'),
-        ('Student ID #', 'Required. Must match a student in your caseload.'),
-        ('School Year', 'e.g., 2025-2026. Helps track year-over-year trends.'),
-        ('Quarter', 'Which quarter: 1, 2, 3, or 4.'),
-        ('Semester', '1 or 2. Q1-Q2 = Semester 1 classes. Q3-Q4 = Semester 2 classes.'),
-        ('Period', 'Class period 1-4.'),
-        ('Course Name', 'Required. Full course title.'),
-        ('Course Number', 'Optional. Matches to your Course Catalog if available.'),
-        ('Subject Area', 'English, Math, Science, etc. Helps with grad requirement tracking.'),
-        ('Letter Grade', 'A+ through F, or P/NP/I/W.'),
-        ('Percent', 'Optional. Numeric grade (0-100).'),
-        ('Credits Earned', 'Default 5 for your 4x4 schedule. Enter 0 if failed/incomplete.'),
-        ('a-g?', 'Yes if this course is UC a-g approved.'),
-        ('Honors/AP?', 'Yes if Honors, AP, or IB course.'),
-        ('CTE?', 'Yes if Career Technical Education course.'),
+        ('School Year', 'e.g., 2025-2026.'),
+        ('Perm ID', 'Required. Student permanent ID — must match a student in your caseload.'),
+        ('Grade Level', 'Student grade level (9, 10, 11, 12). Informational.'),
+        ('Grade', 'Required. Letter grade (A+, A, A-, B+, … F, P, NP, I, W).'),
+        ('Mark Order', 'Numeric mark sequence (1, 2, etc.). Optional.'),
+        ('Mark Name', 'e.g., "Quarter 3". The quarter number is extracted automatically.'),
+        ('Course Title', 'Required. Full course title from Synergy (e.g., "Spanish 1 CP [S1]").'),
+        ('Course ID', 'Synergy course ID number. Used to match to your Course Catalog.'),
+        ('Period', 'Class period (1-4).'),
+        ('C1, C2, C3', 'Citizenship grades. Stored for reference but not analyzed.'),
+        ('Staff Name', 'Teacher name. Stored for reference.'),
+        ('Audit Class', 'N or Y. Audit classes are skipped during import.'),
+        ('Student Name', 'For reference. Not used for matching (Perm ID is used).'),
+        ('SPED', 'Special education flag. Informational.'),
+        ('SigDis', 'Significant disability flag. Informational.'),
+        ('SLE', 'Structured Learning Experience flag. Informational.'),
         ('', ''),
         ('TIPS:', ''),
-        ('', 'You can export grades from Synergy/Aeries/PowerSchool and reformat to match.'),
+        ('', 'You can paste your Synergy export directly — no reformatting needed.'),
         ('', 'One row per student per course per quarter.'),
         ('', 'The AI will use this data to recommend courses for next year.'),
     ]
@@ -444,6 +426,7 @@ def grades_upload():
 
         added = 0
         updated = 0
+        skipped = 0
         errors = []
         BATCH_SIZE = 200
 
@@ -454,63 +437,49 @@ def grades_upload():
                 Student.student_id_number, Student.id).all()
         }
 
+        # Build column index from header row
+        col_map = _build_grade_col_map(_header)
+
         for row_idx, row in enumerate(rows, start=2):
-            if len(row) < 14:
-                row.extend([''] * (14 - len(row)))
-            (student_id_str, school_year, quarter_str, semester_str, period_str,
-             course_name, course_number, subject_area, letter_grade,
-             percent_str, credits_str, ag_str, honors_str, cte_str) = row[:14]
+            # Pad short rows
+            if len(row) < len(col_map.get('_min_cols', [0])):
+                row.extend([''] * (18 - len(row)))
+
+            # Extract values by mapped column positions
+            student_id_str = _col(row, col_map, 'perm_id')
+            school_year = _col(row, col_map, 'school_year')
+            letter_grade = _col(row, col_map, 'grade')
+            mark_name = _col(row, col_map, 'mark_name')
+            course_name = _col(row, col_map, 'course_title')
+            course_number = _col(row, col_map, 'course_id')
+            period_str = _col(row, col_map, 'period')
+            audit_class = _col(row, col_map, 'audit_class')
 
             if not student_id_str and not course_name:
                 continue
 
+            # Skip audit classes
+            if str(audit_class).strip().upper() == 'Y':
+                skipped += 1
+                continue
+
             row_errors = []
             if not student_id_str:
-                row_errors.append('Student ID # required')
+                row_errors.append('Perm ID required')
             if not course_name:
-                row_errors.append('Course Name required')
+                row_errors.append('Course Title required')
 
-            # Parse quarter
-            quarter_val = None
-            if quarter_str:
-                try:
-                    quarter_val = int(quarter_str)
-                    if quarter_val < 1 or quarter_val > 4:
-                        row_errors.append(f'Quarter must be 1-4')
-                except (ValueError, TypeError):
-                    row_errors.append(f'Invalid quarter: {quarter_str}')
+            # Parse quarter from Mark Name (e.g., "Quarter 3" → 3)
+            quarter_val = _parse_quarter(mark_name)
 
-            # Parse semester
-            semester_val = 1
-            if semester_str:
-                try:
-                    semester_val = int(semester_str)
-                    if semester_val not in (1, 2):
-                        row_errors.append('Semester must be 1 or 2')
-                except (ValueError, TypeError):
-                    row_errors.append(f'Invalid semester: {semester_str}')
+            # Derive semester from quarter (Q1-Q2 = Sem 1, Q3-Q4 = Sem 2)
+            semester_val = 2 if quarter_val and quarter_val >= 3 else 1
 
             # Parse period
             period_val = None
             if period_str:
                 try:
-                    period_val = int(period_str)
-                except (ValueError, TypeError):
-                    pass
-
-            # Parse percent
-            percent_val = None
-            if percent_str:
-                try:
-                    percent_val = float(percent_str)
-                except (ValueError, TypeError):
-                    pass
-
-            # Parse credits (default 5 for 4x4)
-            credits_val = 5.0
-            if credits_str:
-                try:
-                    credits_val = float(credits_str)
+                    period_val = int(float(period_str))
                 except (ValueError, TypeError):
                     pass
 
@@ -526,47 +495,42 @@ def grades_upload():
             sid_clean = str(student_id_str).strip()
             student_db_id = student_cache.get(sid_clean)
             if not student_db_id:
-                errors.append(f'Row {row_idx}: Student ID {student_id_str} not found')
+                errors.append(f'Row {row_idx}: Perm ID {student_id_str} not found')
                 continue
 
+            # Detect honors/AP from course title
+            course_title_clean = str(course_name).strip()
+            title_upper = course_title_clean.upper()
+            is_honors_ap = 'AP ' in title_upper or title_upper.startswith('AP ') or ' HONORS' in title_upper
+
             # Upsert: update if same student+year+quarter+course
-            course_name_clean = str(course_name).strip()
             school_year_clean = str(school_year or '').strip()
             existing = GradeRecord.query.filter_by(
                 student_id=student_db_id,
                 school_year=school_year_clean,
                 quarter=quarter_val,
-                course_name=course_name_clean,
+                course_name=course_title_clean,
             ).first()
-
-            yes_vals = ('yes', 'y', 'true', '1')
 
             if existing:
                 existing.letter_grade = letter_clean or existing.letter_grade
-                existing.percent_grade = percent_val if percent_val is not None else existing.percent_grade
-                existing.credits_earned = credits_val
-                existing.subject_area = str(subject_area or '').strip() or existing.subject_area
-                existing.is_ag = str(ag_str or '').strip().lower() in yes_vals
-                existing.is_honors_ap = str(honors_str or '').strip().lower() in yes_vals
-                existing.is_cte = str(cte_str or '').strip().lower() in yes_vals
+                existing.course_number = str(course_number or '').strip() or existing.course_number
+                existing.is_honors_ap = is_honors_ap
+                existing.credits_earned = 5.0
                 updated += 1
             else:
                 record = GradeRecord(
                     student_id=student_db_id,
                     school_year=school_year_clean,
                     quarter=quarter_val,
-                    course_name=course_name_clean,
+                    course_name=course_title_clean,
                     course_number=str(course_number or '').strip(),
                     period=period_val,
                     letter_grade=letter_clean,
-                    percent_grade=percent_val,
-                    credits_earned=credits_val,
+                    credits_earned=5.0,
                     credits_attempted=5.0,
                     is_semester=semester_val,
-                    subject_area=str(subject_area or '').strip(),
-                    is_ag=str(ag_str or '').strip().lower() in yes_vals,
-                    is_honors_ap=str(honors_str or '').strip().lower() in yes_vals,
-                    is_cte=str(cte_str or '').strip().lower() in yes_vals,
+                    is_honors_ap=is_honors_ap,
                     imported_by_id=current_user.id,
                 )
                 db.session.add(record)
@@ -967,6 +931,81 @@ def _parse_upload_file(file):
     else:
         flash('Please upload a .csv or .xlsx file.', 'danger')
         return None, None
+
+
+import re as _re
+
+
+# ── Grade import helpers ─────────────────────────────────────────
+
+# Canonical header names → accepted header variations (case-insensitive)
+_GRADE_COL_ALIASES = {
+    'school_year':  ('school year', 'schoolyear', 'year'),
+    'perm_id':      ('perm id', 'permid', 'student id', 'student id #', 'student_id'),
+    'grade_level':  ('grade level', 'gradelevel', 'grd'),
+    'grade':        ('grade', 'letter grade', 'lettergrade', 'mark'),
+    'mark_order':   ('mark order', 'markorder'),
+    'mark_name':    ('mark name', 'markname', 'quarter', 'term'),
+    'course_title': ('course title', 'coursetitle', 'course name', 'coursename'),
+    'course_id':    ('course id', 'courseid', 'course number', 'coursenumber', 'course #'),
+    'period':       ('period', 'per'),
+    'audit_class':  ('audit class', 'auditclass', 'audit'),
+    'staff_name':   ('staff name', 'staffname', 'teacher'),
+    'student_name': ('student name', 'studentname', 'name'),
+}
+
+
+def _build_grade_col_map(header):
+    """Map canonical column names to 0-based indices from the actual header row."""
+    if not header:
+        return {}
+    col_map = {}
+    header_lower = [h.strip().lower() for h in header]
+
+    for canon, aliases in _GRADE_COL_ALIASES.items():
+        for alias in aliases:
+            if alias in header_lower:
+                col_map[canon] = header_lower.index(alias)
+                break
+
+    # Special case: if header has 'Grade' in col D (index 3) AND 'Grade Level' in col C (index 2),
+    # make sure 'grade' points to the letter grade, not the grade level
+    if 'grade' in col_map and 'grade_level' in col_map and col_map['grade'] == col_map['grade_level']:
+        # Both matched the same column — 'grade' in header is ambiguous.
+        # Look for a column explicitly named 'Grade' that isn't the grade_level column.
+        for i, h in enumerate(header_lower):
+            if h == 'grade' and i != col_map['grade_level']:
+                col_map['grade'] = i
+                break
+
+    return col_map
+
+
+def _col(row, col_map, key):
+    """Safely get a column value from a row by mapped key."""
+    idx = col_map.get(key)
+    if idx is None or idx >= len(row):
+        return ''
+    return str(row[idx]).strip()
+
+
+def _parse_quarter(mark_name_str):
+    """Extract quarter number from mark name like 'Quarter 3' or 'Q3'."""
+    s = str(mark_name_str or '').strip()
+    if not s:
+        return None
+    # Try "Quarter 3", "Q3", "Qtr 3", or just "3"
+    m = _re.search(r'(?:quarter|qtr|q)\s*(\d)', s, _re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    # Try bare number
+    try:
+        val = int(s)
+        if 1 <= val <= 4:
+            return val
+    except (ValueError, TypeError):
+        pass
+    return None
 
 
 def _is_synergy_format(header):

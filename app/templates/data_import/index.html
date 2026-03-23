@@ -55,8 +55,8 @@
             </div>
             <div style="font-size:0.82rem;color:var(--gray);">
                 <strong>Accepted formats:</strong> .xlsx, .csv<br>
-                <strong>Columns:</strong> Student ID #, School Year, Quarter, Semester, Period, Course Name, Course #, Subject, Letter Grade, Percent, Credits, a-g?, Honors/AP?, CTE?<br>
-                <strong>Schedule:</strong> 4x4 bell (4 classes/quarter, 5 credits each)
+                <strong>Columns:</strong> School Year, Perm ID, Grade Level, Grade, Mark Order, Mark Name, Course Title, Course ID, Period, C1, C2, C3, Staff Name, Audit Class, Student Name, SPED, SigDis, SLE<br>
+                <strong>Source:</strong> Paste your Synergy grade export directly &mdash; no reformatting needed
             </div>
             {% if grade_count > 0 %}
             <form method="POST" action="{{ url_for('data_import.clear_grades') }}" style="margin-top:12px;"
