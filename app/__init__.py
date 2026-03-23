@@ -1,7 +1,7 @@
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from config import Config
 import os
 
@@ -81,6 +81,22 @@ def create_app(config_class=Config):
     app.register_blueprint(settings_bp, url_prefix='/settings')
     app.register_blueprint(ai_bp, url_prefix='/ai')
     app.register_blueprint(data_import_bp, url_prefix='/data-import')
+
+    # Return JSON (not HTML) for CSRF errors on API endpoints
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        if request.path.startswith('/course-catalog/api/') or request.is_json:
+            return jsonify({'ok': False, 'error': 'CSRF token missing or expired. Please refresh the page and try again.'}), 400
+        from flask import abort
+        abort(400)
+
+    # Return JSON for login-required failures on API endpoints
+    @login_manager.unauthorized_handler
+    def unauthorized_api():
+        if request.path.startswith('/course-catalog/api/') or request.is_json:
+            return jsonify({'ok': False, 'error': 'Session expired. Please refresh the page and log in again.'}), 401
+        from flask import redirect, url_for
+        return redirect(url_for('auth.login'))
 
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event

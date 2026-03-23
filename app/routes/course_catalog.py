@@ -191,6 +191,14 @@ def sync_courses():
     if not courses_data:
         return jsonify({'ok': False, 'error': 'No courses provided'}), 400
 
+    try:
+        return _do_sync_courses(courses_data, info_data)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _do_sync_courses(courses_data, info_data):
     synced = 0
     skipped = 0
 
