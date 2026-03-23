@@ -243,7 +243,7 @@ def early_warning():
     # ── Bulk pre-fetch: latest transcript per student (1 query) ──
     all_transcripts = TranscriptRecord.query.filter(
         TranscriptRecord.student_id.in_(student_ids)
-    ).order_by(TranscriptRecord.analyzed_at.desc()).all()
+    ).order_by(TranscriptRecord.created_at.desc()).all()
 
     transcripts_by_student = {}
     for tr in all_transcripts:
@@ -444,7 +444,7 @@ def cohort_trends():
         AttendanceRecord.student_id, AttendanceRecord.status, AttendanceRecord.date
     ).all()
 
-    attendance_by_grade = defaultdict(lambda: {'total': 0, 'absent': 0, 'tardy': 0, 'present': 0})
+    attendance_by_grade = defaultdict(lambda: defaultdict(int))
     att_by_week = defaultdict(lambda: {'total': 0, 'absent': 0})
 
     for sid, status, att_date in all_att:
@@ -519,7 +519,7 @@ def cohort_trends():
     ag_counts = defaultdict(int)
     all_transcripts = TranscriptRecord.query.filter(
         TranscriptRecord.student_id.in_(student_ids)
-    ).order_by(TranscriptRecord.analyzed_at.desc()).all()
+    ).order_by(TranscriptRecord.created_at.desc()).all()
     seen_transcript_sids = set()
     for tr in all_transcripts:
         if tr.student_id not in seen_transcript_sids:
