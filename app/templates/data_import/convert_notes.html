@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Convert Notes to Sessions{% endblock %}
+{% block page_title %}Convert Counseling Notes → Sessions{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">Notes → Activity Log &amp; Service Records</div>
+    <div class="card-body">
+        <p style="font-size:0.9rem;margin-bottom:12px;">
+            This tool converts your existing <strong>Counseling Notes</strong> into
+            <strong>Activity Log</strong> entries (use-of-time tracking) and
+            <strong>Service Records</strong> (per-student service history).
+        </p>
+
+        <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.85rem;">
+            <strong>How it works:</strong>
+            <ul style="margin-top:4px;padding-left:20px;">
+                <li>Each note creates an <strong>Activity</strong> (tracks your time by ASCA category)</li>
+                <li>Each note creates a <strong>Service Record</strong> (tracks services per student)</li>
+                <li>Note type is mapped to the correct ASCA service type automatically</li>
+                <li>Duplicates are detected and skipped — safe to run multiple times</li>
+                <li>Your original notes are <strong>not modified or deleted</strong></li>
+            </ul>
+        </div>
+
+        <div style="background:#fff3cd;border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.85rem;">
+            <strong>You have {{ total_notes }} counseling note{{ 's' if total_notes != 1 else '' }}</strong> that can be converted.
+        </div>
+
+        {% if total_notes > 0 and converted is none %}
+        <form method="POST" data-confirm="This will create Activity Log and Service Record entries from your {{ total_notes }} notes. Continue?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary">Convert Notes to Sessions</button>
+        </form>
+        {% endif %}
+
+        <a href="{{ url_for('data_import.index') }}" class="btn btn-outline" style="margin-top:8px;">Back to Data Import</a>
+    </div>
+</div>
+
+{% if converted %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Conversion Results</div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card success">
+                <div class="stat-value">{{ converted.activities }}</div>
+                <div class="stat-label">Activities Created</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value">{{ converted.services }}</div>
+                <div class="stat-label">Service Records Created</div>
+            </div>
+            {% if skipped %}
+            <div class="stat-card info">
+                <div class="stat-value">{{ skipped }}</div>
+                <div class="stat-label">Duplicates Skipped</div>
+            </div>
+            {% endif %}
+            {% if errors %}
+            <div class="stat-card danger">
+                <div class="stat-value">{{ errors|length }}</div>
+                <div class="stat-label">Errors</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="{{ url_for('activity_log.index') }}" class="btn btn-primary">View Activity Log</a>
+            <a href="{{ url_for('data_import.index') }}" class="btn btn-outline">Back to Data Import</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if errors %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header" style="color:var(--danger);">Conversion Errors</div>
+    <div class="card-body">
+        <table>
+            <thead><tr><th>Error</th></tr></thead>
+            <tbody>
+                {% for err in errors %}
+                <tr><td style="font-size:0.85rem;color:var(--danger);">{{ err }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
