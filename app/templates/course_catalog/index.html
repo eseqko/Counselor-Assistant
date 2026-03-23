@@ -55,7 +55,10 @@
     <button class="tab-btn active" id="tabCatalog" onclick="switchCatalogView('index.html', this)">Catalog</button>
     <button class="tab-btn" id="tabEditor" onclick="switchCatalogView('editor.html', this)">Editor</button>
     <button class="tab-btn" id="tabSetup" onclick="switchCatalogView('setup.html', this)">School Setup</button>
-    <span class="tab-hint">Data is stored in your browser's local storage</span>
+    <button class="tab-btn" id="btnSync" onclick="syncCoursesToDB()" style="margin-left:auto;background:#16a34a;color:#fff;border-color:#16a34a;">
+        Sync to Database
+    </button>
+    <span class="tab-hint" id="syncHint">Sync your catalog to enable AI Course Recommendations</span>
 </div>
 <div class="catalog-frame-wrap">
     <iframe id="catalogFrame"
@@ -70,9 +73,61 @@
 function switchCatalogView(page, btn) {
     var base = '{{ url_for("static", filename="course_catalog/") }}';
     document.getElementById('catalogFrame').src = base + page;
-    var btns = document.querySelectorAll('.catalog-toolbar .tab-btn');
+    var btns = document.querySelectorAll('.catalog-toolbar .tab-btn:not(#btnSync)');
     for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
     btn.classList.add('active');
+}
+
+function syncCoursesToDB() {
+    var btn = document.getElementById('btnSync');
+    var hint = document.getElementById('syncHint');
+    var courses = [];
+    var info = null;
+
+    try {
+        var raw = localStorage.getItem('jhs_catalog_courses');
+        if (raw) courses = JSON.parse(raw);
+        var rawInfo = localStorage.getItem('jhs_catalog_info');
+        if (rawInfo) info = JSON.parse(rawInfo);
+    } catch (e) {}
+
+    if (!courses.length) {
+        hint.textContent = 'No courses found in browser storage.';
+        hint.style.color = '#dc2626';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Syncing...';
+    hint.textContent = 'Sending ' + courses.length + ' courses to database...';
+    hint.style.color = '#6b7280';
+
+    fetch('/course-catalog/api/sync-courses', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ courses: courses, info: info })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        btn.textContent = 'Sync to Database';
+        if (data.ok) {
+            hint.textContent = 'Synced ' + data.synced + ' courses to database! AI recommendations are now ready.';
+            hint.style.color = '#16a34a';
+        } else {
+            hint.textContent = 'Sync failed: ' + (data.error || 'Unknown error');
+            hint.style.color = '#dc2626';
+        }
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Sync to Database';
+        hint.textContent = 'Sync failed: ' + err.message;
+        hint.style.color = '#dc2626';
+    });
 }
 </script>
 {% endblock %}
