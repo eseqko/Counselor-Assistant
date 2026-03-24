@@ -132,7 +132,7 @@
                     <td><span class="grade-badge">{{ r.student.grade_level or '—' }}</span></td>
                     <td>
                         <div class="progress-bar-wrap">
-                            <div class="progress-bar-fill {% if r.pct < 40 %}low{% elif r.pct < 75 %}mid{% else %}good{% endif %}"
+                            <div class="progress-bar-fill {% if r.subj_shortfall > 0 %}mid{% elif r.pct < 40 %}low{% elif r.pct < 75 %}mid{% else %}good{% endif %}"
                                  style="width:{{ [r.pct, 100]|min }}%">
                                 {{ r.pct }}%
                             </div>
@@ -140,7 +140,9 @@
                     </td>
                     <td style="white-space:nowrap;font-size:0.82rem;">
                         {{ r.total_completed|int }} / {{ total_required }}
-                        {% if r.total_needed > 0 %}
+                        {% if r.subj_shortfall > 0 %}
+                        <br><span style="color:var(--danger);font-size:0.75rem;">{{ r.subj_shortfall|int }} needed in {{ r.subj_short_count }} subj</span>
+                        {% elif r.total_needed > 0 %}
                         <span style="color:var(--danger);font-size:0.75rem;">({{ r.total_needed|int }} needed)</span>
                         {% endif %}
                     </td>
