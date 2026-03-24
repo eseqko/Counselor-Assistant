@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Graduation Tracker{% endblock %}
+{% block page_title %}Graduation Tracker{% endblock %}
+
+{% block head %}
+<style>
+.risk-badge {
+    display:inline-block; padding:3px 10px; border-radius:12px;
+    font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.3px;
+}
+.risk-critical { background:#FCE8E8; color:var(--danger); }
+.risk-at-risk  { background:#FFF3D6; color:#996300; }
+.risk-warning  { background:#FFF8E1; color:#BF8700; }
+.risk-on-track { background:#E8F8E8; color:var(--success); }
+.risk-unknown  { background:var(--light-gray); color:var(--gray); }
+
+.ag-badge {
+    display:inline-block; padding:2px 8px; border-radius:10px;
+    font-size:0.72rem; font-weight:600;
+}
+.ag-deficient { background:#FCE8E8; color:var(--danger); }
+.ag-verify    { background:#FFF3D6; color:#996300; }
+.ag-on-track  { background:#E8F8E8; color:var(--success); }
+.ag-unknown   { background:var(--light-gray); color:var(--gray); }
+
+.progress-bar-wrap {
+    width:100%; height:18px; background:var(--light-gray);
+    border-radius:9px; overflow:hidden; position:relative;
+}
+.progress-bar-fill {
+    height:100%; border-radius:9px; transition:width 0.4s ease;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.68rem; font-weight:700; color:white; min-width:28px;
+}
+.progress-bar-fill.low  { background:var(--danger); }
+.progress-bar-fill.mid  { background:var(--warning); }
+.progress-bar-fill.good { background:var(--success); }
+
+.grad-table { width:100%; font-size:0.85rem; }
+.grad-table th {
+    text-align:left; padding:10px 12px; font-weight:600;
+    border-bottom:2px solid var(--light-gray); font-size:0.78rem;
+    text-transform:uppercase; letter-spacing:0.3px; color:var(--gray);
+}
+.grad-table td { padding:10px 12px; border-bottom:1px solid var(--light-gray); vertical-align:middle; }
+.grad-table tr:hover { background:var(--bg); }
+.grad-table .student-name { font-weight:600; color:var(--primary-dark); }
+.grad-table .student-name a { color:inherit; text-decoration:none; }
+.grad-table .student-name a:hover { text-decoration:underline; }
+.grade-badge {
+    display:inline-block; padding:1px 7px; border-radius:8px;
+    font-size:0.72rem; font-weight:600; background:var(--light-gray); color:var(--dark);
+}
+
+/* Filter row */
+.grad-filters {
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    margin-bottom:16px;
+}
+.grad-filters select { padding:6px 10px; font-size:0.85rem; border-radius:6px; border:1px solid var(--light-gray); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Risk summary stats -->
+<div class="stats-grid">
+    <div class="stat-card danger">
+        <div class="stat-value">{{ risk_counts.get('critical', 0) }}</div>
+        <div class="stat-label">Critical</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color:var(--warning);">{{ risk_counts.get('at-risk', 0) }}</div>
+        <div class="stat-label">At-Risk</div>
+    </div>
+    <div class="stat-card info">
+        <div class="stat-value">{{ risk_counts.get('warning', 0) }}</div>
+        <div class="stat-label">Warning</div>
+    </div>
+    <div class="stat-card success">
+        <div class="stat-value">{{ risk_counts.get('on-track', 0) }}</div>
+        <div class="stat-label">On Track</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="grad-filters">
+    <label style="font-weight:600;font-size:0.85rem;">Filter:</label>
+    <select id="filter-grade" onchange="applyFilters()">
+        <option value="">All Grades</option>
+        <option value="9">9th</option>
+        <option value="10">10th</option>
+        <option value="11">11th</option>
+        <option value="12">12th</option>
+    </select>
+    <select id="filter-risk" onchange="applyFilters()">
+        <option value="">All Risk Levels</option>
+        <option value="critical">Critical</option>
+        <option value="at-risk">At-Risk</option>
+        <option value="warning">Warning</option>
+        <option value="on-track">On Track</option>
+    </select>
+    <select id="filter-ag" onchange="applyFilters()">
+        <option value="">All a-g Status</option>
+        <option value="deficient">Deficient</option>
+        <option value="verify">Verify</option>
+        <option value="on-track">On Track</option>
+    </select>
+</div>
+
+<!-- Main table -->
+<div class="card">
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="grad-table" id="grad-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Grade</th>
+                    <th style="min-width:180px;">Credit Progress</th>
+                    <th>Credits</th>
+                    <th>a-g</th>
+                    <th>Risk</th>
+                    <th>Source</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr data-grade="{{ r.student.grade_level or '' }}" data-risk="{{ r.risk }}" data-ag="{{ r.ag_status }}">
+                    <td class="student-name">
+                        <a href="{{ url_for('graduation.student_detail', student_id=r.student.id) }}">{{ r.student.last_name }}, {{ r.student.first_name }}</a>
+                    </td>
+                    <td><span class="grade-badge">{{ r.student.grade_level or '—' }}</span></td>
+                    <td>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar-fill {% if r.pct < 40 %}low{% elif r.pct < 75 %}mid{% else %}good{% endif %}"
+                                 style="width:{{ [r.pct, 100]|min }}%">
+                                {{ r.pct }}%
+                            </div>
+                        </div>
+                    </td>
+                    <td style="white-space:nowrap;font-size:0.82rem;">
+                        {{ r.total_completed|int }} / {{ total_required }}
+                        {% if r.total_needed > 0 %}
+                        <span style="color:var(--danger);font-size:0.75rem;">({{ r.total_needed|int }} needed)</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="ag-badge ag-{{ r.ag_status }}">
+                            {{ r.ag_met }}/7
+                        </span>
+                    </td>
+                    <td>
+                        <span class="risk-badge risk-{{ r.risk }}">{{ r.risk|replace('-', ' ') }}</span>
+                    </td>
+                    <td style="font-size:0.75rem;color:var(--gray);">
+                        {% if r.source == 'transcript' %}Transcript{% elif r.source == 'grades' %}Grades{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not rows %}
+                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray);font-style:italic;">
+                    No active students in your caseload. <a href="{{ url_for('caseload.index') }}">Add students</a> first.
+                </td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilters() {
+    var grade = document.getElementById('filter-grade').value;
+    var risk = document.getElementById('filter-risk').value;
+    var ag = document.getElementById('filter-ag').value;
+    var rows = document.querySelectorAll('#grad-table tbody tr');
+    rows.forEach(function(row) {
+        var show = true;
+        if (grade && row.dataset.grade !== grade) show = false;
+        if (risk && row.dataset.risk !== risk) show = false;
+        if (ag && row.dataset.ag !== ag) show = false;
+        row.style.display = show ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

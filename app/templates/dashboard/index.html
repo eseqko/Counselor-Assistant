@@ -20,6 +20,14 @@
         <div class="stat-value" id="follow-up-count">{{ follow_ups|length }}</div>
         <div class="stat-label">Follow-Ups Due</div>
     </div>
+    {% if grad_at_risk_total > 0 %}
+    <div class="stat-card danger">
+        <a href="{{ url_for('graduation.index') }}" style="text-decoration:none;color:inherit;">
+            <div class="stat-value">{{ grad_at_risk_total }}</div>
+            <div class="stat-label">Grad At-Risk</div>
+        </a>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Use of Time Bar -->
