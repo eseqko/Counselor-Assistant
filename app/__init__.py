@@ -67,6 +67,7 @@ def create_app(config_class=Config):
     from app.routes.settings import settings_bp
     from app.routes.ai import ai_bp
     from app.routes.data_import import data_import_bp
+    from app.routes.followups import followups_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -81,6 +82,7 @@ def create_app(config_class=Config):
     app.register_blueprint(settings_bp, url_prefix='/settings')
     app.register_blueprint(ai_bp, url_prefix='/ai')
     app.register_blueprint(data_import_bp, url_prefix='/data-import')
+    app.register_blueprint(followups_bp, url_prefix='/follow-ups')
 
     # Return JSON (not HTML) for CSRF errors on API endpoints
     @app.errorhandler(CSRFError)

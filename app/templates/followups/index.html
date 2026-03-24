@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+{% block title %}Follow-Ups{% endblock %}
+{% block page_title %}Follow-Up Tracker{% endblock %}
+
+{% block head %}
+<style>
+/* ── Stats bar ─────────────────────────────────── */
+.fu-stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.fu-stat {
+    flex:1; min-width:120px; text-align:center;
+    padding:14px 10px; border-radius:8px;
+    background:var(--white); box-shadow:0 1px 3px rgba(0,0,0,0.08);
+}
+.fu-stat .val { font-size:1.6rem; font-weight:700; }
+.fu-stat .lbl { font-size:0.75rem; text-transform:uppercase; color:var(--gray); letter-spacing:0.5px; margin-top:2px; }
+.fu-stat.overdue .val  { color:var(--danger); }
+.fu-stat.today .val    { color:var(--warning); }
+.fu-stat.upcoming .val { color:var(--primary); }
+.fu-stat.resolved .val { color:var(--success); }
+
+/* ── Filter bar ────────────────────────────────── */
+.fu-filters {
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+    margin-bottom:20px;
+}
+.fu-filters .pill {
+    padding:6px 14px; border-radius:20px; font-size:0.82rem; font-weight:600;
+    border:1px solid var(--light-gray); background:var(--white); cursor:pointer;
+    transition:all 0.15s;
+}
+.fu-filters .pill:hover { background:var(--bg); }
+.fu-filters .pill.active { background:var(--primary); color:var(--white); border-color:var(--primary); }
+
+/* ── Lane (collapsible) ───────────────────────── */
+.fu-lane { margin-bottom:16px; }
+.fu-lane-header {
+    display:flex; align-items:center; gap:8px; padding:10px 16px;
+    background:var(--bg); border-radius:8px; cursor:pointer;
+    user-select:none; font-weight:600; font-size:0.9rem;
+}
+.fu-lane-header .chevron {
+    transition:transform 0.2s; font-size:0.7rem;
+}
+.fu-lane-header.collapsed .chevron { transform:rotate(-90deg); }
+.fu-lane-count {
+    margin-left:auto; font-size:0.75rem; font-weight:600;
+    padding:2px 8px; border-radius:10px; background:rgba(0,0,0,0.06);
+}
+.fu-lane-body { padding:8px 0; }
+.fu-lane-body.hidden { display:none; }
+.fu-lane-empty {
+    text-align:center; padding:20px; color:var(--gray); font-size:0.85rem;
+    font-style:italic;
+}
+
+/* ── Card ──────────────────────────────────────── */
+.fu-card {
+    display:flex; flex-direction:column; gap:8px;
+    padding:14px 16px; margin-bottom:8px;
+    background:var(--white); border-radius:8px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.06);
+    border-left:3px solid var(--primary);
+    transition:box-shadow 0.15s;
+}
+.fu-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+.fu-card.overdue  { border-left-color:var(--danger); }
+.fu-card.today    { border-left-color:var(--warning); }
+.fu-card.upcoming { border-left-color:var(--primary); }
+.fu-card.resolved { border-left-color:var(--success); opacity:0.8; }
+
+.fu-card-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.fu-card-name { font-weight:600; font-size:0.95rem; }
+.fu-card-due { font-size:0.78rem; color:var(--gray); margin-left:auto; white-space:nowrap; }
+.fu-card-notes {
+    font-size:0.84rem; color:var(--dark); line-height:1.4;
+    overflow:hidden; text-overflow:ellipsis;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
+.fu-card-actions {
+    display:flex; gap:6px; flex-wrap:wrap; margin-top:2px;
+}
+.fu-card-actions .btn { padding:4px 10px; font-size:0.75rem; }
+
+/* ── Modal ─────────────────────────────────────── */
+.fu-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.4); z-index:1000;
+    justify-content:center; align-items:center;
+}
+.fu-overlay.open { display:flex; }
+.fu-modal {
+    background:var(--white); border-radius:10px; padding:24px;
+    width:90%; max-width:480px; box-shadow:0 8px 30px rgba(0,0,0,0.2);
+    max-height:90vh; overflow-y:auto;
+}
+.fu-modal h3 { margin:0 0 16px; font-size:1.1rem; color:var(--primary-dark); }
+
+/* ── Type pills (radio) ───────────────────────── */
+.type-pills { display:flex; gap:6px; margin-bottom:16px; }
+.type-pills label {
+    flex:1; text-align:center; padding:8px 4px; border-radius:20px;
+    font-size:0.82rem; font-weight:600; cursor:pointer;
+    border:1px solid var(--light-gray); background:var(--white);
+    transition:all 0.15s;
+}
+.type-pills input { display:none; }
+.type-pills input:checked + span {
+    /* handled by JS adding .active class to parent label */
+}
+.type-pills label.active {
+    background:var(--primary); color:var(--white); border-color:var(--primary);
+}
+
+/* ── Autocomplete ──────────────────────────────── */
+.ac-wrap { position:relative; }
+.ac-list {
+    display:none; position:absolute; top:100%; left:0; right:0;
+    background:var(--white); border:1px solid var(--light-gray);
+    border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.1);
+    max-height:200px; overflow-y:auto; z-index:10;
+}
+.ac-list.open { display:block; }
+.ac-item {
+    padding:8px 12px; cursor:pointer; font-size:0.88rem;
+    display:flex; justify-content:space-between;
+}
+.ac-item:hover { background:var(--bg); }
+.ac-item .ac-grade { color:var(--gray); font-size:0.78rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats bar -->
+<div class="fu-stats" id="fu-stats">
+    <div class="fu-stat overdue"><div class="val" id="stat-overdue">0</div><div class="lbl">Overdue</div></div>
+    <div class="fu-stat today"><div class="val" id="stat-today">0</div><div class="lbl">Due Today</div></div>
+    <div class="fu-stat upcoming"><div class="val" id="stat-upcoming">0</div><div class="lbl">Upcoming</div></div>
+    <div class="fu-stat resolved"><div class="val" id="stat-resolved">0</div><div class="lbl">Resolved</div></div>
+</div>
+
+<!-- Filter bar + Add button -->
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+    <div class="fu-filters" id="fu-filters">
+        <span class="pill active" data-filter="all">All</span>
+        <span class="pill" data-filter="check-in">Check-in</span>
+        <span class="pill" data-filter="referral">Referral</span>
+        <span class="pill" data-filter="attendance-grades">Attendance/Grades</span>
+    </div>
+    <button class="btn btn-primary" onclick="openModal()">+ Add Follow-Up</button>
+</div>
+
+<!-- Lanes -->
+<div id="fu-lanes">
+    <div class="fu-lane" data-lane="overdue">
+        <div class="fu-lane-header" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:var(--danger);">Overdue</span>
+            <span class="fu-lane-count" id="lane-count-overdue">0</span>
+        </div>
+        <div class="fu-lane-body" id="lane-overdue"></div>
+    </div>
+    <div class="fu-lane" data-lane="today">
+        <div class="fu-lane-header" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:var(--warning);">Due Today</span>
+            <span class="fu-lane-count" id="lane-count-today">0</span>
+        </div>
+        <div class="fu-lane-body" id="lane-today"></div>
+    </div>
+    <div class="fu-lane" data-lane="upcoming">
+        <div class="fu-lane-header" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:var(--primary);">Upcoming</span>
+            <span class="fu-lane-count" id="lane-count-upcoming">0</span>
+        </div>
+        <div class="fu-lane-body" id="lane-upcoming"></div>
+    </div>
+    <div class="fu-lane" data-lane="resolved">
+        <div class="fu-lane-header collapsed" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:var(--success);">Resolved</span>
+            <span class="fu-lane-count" id="lane-count-resolved">0</span>
+        </div>
+        <div class="fu-lane-body hidden" id="lane-resolved"></div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="fu-overlay" id="fu-modal">
+    <div class="fu-modal">
+        <h3 id="modal-title">Add Follow-Up</h3>
+        <input type="hidden" id="edit-id">
+
+        <div class="form-group ac-wrap">
+            <label>Student Name</label>
+            <input type="text" id="inp-name" class="form-control" placeholder="Search student..." autocomplete="off">
+            <div class="ac-list" id="ac-list"></div>
+            <input type="hidden" id="inp-sid">
+            <input type="hidden" id="inp-grade">
+        </div>
+
+        <label style="font-size:0.85rem;font-weight:600;margin-bottom:6px;display:block;">Type</label>
+        <div class="type-pills" id="type-pills">
+            <label class="active" onclick="pickType(this)"><input type="radio" name="fu-type" value="check-in" checked><span>Check-in</span></label>
+            <label onclick="pickType(this)"><input type="radio" name="fu-type" value="referral"><span>Referral</span></label>
+            <label onclick="pickType(this)"><input type="radio" name="fu-type" value="attendance-grades"><span>Attendance/Grades</span></label>
+        </div>
+
+        <div class="form-group">
+            <label>Due Date</label>
+            <input type="date" id="inp-due" class="form-control">
+        </div>
+
+        <div class="form-group">
+            <label>Notes</label>
+            <textarea id="inp-notes" class="form-control" rows="3" placeholder="Optional context..."></textarea>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" id="modal-save" onclick="saveFollowUp()">Save</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var BASE = "{{ url_for('followups.index') }}".replace(/\/$/,'');
+    var allData = [];
+    var activeFilter = 'all';
+
+    /* ── API helpers ──────────────────────────── */
+    function api(method, path, body) {
+        var opts = {method: method, headers: {'Content-Type':'application/json'}};
+        if (body) opts.body = JSON.stringify(body);
+        return fetch(BASE + path, opts).then(function(r){ return r.json(); });
+    }
+
+    /* ── Load & render ────────────────────────── */
+    function load() {
+        api('GET', '/api').then(function(data){
+            allData = data;
+            render();
+        });
+    }
+
+    function urgency(f) {
+        if (f.status === 'resolved') return 'resolved';
+        var today = new Date(); today.setHours(0,0,0,0);
+        var due = new Date(f.due_date + 'T00:00:00');
+        if (due < today) return 'overdue';
+        if (due.getTime() === today.getTime()) return 'today';
+        return 'upcoming';
+    }
+
+    function relDate(iso) {
+        var today = new Date(); today.setHours(0,0,0,0);
+        var d = new Date(iso + 'T00:00:00');
+        var diff = Math.round((d - today) / 86400000);
+        if (diff === 0) return 'Today';
+        if (diff === 1) return 'Tomorrow';
+        if (diff === -1) return 'Yesterday';
+        if (diff < -1) return Math.abs(diff) + ' days ago';
+        return 'In ' + diff + ' days';
+    }
+
+    function typeBadge(t) {
+        var map = {'check-in':'badge-info','referral':'badge-warning','attendance-grades':'badge-primary'};
+        var lbl = {'check-in':'Check-in','referral':'Referral','attendance-grades':'Att/Grades'};
+        return '<span class="badge '+(map[t]||'badge-gray')+'">'+(lbl[t]||t)+'</span>';
+    }
+
+    function gradeBadge(g) {
+        if (!g) return '';
+        return '<span class="badge badge-gray">'+g+'th</span>';
+    }
+
+    function cardHTML(f) {
+        var u = urgency(f);
+        var actions = '';
+        if (u !== 'resolved') {
+            actions += '<button class="btn btn-success btn-sm" onclick="resolve(\''+f.id+'\')">Resolve</button>';
+            actions += '<button class="btn btn-warning btn-sm" onclick="snooze(\''+f.id+'\')">Snooze 3d</button>';
+        } else {
+            actions += '<button class="btn btn-outline btn-sm" onclick="reopen(\''+f.id+'\')">Reopen</button>';
+        }
+        actions += '<button class="btn btn-outline btn-sm" onclick="editFU(\''+f.id+'\')">Edit</button>';
+        actions += '<button class="btn btn-danger btn-sm" onclick="deleteFU(\''+f.id+'\')">Delete</button>';
+
+        return '<div class="fu-card '+u+'" data-id="'+f.id+'">'
+            + '<div class="fu-card-top">'
+            + '<span class="fu-card-name">'+esc(f.student_name)+'</span> '
+            + gradeBadge(f.grade) + ' ' + typeBadge(f.type)
+            + '<span class="fu-card-due">'+relDate(f.due_date)+'</span>'
+            + '</div>'
+            + (f.notes ? '<div class="fu-card-notes">'+esc(f.notes)+'</div>' : '')
+            + '<div class="fu-card-actions">'+actions+'</div>'
+            + '</div>';
+    }
+
+    function render() {
+        var buckets = {overdue:[], today:[], upcoming:[], resolved:[]};
+        var filtered = allData.filter(function(f){
+            return activeFilter === 'all' || f.type === activeFilter;
+        });
+        filtered.forEach(function(f){ buckets[urgency(f)].push(f); });
+
+        ['overdue','today','upcoming','resolved'].forEach(function(lane){
+            var el = document.getElementById('lane-'+lane);
+            var cnt = document.getElementById('lane-count-'+lane);
+            cnt.textContent = buckets[lane].length;
+            if (buckets[lane].length === 0) {
+                el.innerHTML = '<div class="fu-lane-empty">No follow-ups</div>';
+            } else {
+                el.innerHTML = buckets[lane].map(cardHTML).join('');
+            }
+        });
+
+        /* Stats use unfiltered data */
+        var all = {overdue:0, today:0, upcoming:0, resolved:0};
+        allData.forEach(function(f){ all[urgency(f)]++; });
+        document.getElementById('stat-overdue').textContent = all.overdue;
+        document.getElementById('stat-today').textContent = all.today;
+        document.getElementById('stat-upcoming').textContent = all.upcoming;
+        document.getElementById('stat-resolved').textContent = all.resolved;
+    }
+
+    function esc(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    /* ── Actions ──────────────────────────────── */
+    window.resolve = function(id) {
+        api('PATCH', '/api/'+id, {status:'resolved'}).then(function(f){
+            var i = allData.findIndex(function(x){return x.id===id;});
+            if (i>=0) allData[i] = f;
+            render();
+        });
+    };
+    window.reopen = function(id) {
+        api('PATCH', '/api/'+id, {status:'open'}).then(function(f){
+            var i = allData.findIndex(function(x){return x.id===id;});
+            if (i>=0) allData[i] = f;
+            render();
+        });
+    };
+    window.snooze = function(id) {
+        api('POST', '/api/'+id+'/snooze', {days:3}).then(function(f){
+            var i = allData.findIndex(function(x){return x.id===id;});
+            if (i>=0) allData[i] = f;
+            render();
+        });
+    };
+    window.deleteFU = function(id) {
+        if (!confirm('Delete this follow-up?')) return;
+        api('DELETE', '/api/'+id).then(function(){
+            allData = allData.filter(function(x){return x.id!==id;});
+            render();
+        });
+    };
+
+    /* ── Modal ────────────────────────────────── */
+    window.openModal = function(data) {
+        document.getElementById('modal-title').textContent = data ? 'Edit Follow-Up' : 'Add Follow-Up';
+        document.getElementById('edit-id').value = data ? data.id : '';
+        document.getElementById('inp-name').value = data ? data.student_name : '';
+        document.getElementById('inp-sid').value = data ? data.student_id : '';
+        document.getElementById('inp-grade').value = data ? data.grade : '';
+        document.getElementById('inp-due').value = data ? data.due_date : new Date().toISOString().slice(0,10);
+        document.getElementById('inp-notes').value = data ? data.notes : '';
+
+        // Set type pill
+        var typeVal = data ? data.type : 'check-in';
+        document.querySelectorAll('#type-pills label').forEach(function(l){
+            var inp = l.querySelector('input');
+            l.classList.toggle('active', inp.value === typeVal);
+            inp.checked = inp.value === typeVal;
+        });
+
+        document.getElementById('fu-modal').classList.add('open');
+    };
+
+    window.closeModal = function() {
+        document.getElementById('fu-modal').classList.remove('open');
+    };
+
+    window.editFU = function(id) {
+        var f = allData.find(function(x){return x.id===id;});
+        if (f) openModal(f);
+    };
+
+    window.saveFollowUp = function() {
+        var id = document.getElementById('edit-id').value;
+        var name = document.getElementById('inp-name').value.trim();
+        if (!name) { alert('Student name is required.'); return; }
+        var typeEl = document.querySelector('#type-pills input:checked');
+        var body = {
+            student_name: name,
+            student_id: document.getElementById('inp-sid').value,
+            grade: document.getElementById('inp-grade').value,
+            type: typeEl ? typeEl.value : 'check-in',
+            due_date: document.getElementById('inp-due').value,
+            notes: document.getElementById('inp-notes').value.trim()
+        };
+        if (!body.due_date) { alert('Due date is required.'); return; }
+
+        if (id) {
+            api('PATCH', '/api/'+id, body).then(function(f){
+                var i = allData.findIndex(function(x){return x.id===id;});
+                if (i>=0) allData[i] = f;
+                render(); closeModal();
+            });
+        } else {
+            api('POST', '/api', body).then(function(f){
+                allData.push(f);
+                render(); closeModal();
+            });
+        }
+    };
+
+    window.pickType = function(label) {
+        document.querySelectorAll('#type-pills label').forEach(function(l){ l.classList.remove('active'); });
+        label.classList.add('active');
+        label.querySelector('input').checked = true;
+    };
+
+    /* ── Lane toggle ──────────────────────────── */
+    window.toggleLane = function(header) {
+        header.classList.toggle('collapsed');
+        var body = header.nextElementSibling;
+        body.classList.toggle('hidden');
+    };
+
+    /* ── Filter pills ─────────────────────────── */
+    document.getElementById('fu-filters').addEventListener('click', function(e){
+        if (!e.target.classList.contains('pill')) return;
+        document.querySelectorAll('#fu-filters .pill').forEach(function(p){ p.classList.remove('active'); });
+        e.target.classList.add('active');
+        activeFilter = e.target.dataset.filter;
+        render();
+    });
+
+    /* ── Student autocomplete ─────────────────── */
+    var acTimer = null;
+    var nameInp = document.getElementById('inp-name');
+    var acList = document.getElementById('ac-list');
+
+    nameInp.addEventListener('input', function(){
+        clearTimeout(acTimer);
+        var q = nameInp.value.trim();
+        if (q.length < 2) { acList.classList.remove('open'); return; }
+        acTimer = setTimeout(function(){
+            fetch(BASE + '/api/students?q=' + encodeURIComponent(q))
+                .then(function(r){ return r.json(); })
+                .then(function(results){
+                    if (!results.length) { acList.classList.remove('open'); return; }
+                    acList.innerHTML = results.map(function(s){
+                        return '<div class="ac-item" data-name="'+esc(s.name)+'" data-id="'+esc(s.id)+'" data-grade="'+(s.grade||'')+'">'
+                            + '<span>'+esc(s.name)+'</span>'
+                            + (s.grade ? '<span class="ac-grade">Grade '+s.grade+'</span>' : '')
+                            + '</div>';
+                    }).join('');
+                    acList.classList.add('open');
+                });
+        }, 250);
+    });
+
+    acList.addEventListener('click', function(e){
+        var item = e.target.closest('.ac-item');
+        if (!item) return;
+        nameInp.value = item.dataset.name;
+        document.getElementById('inp-sid').value = item.dataset.id;
+        document.getElementById('inp-grade').value = item.dataset.grade;
+        acList.classList.remove('open');
+    });
+
+    document.addEventListener('click', function(e){
+        if (!e.target.closest('.ac-wrap')) acList.classList.remove('open');
+    });
+
+    /* Close modal on overlay click */
+    document.getElementById('fu-modal').addEventListener('click', function(e){
+        if (e.target === this) closeModal();
+    });
+
+    /* ── Init ─────────────────────────────────── */
+    load();
+})();
+</script>
+{% endblock %}
