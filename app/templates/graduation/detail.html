@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Credit Audit — {{ data.student.display_name }}{% endblock %}
+{% block page_title %}Credit Audit — {{ data.student.display_name }}{% endblock %}
+
+{% block head %}
+<style>
+.audit-header {
+    display:flex; gap:20px; flex-wrap:wrap; align-items:center;
+    margin-bottom:20px;
+}
+.audit-header .student-info { flex:1; min-width:200px; }
+.audit-header .student-info h2 { margin:0; font-size:1.3rem; color:var(--primary-dark); }
+.audit-header .student-info .meta { font-size:0.85rem; color:var(--gray); margin-top:4px; }
+
+.risk-badge {
+    display:inline-block; padding:4px 12px; border-radius:12px;
+    font-size:0.8rem; font-weight:700; text-transform:uppercase;
+}
+.risk-critical { background:#FCE8E8; color:var(--danger); }
+.risk-at-risk  { background:#FFF3D6; color:#996300; }
+.risk-warning  { background:#FFF8E1; color:#BF8700; }
+.risk-on-track { background:#E8F8E8; color:var(--success); }
+.risk-unknown  { background:var(--light-gray); color:var(--gray); }
+
+/* Credit progress bars */
+.credit-row {
+    display:flex; align-items:center; gap:12px; padding:8px 0;
+    border-bottom:1px solid var(--light-gray);
+}
+.credit-row:last-child { border-bottom:none; }
+.credit-label { width:160px; font-size:0.85rem; font-weight:600; flex-shrink:0; }
+.credit-bar-wrap {
+    flex:1; height:20px; background:var(--light-gray);
+    border-radius:10px; overflow:hidden; position:relative;
+}
+.credit-bar-fill {
+    height:100%; border-radius:10px; transition:width 0.4s;
+    display:flex; align-items:center; padding-left:8px;
+    font-size:0.7rem; font-weight:700; color:white; min-width:fit-content;
+}
+.credit-bar-fill.met    { background:var(--success); }
+.credit-bar-fill.partial { background:var(--warning); }
+.credit-bar-fill.low    { background:var(--danger); }
+.credit-nums {
+    width:90px; text-align:right; font-size:0.82rem; flex-shrink:0;
+    white-space:nowrap;
+}
+.credit-nums .deficit { color:var(--danger); font-weight:600; }
+
+/* a-g area cards */
+.ag-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; }
+.ag-card {
+    padding:14px; border-radius:8px; background:var(--white);
+    box-shadow:0 1px 3px rgba(0,0,0,0.06); border-left:3px solid var(--gray);
+}
+.ag-card.met { border-left-color:var(--success); }
+.ag-card.not-met { border-left-color:var(--danger); }
+.ag-card .area-label { font-size:0.72rem; text-transform:uppercase; color:var(--gray); font-weight:600; letter-spacing:0.5px; }
+.ag-card .area-name { font-size:0.9rem; font-weight:600; margin:4px 0; }
+.ag-card .area-progress { font-size:0.82rem; }
+
+/* Grade history table */
+.grades-table { width:100%; font-size:0.82rem; }
+.grades-table th {
+    text-align:left; padding:8px 10px; font-weight:600;
+    border-bottom:2px solid var(--light-gray); font-size:0.75rem;
+    text-transform:uppercase; color:var(--gray);
+}
+.grades-table td { padding:8px 10px; border-bottom:1px solid var(--light-gray); }
+.grade-pass { color:var(--success); font-weight:600; }
+.grade-fail { color:var(--danger); font-weight:600; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="audit-header">
+    <div class="student-info">
+        <h2>{{ data.student.first_name }} {{ data.student.last_name }}</h2>
+        <div class="meta">
+            ID: {{ data.student.student_id_number or '—' }} &middot;
+            Grade {{ data.student.grade_level or '—' }} &middot;
+            Data source: {{ data.source|capitalize }}
+        </div>
+    </div>
+    <span class="risk-badge risk-{{ data.risk }}">{{ data.risk|replace('-', ' ') }}</span>
+</div>
+
+<!-- Summary stats -->
+<div class="stats-grid">
+    <div class="stat-card {% if data.pct >= 75 %}success{% elif data.pct >= 40 %}{% else %}danger{% endif %}">
+        <div class="stat-value">{{ data.pct }}%</div>
+        <div class="stat-label">Credits Complete</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ data.total_completed|int }}</div>
+        <div class="stat-label">Credits Earned</div>
+    </div>
+    <div class="stat-card {% if data.total_needed > 0 %}danger{% else %}success{% endif %}">
+        <div class="stat-value">{{ data.total_needed|int }}</div>
+        <div class="stat-label">Credits Needed</div>
+    </div>
+    <div class="stat-card {% if data.ag_met >= 7 %}success{% elif data.ag_met >= 5 %}{% else %}danger{% endif %}">
+        <div class="stat-value">{{ data.ag_met }}/7</div>
+        <div class="stat-label">a-g Areas Met</div>
+    </div>
+</div>
+
+<!-- Credit breakdown -->
+<div class="card">
+    <div class="card-header">Credit Breakdown by Subject</div>
+    <div class="card-body">
+        {% if data.credits %}
+            {% for subj, req in grad_requirements.items() %}
+                {% set c = data.credits.get(subj, {'required': req, 'completed': 0, 'need': req}) %}
+                {% set comp = c.get('completed', 0)|float %}
+                {% set need = c.get('need', req)|float %}
+                {% set pct = (comp / req * 100)|round|int if req else 100 %}
+                <div class="credit-row">
+                    <div class="credit-label">{{ subj }}</div>
+                    <div class="credit-bar-wrap">
+                        <div class="credit-bar-fill {% if pct >= 100 %}met{% elif pct >= 50 %}partial{% else %}low{% endif %}"
+                             style="width:{{ [pct, 100]|min }}%">
+                            {% if pct >= 20 %}{{ comp|int }}/{{ req }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="credit-nums">
+                        {{ comp|int }}/{{ req }}
+                        {% if need > 0 %}<span class="deficit">(-{{ need|int }})</span>{% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:var(--gray);font-style:italic;text-align:center;padding:20px;">
+                No credit data available. <a href="{{ url_for('data_import.index') }}">Import grades</a> or
+                <a href="{{ url_for('caseload.index') }}">upload transcripts</a> to see the credit audit.
+            </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- a-g Progress -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">a-g Requirements (UC/CSU Eligibility)</div>
+    <div class="card-body">
+        {% if data.ag %}
+        <div class="ag-grid">
+            {% for area, info in ag_requirements.items() %}
+                {% set a = data.ag.get(area, {}) %}
+                {% set is_met = a.get('isMet', false) %}
+                <div class="ag-card {% if is_met %}met{% else %}not-met{% endif %}">
+                    <div class="area-label">Area {{ area }}</div>
+                    <div class="area-name">{{ info.label }}</div>
+                    <div class="area-progress">
+                        {{ a.get('completed', 0)|int }} / {{ info.required }} credits
+                        {% if not is_met and a.get('needed', 0) > 0 %}
+                            <span style="color:var(--danger);font-weight:600;"> — {{ a.get('needed', 0)|int }} needed</span>
+                        {% elif is_met %}
+                            <span style="color:var(--success);font-weight:600;"> — Met</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:var(--gray);font-style:italic;text-align:center;padding:20px;">
+            No a-g data available. a-g tracking requires transcript import or a-g flagged grade records.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Grade History -->
+{% if grades %}
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Grade History ({{ grades|length }} records)</div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="grades-table">
+            <thead>
+                <tr>
+                    <th>Year</th>
+                    <th>Qtr</th>
+                    <th>Course</th>
+                    <th>Grade</th>
+                    <th>Credits</th>
+                    <th>Subject</th>
+                    <th>a-g</th>
+                    <th>AP/Hon</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in grades %}
+                <tr>
+                    <td>{{ g.school_year or '—' }}</td>
+                    <td>{{ g.quarter or '—' }}</td>
+                    <td>{{ g.course_name }}</td>
+                    <td class="{% if g.is_passing %}grade-pass{% elif g.is_passing == false %}grade-fail{% endif %}">
+                        {{ g.letter_grade or '—' }}
+                    </td>
+                    <td>{{ g.credits_earned|int if g.credits_earned else '—' }}</td>
+                    <td>{{ g.subject_area or '—' }}</td>
+                    <td>{% if g.is_ag %}Yes{% endif %}</td>
+                    <td>{% if g.is_honors_ap %}Yes{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div style="margin-top:20px;">
+    <a href="{{ url_for('graduation.index') }}" class="btn btn-outline">Back to Graduation Tracker</a>
+    <a href="{{ url_for('caseload.view_student', id=data.student.id) }}" class="btn btn-primary">View Student Profile</a>
+</div>
+
+{% endblock %}

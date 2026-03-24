@@ -6,6 +6,7 @@ from app.models.calendar_event import CalendarEvent
 from app.models.note import Note
 from app.models.activity import Activity
 from app.models.service_record import ServiceRecord
+from app.models.transcript import TranscriptRecord
 from datetime import datetime, date, timedelta, timezone
 import requests as http_requests
 import pytz
@@ -232,6 +233,26 @@ def index():
     # Combined event count for stats card
     all_event_count = len(todays_events) + len(external_events)
 
+    # Graduation at-risk summary from transcript records
+    my_student_ids = [s.id for s in Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active'
+    ).with_entities(Student.id).all()]
+
+    grad_risk = {'critical': 0, 'at-risk': 0, 'warning': 0, 'on-track': 0}
+    if my_student_ids:
+        # Get latest transcript per student
+        seen = set()
+        transcripts = TranscriptRecord.query.filter(
+            TranscriptRecord.student_id.in_(my_student_ids)
+        ).order_by(TranscriptRecord.import_date.desc()).all()
+        for tr in transcripts:
+            if tr.student_id not in seen:
+                seen.add(tr.student_id)
+                rl = tr.risk_level or 'unknown'
+                if rl in grad_risk:
+                    grad_risk[rl] += 1
+    grad_at_risk_total = grad_risk['critical'] + grad_risk['at-risk']
+
     return render_template('dashboard/index.html',
         today=today,
         total_students=total_students,
@@ -248,6 +269,8 @@ def index():
         mgmt_minutes=mgmt_minutes,
         non_minutes=non_minutes,
         week_activities=week_activities,
+        grad_risk=grad_risk,
+        grad_at_risk_total=grad_at_risk_total,
     )
 
 
