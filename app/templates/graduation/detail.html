@@ -89,23 +89,31 @@
 
 <!-- Summary stats -->
 <div class="stats-grid">
-    <div class="stat-card {% if data.pct >= 75 %}success{% elif data.pct >= 40 %}{% else %}danger{% endif %}">
+    <div class="stat-card {% if data.pct >= 100 and data.subj_shortfall == 0 %}success{% elif data.pct >= 75 %}{% else %}danger{% endif %}">
         <div class="stat-value">{{ data.pct }}%</div>
-        <div class="stat-label">Credits Complete</div>
+        <div class="stat-label">Subjects Complete</div>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{ data.total_completed|int }}</div>
         <div class="stat-label">Credits Earned</div>
     </div>
-    <div class="stat-card {% if data.total_needed > 0 %}danger{% else %}success{% endif %}">
-        <div class="stat-value">{{ data.total_needed|int }}</div>
-        <div class="stat-label">Credits Needed</div>
+    <div class="stat-card {% if data.subj_shortfall > 0 %}danger{% elif data.total_needed > 0 %}danger{% else %}success{% endif %}">
+        <div class="stat-value">{{ data.subj_shortfall|int if data.subj_shortfall > 0 else data.total_needed|int }}</div>
+        <div class="stat-label">{% if data.subj_shortfall > 0 %}Subject Credits Needed{% else %}Credits Needed{% endif %}</div>
     </div>
     <div class="stat-card {% if data.ag_met >= 7 %}success{% elif data.ag_met >= 5 %}{% else %}danger{% endif %}">
         <div class="stat-value">{{ data.ag_met }}/7</div>
         <div class="stat-label">a-g Areas Met</div>
     </div>
 </div>
+
+{% if data.subj_shortfall > 0 and data.total_completed >= total_required %}
+<div class="alert alert-warning" style="margin-bottom:20px;">
+    This student has <strong>{{ data.total_completed|int }}/{{ total_required }} total credits</strong> but is still
+    <strong>missing {{ data.subj_shortfall|int }} credits across {{ data.subj_short_count }} subject area{{ 's' if data.subj_short_count != 1 else '' }}</strong>.
+    Total credits alone do not guarantee graduation — each subject requirement must be met individually.
+</div>
+{% endif %}
 
 <!-- Credit breakdown -->
 <div class="card">

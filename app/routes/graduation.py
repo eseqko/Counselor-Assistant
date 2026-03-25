@@ -151,6 +151,27 @@ def _risk_level(total_completed, total_required, grade_level):
     return 'on-track'
 
 
+def _subject_deficiency(credits_data):
+    """Calculate total subject-level deficiency from credits breakdown.
+
+    Even if total credits exceed 225, individual subjects may be short.
+    Returns (total_shortfall, num_subjects_short).
+    """
+    if not credits_data:
+        return 0, 0
+    shortfall = 0
+    num_short = 0
+    for subj, data in credits_data.items():
+        if subj == 'TOTALS':
+            continue
+        req = data.get('required', 0) or 0
+        comp = data.get('completed', 0) or 0
+        if comp < req:
+            shortfall += req - comp
+            num_short += 1
+    return shortfall, num_short
+
+
 def _build_student_grad_data(student):
     """Build graduation data for a single student, preferring transcript if available."""
     latest = student.transcript_records.first()
@@ -168,7 +189,6 @@ def _build_student_grad_data(student):
 
         totals = credits.get('TOTALS', {}) if credits else {}
         total_comp = totals.get('completed', latest.total_completed or 0)
-        total_need = totals.get('need', latest.total_needed or 0)
         risk = latest.risk_level or 'unknown'
         ag_met = latest.ag_areas_met or 0
         ag_status = latest.ag_status or 'unknown'
@@ -181,11 +201,9 @@ def _build_student_grad_data(student):
         if credits:
             totals = credits.get('TOTALS', {})
             total_comp = totals.get('completed', 0)
-            total_need = totals.get('need', 0)
             risk = _risk_level(total_comp, TOTAL_REQUIRED, student.grade_level)
         else:
             total_comp = 0
-            total_need = TOTAL_REQUIRED
             risk = 'unknown'
 
         if ag:
@@ -197,12 +215,35 @@ def _build_student_grad_data(student):
 
         source = 'grades' if credits else 'none'
 
+    # Subject-level deficiency: the REAL credits needed even if total > 225
+    subj_shortfall, subj_short_count = _subject_deficiency(credits)
+    # "Credits needed" is the higher of total shortfall or subject shortfall
+    total_need_raw = max(0, TOTAL_REQUIRED - total_comp)
+    total_need = max(total_need_raw, subj_shortfall)
+
+    # Progress percentage: use subject completion ratio, not just total credits
+    # A student with 275/225 total but missing 10 credits in subjects is NOT 100%
+    if credits and TOTAL_REQUIRED:
+        # Sum credits earned per subject, capped at each subject's requirement
+        subj_satisfied = 0
+        for subj, data in credits.items():
+            if subj == 'TOTALS':
+                continue
+            req = data.get('required', 0) or 0
+            comp = data.get('completed', 0) or 0
+            subj_satisfied += min(comp, req)
+        pct = round(subj_satisfied / TOTAL_REQUIRED * 100)
+    else:
+        pct = round(total_comp / TOTAL_REQUIRED * 100) if TOTAL_REQUIRED else 0
+
     return {
         'student': student,
         'total_completed': total_comp,
         'total_needed': total_need,
         'total_required': TOTAL_REQUIRED,
-        'pct': round(total_comp / TOTAL_REQUIRED * 100) if TOTAL_REQUIRED else 0,
+        'pct': pct,
+        'subj_shortfall': subj_shortfall,
+        'subj_short_count': subj_short_count,
         'risk': risk,
         'ag_met': ag_met,
         'ag_status': ag_status,
