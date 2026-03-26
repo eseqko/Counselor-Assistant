@@ -1,11 +1,19 @@
 import json
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+import io
+import os
+import zipfile
+from flask import (Blueprint, render_template, request, redirect,
+                   url_for, flash, jsonify, send_from_directory, send_file)
 from flask_login import login_required, current_user
 from app import db, csrf
 from app.models.course import Course, Department, GraduationRequirement
 from app.utils.audit import log_action
 
 course_catalog_bp = Blueprint('course_catalog', __name__)
+
+CATALOG_DIR = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), '..', 'static', 'course_catalog'
+)
 
 
 @course_catalog_bp.route('/')
@@ -324,3 +332,62 @@ def save_school_config():
     current_user.school_config_json = json.dumps(data, ensure_ascii=False)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+# =====================================================================
+#  PUBLIC CATALOG (no login required — replaces run_catalog.py)
+# =====================================================================
+
+@course_catalog_bp.route('/public')
+def public_catalog():
+    """Serve the catalog viewer without authentication."""
+    return send_from_directory(CATALOG_DIR, 'index.html')
+
+
+@course_catalog_bp.route('/public/editor')
+def public_editor():
+    return send_from_directory(CATALOG_DIR, 'editor.html')
+
+
+@course_catalog_bp.route('/public/setup')
+def public_setup():
+    return send_from_directory(CATALOG_DIR, 'setup.html')
+
+
+@course_catalog_bp.route('/public/<path:filename>')
+def public_files(filename):
+    """Serve static files referenced by the catalog pages."""
+    filepath = os.path.join(CATALOG_DIR, filename)
+    if os.path.isfile(filepath):
+        return send_from_directory(CATALOG_DIR, filename)
+    return send_from_directory(
+        os.path.join(os.path.dirname(CATALOG_DIR)), filename
+    )
+
+
+# =====================================================================
+#  EXPORT (ZIP download)
+# =====================================================================
+
+@course_catalog_bp.route('/export-zip')
+@login_required
+def export_zip():
+    """Download the catalog as a self-contained ZIP folder.
+
+    Bundles index.html, editor.html, setup.html, and school-config.js
+    into a ZIP file ready to host on any static server or open locally.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for fname in ('index.html', 'editor.html', 'setup.html',
+                       'school-config.js', 'importer.js'):
+            fpath = os.path.join(CATALOG_DIR, fname)
+            if os.path.isfile(fpath):
+                zf.write(fpath, f'course-catalog/{fname}')
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='Course_Catalog_Export.zip',
+    )
