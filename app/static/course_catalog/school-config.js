@@ -62,8 +62,39 @@
   /* ── Core API ── */
   const SchoolConfig = {
     _cache: null,
+    _hashImported: false,
+
+    /** Import config from URL hash (set by main app's Standalone button). */
+    _importFromHash() {
+      if (this._hashImported) return;
+      this._hashImported = true;
+      try {
+        var hash = window.location.hash;
+        if (!hash || !hash.includes('config=')) return;
+        var encoded = hash.split('config=')[1];
+        if (!encoded) return;
+        var payload = JSON.parse(decodeURIComponent(encoded));
+        if (payload.school_config) {
+          localStorage.setItem(LS_KEY, JSON.stringify(payload.school_config));
+          this._cache = { ...DEFAULTS, ...payload.school_config };
+        }
+        if (payload.courses) {
+          localStorage.setItem('jhs_catalog_courses', JSON.stringify(payload.courses));
+        }
+        if (payload.info) {
+          localStorage.setItem('jhs_catalog_info', JSON.stringify(payload.info));
+        }
+        // Clean the hash so it doesn't re-import on refresh
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      } catch (e) { /* ignore parse errors */ }
+    },
 
     load() {
+      if (this._cache) return this._cache;
+      // Check URL hash first (standalone link from main app)
+      this._importFromHash();
       if (this._cache) return this._cache;
       try {
         const raw = localStorage.getItem(LS_KEY);
