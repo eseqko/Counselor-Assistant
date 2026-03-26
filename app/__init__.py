@@ -69,6 +69,7 @@ def create_app(config_class=Config):
     from app.routes.data_import import data_import_bp
     from app.routes.followups import followups_bp
     from app.routes.graduation import graduation_bp
+    from app.routes.iep504 import iep504_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -85,6 +86,7 @@ def create_app(config_class=Config):
     app.register_blueprint(data_import_bp, url_prefix='/data-import')
     app.register_blueprint(followups_bp, url_prefix='/follow-ups')
     app.register_blueprint(graduation_bp, url_prefix='/graduation')
+    app.register_blueprint(iep504_bp, url_prefix='/iep504')
 
     # Return JSON (not HTML) for CSRF errors on API endpoints
     @app.errorhandler(CSRFError)
@@ -105,7 +107,7 @@ def create_app(config_class=Config):
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
-        from app.models import attendance, grade
+        from app.models import attendance, grade, iep504
         db.create_all()
 
         # Auto-migrate: add any missing columns to existing tables
