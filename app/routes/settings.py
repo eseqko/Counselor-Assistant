@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from app import db
 from app.models.user import User, AuditLog
-from app.models.student import Student, Tag, student_tags
+from app.models.student import Student, Tag
 from app.models.note import Note
 from app.models.service_record import ServiceRecord
 from app.models.transcript import TranscriptRecord
@@ -90,9 +90,9 @@ def backup():
     try:
         shutil.copy2(db_path, backup_path)
         log_action('backup', 'database', details=f'Backup created: {backup_path}')
-        flash(f'Backup created successfully at {backup_path}', 'success')
-    except Exception as e:
-        flash(f'Backup failed: {str(e)}', 'danger')
+        flash('Backup created successfully.', 'success')
+    except Exception:
+        flash('Backup failed. Please check disk space and try again.', 'danger')
 
     return redirect(url_for('settings.index'))
 
@@ -115,6 +115,9 @@ def export_backup():
         return redirect(url_for('settings.index'))
 
     backup_path = os.path.join(backup_dir, backups[0])
+    if not os.path.abspath(backup_path).startswith(os.path.abspath(backup_dir)):
+        flash('Invalid backup file.', 'danger')
+        return redirect(url_for('settings.index'))
     log_action('export', 'database', details='Downloaded backup')
     return send_file(backup_path, as_attachment=True)
 

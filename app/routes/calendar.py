@@ -5,7 +5,7 @@ from app.models.calendar_event import CalendarEvent
 from app.models.student import Student
 from app.models.user import User
 from app.utils.audit import log_action
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from dateutil.rrule import rrulestr
 import pytz
 import re
@@ -269,8 +269,8 @@ def _parse_ical_feed(ics_text):
             tz_map[m.group(1).strip()] = True
 
     # Window for recurring event expansion: 90 days before/after today
-    window_start = datetime.utcnow() - timedelta(days=90)
-    window_end = datetime.utcnow() + timedelta(days=90)
+    window_start = datetime.now(timezone.utc) - timedelta(days=90)
+    window_end = datetime.now(timezone.utc) + timedelta(days=90)
 
     blocks = re.split(r'BEGIN:VEVENT', ics_text)
 

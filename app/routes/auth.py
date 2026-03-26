@@ -1,9 +1,19 @@
+from urllib.parse import urlparse
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.models.user import User
 from app.utils.audit import log_action
 from datetime import datetime, timezone
+
+
+def _is_safe_redirect(target):
+    """Reject external / open-redirect URLs."""
+    if not target:
+        return False
+    parsed = urlparse(target)
+    # Only allow relative paths (no scheme, no external host)
+    return parsed.scheme == '' and parsed.netloc == ''
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -24,6 +34,8 @@ def login():
             db.session.commit()
             log_action('login', 'user', user.id)
             next_page = request.args.get('next')
+            if not _is_safe_redirect(next_page):
+                next_page = None
             return redirect(next_page or url_for('dashboard.index'))
         else:
             flash('Invalid username or password.', 'danger')

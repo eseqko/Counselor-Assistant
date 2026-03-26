@@ -88,6 +88,15 @@ def create_app(config_class=Config):
     app.register_blueprint(graduation_bp, url_prefix='/graduation')
     app.register_blueprint(iep504_bp, url_prefix='/iep504')
 
+    # Security headers
+    @app.after_request
+    def set_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        return response
+
     # Return JSON (not HTML) for CSRF errors on API endpoints
     @app.errorhandler(CSRFError)
     def handle_csrf_error(e):

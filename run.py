@@ -5,12 +5,8 @@ Counselor Assistant - All-in-One School Counselor Management Tool
 
 Usage:
     python run.py
-
-Default login:
-    Username: counselor
-    Password: changeme
-    (Change your password immediately after first login)
 """
+import os
 from app import create_app
 
 app = create_app()
@@ -27,11 +23,8 @@ if __name__ == '__main__':
     print()
     print("  Open your browser to: http://127.0.0.1:5000")
     print()
-    print("  Default Login:")
-    print("    Username: counselor")
-    print("    Password: changeme")
-    print()
     print("  Press Ctrl+C to stop the server.")
     print("=" * 60)
     print()
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000,
+            debug=os.environ.get('FLASK_DEBUG', '').lower() == 'true')

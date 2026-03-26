@@ -5,16 +5,18 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Generate or load a persistent secret key
-SECRET_KEY_FILE = os.path.join(DATA_DIR, '.secret_key')
-if os.path.exists(SECRET_KEY_FILE):
-    with open(SECRET_KEY_FILE, 'r') as f:
-        SECRET_KEY = f.read().strip()
-else:
-    SECRET_KEY = secrets.token_hex(32)
-    with open(SECRET_KEY_FILE, 'w') as f:
-        f.write(SECRET_KEY)
-    os.chmod(SECRET_KEY_FILE, 0o600)
+# Secret key: prefer environment variable, fall back to persistent file
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    SECRET_KEY_FILE = os.path.join(DATA_DIR, '.secret_key')
+    if os.path.exists(SECRET_KEY_FILE):
+        with open(SECRET_KEY_FILE, 'r') as f:
+            SECRET_KEY = f.read().strip()
+    else:
+        SECRET_KEY = secrets.token_hex(32)
+        with open(SECRET_KEY_FILE, 'w') as f:
+            f.write(SECRET_KEY)
+        os.chmod(SECRET_KEY_FILE, 0o600)
 
 
 class Config:
@@ -25,7 +27,7 @@ class Config:
 
     # FERPA Compliance settings
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SAMESITE = 'Strict'
     PERMANENT_SESSION_LIFETIME = 1800  # 30 minutes auto-logout
 
     # Local-only: no cloud, no external connections

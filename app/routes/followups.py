@@ -2,7 +2,7 @@
 import json
 import os
 import uuid
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from app import csrf
@@ -89,7 +89,7 @@ def api_create():
     if data['type'] not in valid_types:
         return jsonify({'error': f'Invalid type. Must be one of: {", ".join(valid_types)}'}), 400
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     followup = {
         'id': str(uuid.uuid4()),
         'counselor_id': current_user.id,
@@ -122,7 +122,7 @@ def api_update(followup_id):
     for key in allowed:
         if key in data:
             followup[key] = data[key]
-    followup['updated_at'] = datetime.utcnow().isoformat()
+    followup['updated_at'] = datetime.now(timezone.utc).isoformat()
     _save_user_followup(followup)
     return jsonify(followup)
 
@@ -142,7 +142,7 @@ def api_snooze(followup_id):
     current_due = date.fromisoformat(followup['due_date'])
     new_due = current_due + timedelta(days=days)
     followup['due_date'] = new_due.isoformat()
-    followup['updated_at'] = datetime.utcnow().isoformat()
+    followup['updated_at'] = datetime.now(timezone.utc).isoformat()
     _save_user_followup(followup)
     return jsonify(followup)
 
