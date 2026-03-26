@@ -66,4 +66,5 @@ if __name__ == '__main__':
     print("  Press Ctrl+C to stop the server.")
     print("=" * 60)
     print()
-    app.run(host='127.0.0.1', port=5001, debug=True)
+    app.run(host='127.0.0.1', port=5001,
+            debug=os.environ.get('FLASK_DEBUG', '').lower() == 'true')

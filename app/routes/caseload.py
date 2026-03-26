@@ -233,7 +233,7 @@ def download_template():
     """Generate and download a formatted Excel template for caseload upload."""
     if not HAS_OPENPYXL:
         flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
-        return redirect(url_for('caseload.caseload_list'))
+        return redirect(url_for('caseload.index'))
     wb = Workbook()
     ws = wb.active
     ws.title = "Caseload Import"
@@ -404,7 +404,7 @@ def download_template():
 def upload_caseload():
     if not HAS_OPENPYXL:
         flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
-        return redirect(url_for('caseload.caseload_list'))
+        return redirect(url_for('caseload.index'))
     if request.method == 'POST':
         file = request.files.get('file')
         if not file or not file.filename.endswith(('.xlsx', '.xls')):
@@ -542,7 +542,7 @@ def export_caseload():
     """Export current caseload to Excel."""
     if not HAS_OPENPYXL:
         flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
-        return redirect(url_for('caseload.caseload_list'))
+        return redirect(url_for('caseload.index'))
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id
     ).order_by(Student.grade_level, Student.last_name).all()

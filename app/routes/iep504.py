@@ -122,10 +122,12 @@ def api_delete(record_id):
     if not record:
         return jsonify({'error': 'Not found'}), 404
 
-    # Remove uploaded document if present
+    # Remove uploaded document if present (with path traversal check)
     if record.document_filename:
         path = os.path.join(DOCS_DIR, record.document_filename)
-        if os.path.exists(path):
+        if not os.path.abspath(path).startswith(os.path.abspath(DOCS_DIR)):
+            path = None  # skip deletion if path is suspicious
+        if path and os.path.exists(path):
             os.remove(path)
 
     db.session.delete(record)
@@ -183,6 +185,8 @@ def api_parse(record_id):
         return jsonify({'error': 'No document uploaded yet'}), 400
 
     pdf_path = os.path.join(DOCS_DIR, record.document_filename)
+    if not os.path.abspath(pdf_path).startswith(os.path.abspath(DOCS_DIR)):
+        return jsonify({'error': 'Invalid document path'}), 400
     if not os.path.exists(pdf_path):
         return jsonify({'error': 'Document file not found on disk'}), 404
 
@@ -193,8 +197,8 @@ def api_parse(record_id):
         text = '\n'.join(page.extract_text() or '' for page in reader.pages)
     except ImportError:
         return jsonify({'error': 'PyPDF2 is not installed. Run: pip install PyPDF2'}), 500
-    except Exception as e:
-        return jsonify({'error': f'Failed to read PDF: {str(e)}'}), 500
+    except Exception:
+        return jsonify({'error': 'Failed to read PDF. The file may be corrupted.'}), 500
 
     if not text.strip():
         return jsonify({
@@ -235,7 +239,7 @@ def api_parse(record_id):
             'ai_available': False,
             'raw_text': text.strip(),
             'accommodations': '',
-            'message': f'AI error: {str(e)}. Raw text provided.',
+            'message': 'AI processing failed. Raw text provided for manual editing.',
         })
 
     # Save extracted accommodations
@@ -261,6 +265,8 @@ def api_document(record_id):
         return jsonify({'error': 'Not found'}), 404
 
     pdf_path = os.path.join(DOCS_DIR, record.document_filename)
+    if not os.path.abspath(pdf_path).startswith(os.path.abspath(DOCS_DIR)):
+        return jsonify({'error': 'Invalid document path'}), 400
     if not os.path.exists(pdf_path):
         return jsonify({'error': 'File not found'}), 404
 
