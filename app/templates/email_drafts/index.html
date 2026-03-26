@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block title %}Email Drafts{% endblock %}
+{% block page_title %}Email Drafting{% endblock %}
+
+{% block head %}
+<style>
+.email-layout { display:grid; grid-template-columns:280px 1fr; gap:20px; }
+
+/* Sidebar: templates */
+.tmpl-panel {
+    background:var(--white); border-radius:10px; padding:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08); align-self:start;
+}
+.tmpl-panel h3 { font-size:0.9rem; color:var(--primary-dark); margin:0 0 12px; }
+.tmpl-cat { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;
+            color:var(--gray); font-weight:600; margin:12px 0 4px; }
+.tmpl-item {
+    padding:8px 10px; border-radius:6px; cursor:pointer;
+    font-size:0.84rem; transition:background 0.15s;
+}
+.tmpl-item:hover { background:var(--bg); }
+.tmpl-item.active { background:var(--primary); color:var(--white); }
+.tmpl-item .tmpl-name { font-weight:600; }
+
+/* Composer */
+.composer {
+    background:var(--white); border-radius:10px; padding:20px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);
+}
+.composer label { font-size:0.84rem; font-weight:600; margin-bottom:4px; display:block; }
+.composer .form-group { margin-bottom:14px; }
+
+.toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+.toolbar .btn { font-size:0.78rem; padding:5px 12px; }
+
+/* Merge field chips */
+.merge-chips { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:12px; }
+.merge-chip {
+    padding:3px 8px; border-radius:12px; font-size:0.72rem; font-weight:600;
+    background:var(--bg); border:1px solid var(--light-gray); cursor:pointer;
+    transition:all 0.15s; font-family:monospace;
+}
+.merge-chip:hover { background:var(--primary-light); color:var(--white); border-color:var(--primary-light); }
+
+/* Preview pane */
+.preview-pane {
+    background:#fafbfc; border:1px solid var(--light-gray); border-radius:6px;
+    padding:16px; min-height:200px; white-space:pre-wrap;
+    font-size:0.88rem; line-height:1.6;
+}
+.preview-pane .subject-line { font-weight:700; margin-bottom:8px;
+                               padding-bottom:8px; border-bottom:1px solid var(--light-gray); }
+
+/* Copy feedback */
+.copy-toast {
+    display:none; position:fixed; bottom:20px; right:20px;
+    background:var(--success); color:#fff; padding:10px 20px;
+    border-radius:8px; font-weight:600; font-size:0.88rem;
+    box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:999;
+}
+.copy-toast.show { display:block; }
+
+/* Save template modal */
+.save-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.4); z-index:1000;
+    justify-content:center; align-items:center;
+}
+.save-overlay.open { display:flex; }
+.save-modal {
+    background:var(--white); border-radius:10px; padding:24px;
+    width:90%; max-width:400px; box-shadow:0 8px 30px rgba(0,0,0,0.2);
+}
+.save-modal h3 { margin:0 0 16px; font-size:1rem; }
+
+@media (max-width: 768px) {
+    .email-layout { grid-template-columns:1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="email-layout">
+
+    <!-- Template sidebar -->
+    <div class="tmpl-panel">
+        <h3>Templates</h3>
+        {% for cat in categories %}
+        <div class="tmpl-cat">{{ cat }}</div>
+        {% for t in templates if t.category == cat %}
+        <div class="tmpl-item" data-id="{{ t.id }}"
+             onclick="loadTemplate('{{ t.id }}')">
+            <div class="tmpl-name">{{ t.name }}</div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+
+    <!-- Composer -->
+    <div class="composer">
+        <!-- Student + Controls -->
+        <div class="toolbar">
+            <select id="sel-student" class="form-control" style="max-width:280px;">
+                <option value="">No student (generic)</option>
+                {% for s in students %}
+                <option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id_number }})</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-primary" onclick="mergeFields()">Merge Fields</button>
+            <button class="btn btn-outline" onclick="aiDraft()" id="btn-ai" title="Requires Ollama">AI Draft</button>
+            <button class="btn btn-outline" onclick="aiImprove()" id="btn-ai-improve" title="Requires Ollama">AI Improve</button>
+        </div>
+
+        <!-- Merge field reference -->
+        <div class="merge-chips">
+            {% for field, desc in merge_fields %}
+            <span class="merge-chip" title="{{ desc }}"
+                  onclick="insertField('{{ field }}')">{{ field }}</span>
+            {% endfor %}
+        </div>
+
+        <!-- Subject -->
+        <div class="form-group">
+            <label for="inp-subject">Subject</label>
+            <input type="text" id="inp-subject" class="form-control"
+                   placeholder="Email subject line...">
+        </div>
+
+        <!-- Body -->
+        <div class="form-group">
+            <label for="inp-body">Body</label>
+            <textarea id="inp-body" class="form-control" rows="14"
+                      placeholder="Compose your email..."></textarea>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="copyToClipboard()">Copy to Clipboard</button>
+            <button class="btn btn-outline" onclick="openSaveModal()">Save as Template</button>
+            <button class="btn btn-outline" onclick="clearComposer()">Clear</button>
+        </div>
+
+        <!-- Preview toggle -->
+        <div style="margin-top:20px;">
+            <label style="cursor:pointer;">
+                <input type="checkbox" id="chk-preview" onchange="togglePreview()"> Show Preview
+            </label>
+            <div id="preview-pane" class="preview-pane" style="display:none;margin-top:8px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Copy toast -->
+<div class="copy-toast" id="copy-toast">Copied to clipboard!</div>
+
+<!-- Save template modal -->
+<div class="save-overlay" id="save-modal">
+    <div class="save-modal">
+        <h3>Save as Template</h3>
+        <div class="form-group">
+            <label>Template Name</label>
+            <input type="text" id="save-name" class="form-control" placeholder="My Template">
+        </div>
+        <div class="form-group">
+            <label>Category</label>
+            <select id="save-category" class="form-control">
+                <option value="parent">Parent</option>
+                <option value="teacher">Teacher</option>
+                <option value="student">Student</option>
+                <option value="admin">Admin</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn btn-outline" onclick="closeSaveModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveTemplate()">Save</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var BASE = "{{ url_for('email_drafts.index') }}".replace(/\/$/,'');
+    var templates = {{ templates|tojson }};
+    var lastFocused = null;
+
+    /* Track which field was last focused for merge field insertion */
+    document.getElementById('inp-body').addEventListener('focus', function(){ lastFocused = this; });
+    document.getElementById('inp-subject').addEventListener('focus', function(){ lastFocused = this; });
+
+    /* ── Template loading ─────────────────────── */
+    window.loadTemplate = function(id) {
+        var t = templates.find(function(x){ return x.id === id; });
+        if (!t) return;
+        document.getElementById('inp-subject').value = t.subject || '';
+        document.getElementById('inp-body').value = t.body || '';
+
+        document.querySelectorAll('.tmpl-item').forEach(function(el){
+            el.classList.toggle('active', el.dataset.id === id);
+        });
+        updatePreview();
+    };
+
+    /* ── Merge fields ─────────────────────────── */
+    window.insertField = function(field) {
+        var el = lastFocused || document.getElementById('inp-body');
+        var start = el.selectionStart;
+        var end = el.selectionEnd;
+        var val = el.value;
+        el.value = val.substring(0, start) + field + val.substring(end);
+        el.selectionStart = el.selectionEnd = start + field.length;
+        el.focus();
+        updatePreview();
+    };
+
+    window.mergeFields = function() {
+        var studentId = document.getElementById('sel-student').value;
+        var subject = document.getElementById('inp-subject').value;
+        var body = document.getElementById('inp-body').value;
+
+        if (!studentId) {
+            alert('Select a student to merge fields.');
+            return;
+        }
+
+        fetch(BASE + '/api/merge', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({student_id: parseInt(studentId), subject:subject, body:body})
+        }).then(function(r){ return r.json(); }).then(function(data){
+            document.getElementById('inp-subject').value = data.subject;
+            document.getElementById('inp-body').value = data.body;
+            updatePreview();
+        });
+    };
+
+    /* ── AI Draft ─────────────────────────────── */
+    window.aiDraft = function() {
+        var context = prompt('Describe what this email should be about:');
+        if (!context) return;
+
+        var btn = document.getElementById('btn-ai');
+        btn.textContent = 'Drafting...';
+        btn.disabled = true;
+
+        fetch(BASE + '/api/ai-draft', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({context:context, action:'draft'})
+        }).then(function(r){ return r.json(); }).then(function(data){
+            btn.textContent = 'AI Draft';
+            btn.disabled = false;
+            if (data.error) { alert(data.error); return; }
+            document.getElementById('inp-body').value = data.body;
+            updatePreview();
+        }).catch(function(){
+            btn.textContent = 'AI Draft';
+            btn.disabled = false;
+        });
+    };
+
+    window.aiImprove = function() {
+        var body = document.getElementById('inp-body').value.trim();
+        if (!body) { alert('Write something first, then improve it.'); return; }
+
+        var btn = document.getElementById('btn-ai-improve');
+        btn.textContent = 'Improving...';
+        btn.disabled = true;
+
+        fetch(BASE + '/api/ai-draft', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({current_body:body, action:'improve',
+                                  context:'School counselor email'})
+        }).then(function(r){ return r.json(); }).then(function(data){
+            btn.textContent = 'AI Improve';
+            btn.disabled = false;
+            if (data.error) { alert(data.error); return; }
+            document.getElementById('inp-body').value = data.body;
+            updatePreview();
+        }).catch(function(){
+            btn.textContent = 'AI Improve';
+            btn.disabled = false;
+        });
+    };
+
+    /* ── Copy ─────────────────────────────────── */
+    window.copyToClipboard = function() {
+        var subject = document.getElementById('inp-subject').value;
+        var body = document.getElementById('inp-body').value;
+        var text = (subject ? 'Subject: ' + subject + '\n\n' : '') + body;
+
+        navigator.clipboard.writeText(text).then(function(){
+            var toast = document.getElementById('copy-toast');
+            toast.classList.add('show');
+            setTimeout(function(){ toast.classList.remove('show'); }, 2000);
+        });
+    };
+
+    /* ── Clear ────────────────────────────────── */
+    window.clearComposer = function() {
+        document.getElementById('inp-subject').value = '';
+        document.getElementById('inp-body').value = '';
+        document.querySelectorAll('.tmpl-item').forEach(function(el){ el.classList.remove('active'); });
+        updatePreview();
+    };
+
+    /* ── Preview ──────────────────────────────── */
+    function esc(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    function updatePreview() {
+        var pane = document.getElementById('preview-pane');
+        if (pane.style.display === 'none') return;
+        var subject = document.getElementById('inp-subject').value;
+        var body = document.getElementById('inp-body').value;
+        pane.innerHTML = (subject ? '<div class="subject-line">' + esc(subject) + '</div>' : '')
+            + esc(body);
+    }
+
+    window.togglePreview = function() {
+        var pane = document.getElementById('preview-pane');
+        pane.style.display = document.getElementById('chk-preview').checked ? 'block' : 'none';
+        updatePreview();
+    };
+
+    /* Update preview on input */
+    document.getElementById('inp-subject').addEventListener('input', updatePreview);
+    document.getElementById('inp-body').addEventListener('input', updatePreview);
+
+    /* ── Save template modal ──────────────────── */
+    window.openSaveModal = function() {
+        document.getElementById('save-name').value = '';
+        document.getElementById('save-modal').classList.add('open');
+    };
+    window.closeSaveModal = function() {
+        document.getElementById('save-modal').classList.remove('open');
+    };
+
+    window.saveTemplate = function() {
+        var name = document.getElementById('save-name').value.trim();
+        if (!name) { alert('Template name is required.'); return; }
+
+        fetch(BASE + '/api/templates', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                name: name,
+                category: document.getElementById('save-category').value,
+                subject: document.getElementById('inp-subject').value,
+                body: document.getElementById('inp-body').value
+            })
+        }).then(function(r){ return r.json(); }).then(function(t){
+            if (t.error) { alert(t.error); return; }
+            templates.push(t);
+            /* Reload page to show new template in sidebar */
+            window.location.reload();
+        });
+    };
+
+    document.getElementById('save-modal').addEventListener('click', function(e){
+        if (e.target === this) closeSaveModal();
+    });
+})();
+</script>
+{% endblock %}
