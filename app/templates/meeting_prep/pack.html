@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting Prep — {{ student.full_name }}</title>
+<style>
+:root {
+    --primary: #2C5F8A; --primary-dark: #1A3D5C;
+    --danger: #D9534F; --warning: #F0AD4E; --success: #5CB85C;
+    --gray: #7F8C8D; --light-gray: #ECF0F1; --dark: #2C3E50;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       font-size:13px; color:var(--dark); line-height:1.5; padding:20px; max-width:900px; margin:0 auto; }
+
+/* Header */
+.pack-header { display:flex; justify-content:space-between; align-items:flex-start;
+               border-bottom:3px solid var(--primary); padding-bottom:12px; margin-bottom:16px; }
+.pack-header h1 { font-size:1.3rem; color:var(--primary-dark); }
+.pack-header .meta { font-size:0.78rem; color:var(--gray); }
+.meeting-label { display:inline-block; padding:3px 10px; border-radius:4px;
+                 background:var(--primary); color:#fff; font-size:0.78rem; font-weight:600;
+                 text-transform:uppercase; letter-spacing:0.5px; }
+
+/* Sections */
+.section { margin-bottom:18px; page-break-inside:avoid; }
+.section-title { font-size:0.88rem; font-weight:700; color:var(--primary-dark);
+                 border-bottom:1px solid var(--light-gray); padding-bottom:4px; margin-bottom:8px;
+                 text-transform:uppercase; letter-spacing:0.5px; }
+
+/* Info grid */
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; font-size:0.84rem; }
+.info-grid dt { color:var(--gray); font-weight:600; }
+.info-grid dd { margin:0; }
+
+/* Badges */
+.badge { display:inline-block; padding:2px 7px; border-radius:10px;
+         font-size:0.72rem; font-weight:600; text-transform:uppercase; }
+.badge-iep { background:#e6a200; color:#fff; }
+.badge-504 { background:var(--primary); color:#fff; }
+.badge-el { background:#8e44ad; color:#fff; }
+.badge-risk { padding:2px 8px; border-radius:4px; font-size:0.72rem; font-weight:700; }
+.risk-critical { background:#fee; color:var(--danger); }
+.risk-at-risk { background:#fff3e0; color:#e67e22; }
+.risk-warning { background:#fffde7; color:#f57f17; }
+.risk-on-track { background:#e8f5e9; color:var(--success); }
+
+/* Tables */
+table { width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:4px; }
+th { background:#f5f7fa; text-align:left; padding:6px 8px; font-weight:600;
+     font-size:0.75rem; text-transform:uppercase; color:var(--gray); border-bottom:1px solid var(--light-gray); }
+td { padding:5px 8px; border-bottom:1px solid #f0f0f0; }
+tr.failing td { background:#fff5f5; }
+
+/* Stats row */
+.stats-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.stat-box { flex:1; min-width:100px; text-align:center; padding:10px 8px;
+            border-radius:6px; background:#f5f7fa; border:1px solid var(--light-gray); }
+.stat-box .val { font-size:1.3rem; font-weight:700; }
+.stat-box .lbl { font-size:0.7rem; text-transform:uppercase; color:var(--gray); letter-spacing:0.4px; }
+.stat-box.danger .val { color:var(--danger); }
+.stat-box.warning .val { color:var(--warning); }
+.stat-box.success .val { color:var(--success); }
+
+/* Progress bar */
+.prog-wrap { height:14px; background:var(--light-gray); border-radius:7px; overflow:hidden; margin:4px 0; }
+.prog-fill { height:100%; border-radius:7px; transition:width 0.3s; }
+.prog-fill.green { background:var(--success); }
+.prog-fill.yellow { background:var(--warning); }
+.prog-fill.red { background:var(--danger); }
+
+/* Notes list */
+.note-item { padding:6px 0; border-bottom:1px solid #f0f0f0; }
+.note-item:last-child { border:none; }
+.note-meta { font-size:0.75rem; color:var(--gray); }
+.note-content { font-size:0.82rem; margin-top:2px;
+                overflow:hidden; text-overflow:ellipsis;
+                display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+
+/* Follow-ups */
+.fup-item { display:flex; justify-content:space-between; padding:4px 0;
+            border-bottom:1px solid #f0f0f0; font-size:0.82rem; }
+.fup-overdue { color:var(--danger); font-weight:600; }
+
+/* Accommodations */
+.accom-text { font-size:0.84rem; white-space:pre-line; background:#f8f9ff;
+              padding:8px 12px; border-radius:6px; border:1px solid #e0e4f0; }
+
+/* Print */
+.no-print { }
+.print-actions { display:flex; gap:8px; margin-bottom:20px; }
+.print-actions button { padding:8px 16px; border-radius:6px; border:1px solid var(--light-gray);
+                        background:var(--primary); color:#fff; font-weight:600; cursor:pointer; font-size:0.84rem; }
+.print-actions button.outline { background:#fff; color:var(--dark); }
+
+@media print {
+    .no-print { display:none !important; }
+    body { padding:0; font-size:12px; }
+    .section { page-break-inside:avoid; }
+    .pack-header { border-bottom-width:2px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Print actions (hidden when printing) -->
+<div class="print-actions no-print">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="outline" onclick="window.close()">Close</button>
+</div>
+
+<!-- Header -->
+<div class="pack-header">
+    <div>
+        <h1>{{ student.full_name }}</h1>
+        <div class="meta">
+            ID: {{ student.student_id_number }}
+            {% if student.grade_level %} &middot; Grade {{ student.grade_level }}{% endif %}
+            {% if student.homeroom %} &middot; HR: {{ student.homeroom }}{% endif %}
+            {% if student.iep_status %} <span class="badge badge-iep">IEP</span>{% endif %}
+            {% if student.section_504 %} <span class="badge badge-504">504</span>{% endif %}
+            {% if student.el_status and student.el_status != 'EO' %} <span class="badge badge-el">{{ student.el_display }}</span>{% endif %}
+        </div>
+    </div>
+    <div style="text-align:right;">
+        <span class="meeting-label">{{ meeting_type|replace('_',' ') }} Meeting</span>
+        <div class="meta" style="margin-top:4px;">{{ generated_at.strftime('%B %d, %Y') }}</div>
+    </div>
+</div>
+
+<!-- Student Demographics -->
+<div class="section">
+    <div class="section-title">Student Information</div>
+    <dl class="info-grid">
+        <dt>Date of Birth</dt><dd>{{ student.date_of_birth.strftime('%m/%d/%Y') if student.date_of_birth else 'N/A' }}</dd>
+        <dt>Gender</dt><dd>{{ student.gender or 'N/A' }}</dd>
+        <dt>Parent/Guardian</dt><dd>{{ student.parent_guardian_name or 'N/A' }}</dd>
+        <dt>Parent Phone</dt><dd>{{ student.parent_guardian_phone or 'N/A' }}</dd>
+        <dt>Parent Email</dt><dd>{{ student.parent_guardian_email or 'N/A' }}</dd>
+        <dt>Student Email</dt><dd>{{ student.email or 'N/A' }}</dd>
+    </dl>
+</div>
+
+<!-- Academic Snapshot -->
+<div class="section">
+    <div class="section-title">Academic Snapshot</div>
+    <div class="stats-row">
+        <div class="stat-box {% if gpa and gpa < 2.0 %}danger{% elif gpa and gpa < 2.5 %}warning{% elif gpa %}success{% endif %}">
+            <div class="val">{{ '%.2f'|format(gpa) if gpa else 'N/A' }}</div>
+            <div class="lbl">Cumulative GPA</div>
+        </div>
+        {% if gpa_current_year is not none %}
+        <div class="stat-box">
+            <div class="val">{{ '%.2f'|format(gpa_current_year) }}</div>
+            <div class="lbl">{{ school_year }} GPA</div>
+        </div>
+        {% endif %}
+        <div class="stat-box {% if failing %}danger{% else %}success{% endif %}">
+            <div class="val">{{ failing|length }}</div>
+            <div class="lbl">Failing Courses</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ grades|length }}</div>
+            <div class="lbl">Current Courses</div>
+        </div>
+    </div>
+
+    {% if grades %}
+    <table>
+        <thead><tr><th>Period</th><th>Course</th><th>Grade</th><th>%</th></tr></thead>
+        <tbody>
+        {% for g in grades %}
+        <tr {% if not g.is_passing %}class="failing"{% endif %}>
+            <td>{{ g.period or '-' }}</td>
+            <td>{{ g.course_name }}</td>
+            <td><strong>{{ g.letter_grade }}</strong></td>
+            <td>{{ g.percent_grade if g.percent_grade is not none else '-' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="meta" style="margin-top:4px;">{{ school_year }} Q{{ quarter }}</div>
+    {% else %}
+    <div class="meta">No grade records available.</div>
+    {% endif %}
+</div>
+
+<!-- Attendance -->
+<div class="section">
+    <div class="section-title">Attendance (Last {{ attendance.days }} Days)</div>
+    {% if attendance.total_records > 0 %}
+    <div class="stats-row">
+        <div class="stat-box {% if attendance.rate and attendance.rate < 90 %}danger{% elif attendance.rate and attendance.rate < 95 %}warning{% else %}success{% endif %}">
+            <div class="val">{{ attendance.rate }}%</div>
+            <div class="lbl">Attendance Rate</div>
+        </div>
+        <div class="stat-box {% if attendance.absent >= 5 %}danger{% endif %}">
+            <div class="val">{{ attendance.absent }}</div>
+            <div class="lbl">Absences</div>
+        </div>
+        <div class="stat-box {% if attendance.tardy >= 5 %}warning{% endif %}">
+            <div class="val">{{ attendance.tardy }}</div>
+            <div class="lbl">Tardies</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ attendance.excused }}</div>
+            <div class="lbl">Excused</div>
+        </div>
+    </div>
+    {% else %}
+    <div class="meta">No attendance records available.</div>
+    {% endif %}
+</div>
+
+<!-- Graduation Progress -->
+<div class="section">
+    <div class="section-title">Graduation Progress</div>
+    {% if grad.source != 'none' %}
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <div style="flex:1;">
+            <div class="prog-wrap">
+                <div class="prog-fill {% if grad.pct >= 90 and grad.subj_shortfall == 0 %}green{% elif grad.pct >= 50 %}yellow{% else %}red{% endif %}"
+                     style="width:{{ [grad.pct, 100]|min }}%"></div>
+            </div>
+        </div>
+        <div style="font-weight:700;font-size:0.9rem;">{{ grad.pct }}%</div>
+        <span class="badge-risk risk-{{ grad.risk }}">{{ grad.risk|upper }}</span>
+    </div>
+    <div class="stats-row">
+        <div class="stat-box">
+            <div class="val">{{ grad.total_completed|int }}</div>
+            <div class="lbl">Credits Earned</div>
+        </div>
+        <div class="stat-box {% if grad.total_needed > 0 %}danger{% else %}success{% endif %}">
+            <div class="val">{{ grad.total_needed|int }}</div>
+            <div class="lbl">Credits Needed</div>
+        </div>
+        <div class="stat-box">
+            <div class="val">{{ grad.ag_met }}/7</div>
+            <div class="lbl">a-g Areas Met</div>
+        </div>
+    </div>
+    {% if grad.subj_short_count > 0 %}
+    <div style="font-size:0.82rem;color:var(--danger);margin-top:4px;">
+        Subject deficiencies in {{ grad.subj_short_count }} area(s) — {{ grad.subj_shortfall|int }} credits needed.
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="meta">No transcript or grade data available.</div>
+    {% endif %}
+</div>
+
+<!-- IEP/504 Accommodations (if applicable) -->
+{% if iep504 or student.iep_status or student.section_504 %}
+<div class="section">
+    <div class="section-title">
+        {% if student.iep_status %}IEP{% endif %}
+        {% if student.iep_status and student.section_504 %} / {% endif %}
+        {% if student.section_504 %}504 Plan{% endif %}
+        Information
+    </div>
+    {% if iep504 %}
+    <dl class="info-grid" style="margin-bottom:8px;">
+        <dt>Plan Type</dt><dd>{{ iep504.plan_type|upper }}</dd>
+        <dt>Next Review</dt>
+        <dd>
+            {% if iep504.next_review_date %}
+                {{ iep504.next_review_date.strftime('%m/%d/%Y') }}
+                {% set days_until = (iep504.next_review_date - generated_at.date()).days %}
+                {% if days_until < 0 %}
+                    <span style="color:var(--danger);font-weight:600;">({{ (-days_until) }} days overdue)</span>
+                {% elif days_until <= 30 %}
+                    <span style="color:var(--warning);">({{ days_until }} days)</span>
+                {% endif %}
+            {% else %}
+                Not set
+            {% endif %}
+        </dd>
+    </dl>
+    {% if iep504.accommodations_text %}
+    <div style="font-size:0.78rem;font-weight:600;color:var(--gray);margin-bottom:4px;">ACCOMMODATIONS</div>
+    <div class="accom-text">{{ iep504.accommodations_text }}</div>
+    {% endif %}
+    {% if iep504.notes %}
+    <div style="font-size:0.78rem;font-weight:600;color:var(--gray);margin:8px 0 4px;">NOTES</div>
+    <div style="font-size:0.84rem;">{{ iep504.notes }}</div>
+    {% endif %}
+    {% else %}
+    <div class="meta">Student is flagged as {% if student.iep_status %}IEP{% endif %}{% if student.iep_status and student.section_504 %}/{% endif %}{% if student.section_504 %}504{% endif %} but no oversight record has been created yet.</div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Active Follow-Ups -->
+{% if followups %}
+<div class="section">
+    <div class="section-title">Active Follow-Ups</div>
+    {% for f in followups %}
+    <div class="fup-item">
+        <div>
+            <strong>{{ f.type|replace('-',' ')|title }}</strong>
+            {% if f.notes %} — {{ f.notes }}{% endif %}
+        </div>
+        <div class="{% if f.due_date < generated_at.strftime('%Y-%m-%d') %}fup-overdue{% endif %}">
+            Due: {{ f.due_date }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Recent Counseling Notes -->
+<div class="section">
+    <div class="section-title">Recent Counseling Notes ({{ notes|length }})</div>
+    {% if notes %}
+    {% for n in notes %}
+    <div class="note-item">
+        <div class="note-meta">
+            {{ n.session_date.strftime('%m/%d/%Y') if n.session_date else n.created_at.strftime('%m/%d/%Y') }}
+            &middot; {{ n.note_type|replace('_',' ')|title }}
+            {% if n.asca_domain %} &middot; {{ n.asca_domain|title }}{% endif %}
+            {% if n.delivery_method %} &middot; {{ n.delivery_method|replace('_',' ')|title }}{% endif %}
+        </div>
+        {% if n.title %}<div style="font-weight:600;font-size:0.84rem;">{{ n.title }}</div>{% endif %}
+        <div class="note-content">{{ n.content }}</div>
+        {% if n.follow_up_needed and not n.follow_up_completed %}
+        <div style="font-size:0.78rem;color:var(--warning);margin-top:2px;">
+            Follow-up needed{% if n.follow_up_date %}: {{ n.follow_up_date.strftime('%m/%d/%Y') }}{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="meta">No recent notes.</div>
+    {% endif %}
+</div>
+
+<!-- Talking Points (blank space for handwritten notes) -->
+<div class="section">
+    <div class="section-title">Talking Points / Meeting Notes</div>
+    <div style="border:1px solid var(--light-gray); border-radius:6px; padding:12px; min-height:120px;">
+        <div style="border-bottom:1px dotted #ddd;height:28px;"></div>
+        <div style="border-bottom:1px dotted #ddd;height:28px;"></div>
+        <div style="border-bottom:1px dotted #ddd;height:28px;"></div>
+        <div style="height:28px;"></div>
+    </div>
+</div>
+
+<div class="meta" style="text-align:center;margin-top:16px;color:#bbb;">
+    Generated by Counselor Assistant &middot; {{ generated_at.strftime('%m/%d/%Y %I:%M %p') }} &middot; CONFIDENTIAL
+</div>
+
+</body>
+</html>

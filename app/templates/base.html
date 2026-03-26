@@ -49,6 +49,14 @@
                 <span class="nav-icon">&#128204;</span> Follow-Ups
             </a>
 
+            <div class="nav-section">Operations</div>
+            <a href="{{ url_for('meeting_prep.index') }}" class="nav-item {% if request.blueprint == 'meeting_prep' %}active{% endif %}">
+                <span class="nav-icon">&#128203;</span> Meeting Prep
+            </a>
+            <a href="{{ url_for('email_drafts.index') }}" class="nav-item {% if request.blueprint == 'email_drafts' %}active{% endif %}">
+                <span class="nav-icon">&#9993;</span> Email Drafts
+            </a>
+
             <div class="nav-section">Data & Analytics</div>
             <a href="{{ url_for('data_import.index') }}" class="nav-item {% if request.blueprint == 'data_import' %}active{% endif %}">
                 <span class="nav-icon">&#128229;</span> Data Import

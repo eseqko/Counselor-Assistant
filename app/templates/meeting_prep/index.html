@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Meeting Prep{% endblock %}
+{% block page_title %}Meeting Prep Packs{% endblock %}
+
+{% block head %}
+<style>
+.prep-intro {
+    background:var(--white); border-radius:10px; padding:24px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:24px;
+}
+.prep-intro h3 { margin:0 0 8px; color:var(--primary-dark); font-size:1rem; }
+.prep-intro p { margin:0; color:var(--gray); font-size:0.88rem; line-height:1.5; }
+
+.prep-form {
+    background:var(--white); border-radius:10px; padding:24px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);
+}
+.prep-form label { font-weight:600; font-size:0.88rem; margin-bottom:6px; display:block; }
+
+.meeting-types { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; }
+.meeting-types label {
+    flex:1; min-width:120px; text-align:center; padding:12px 8px;
+    border-radius:8px; font-size:0.84rem; font-weight:600; cursor:pointer;
+    border:2px solid var(--light-gray); background:var(--white);
+    transition:all 0.15s;
+}
+.meeting-types input { display:none; }
+.meeting-types label:has(input:checked) {
+    border-color:var(--primary); background:var(--primary); color:var(--white);
+}
+.meeting-types label:hover { border-color:var(--primary-light); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="prep-intro">
+    <h3>Generate a Meeting Prep Pack</h3>
+    <p>Select a student and meeting type to generate a comprehensive, print-ready packet
+    with grades, attendance, notes, graduation progress, and more.</p>
+</div>
+
+<div class="prep-form">
+    <form id="prep-form" method="get" action="#">
+        <div class="form-group">
+            <label for="student-select">Student</label>
+            <select id="student-select" class="form-control" required>
+                <option value="">Select a student...</option>
+                {% for s in students %}
+                <option value="{{ s.id }}">
+                    {{ s.full_name }} ({{ s.student_id_number }}){% if s.grade_level %} - Grade {{ s.grade_level }}{% endif %}
+                    {% if s.iep_status %} [IEP]{% endif %}{% if s.section_504 %} [504]{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <label>Meeting Type</label>
+        <div class="meeting-types">
+            <label><input type="radio" name="type" value="general" checked><span>General</span></label>
+            <label><input type="radio" name="type" value="sst"><span>SST</span></label>
+            <label><input type="radio" name="type" value="iep"><span>IEP</span></label>
+            <label><input type="radio" name="type" value="504"><span>504</span></label>
+            <label><input type="radio" name="type" value="parent"><span>Parent Conf.</span></label>
+            <label><input type="radio" name="type" value="college"><span>College/Career</span></label>
+        </div>
+
+        <div style="margin-top:20px;">
+            <button type="submit" class="btn btn-primary" id="btn-generate" disabled>Generate Prep Pack</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var sel = document.getElementById('student-select');
+    var btn = document.getElementById('btn-generate');
+    var form = document.getElementById('prep-form');
+
+    sel.addEventListener('change', function(){
+        btn.disabled = !sel.value;
+    });
+
+    form.addEventListener('submit', function(e){
+        e.preventDefault();
+        if (!sel.value) return;
+        var type = document.querySelector('input[name="type"]:checked').value;
+        var url = "{{ url_for('meeting_prep.index') }}".replace(/\/$/, '')
+            + '/generate/' + sel.value + '?type=' + type;
+        window.open(url, '_blank');
+    });
+})();
+</script>
+{% endblock %}

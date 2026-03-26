@@ -70,6 +70,8 @@ def create_app(config_class=Config):
     from app.routes.followups import followups_bp
     from app.routes.graduation import graduation_bp
     from app.routes.iep504 import iep504_bp
+    from app.routes.meeting_prep import meeting_prep_bp
+    from app.routes.email_drafts import email_drafts_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -87,6 +89,8 @@ def create_app(config_class=Config):
     app.register_blueprint(followups_bp, url_prefix='/follow-ups')
     app.register_blueprint(graduation_bp, url_prefix='/graduation')
     app.register_blueprint(iep504_bp, url_prefix='/iep504')
+    app.register_blueprint(meeting_prep_bp, url_prefix='/meeting-prep')
+    app.register_blueprint(email_drafts_bp, url_prefix='/email-drafts')
 
     # Security headers
     @app.after_request
