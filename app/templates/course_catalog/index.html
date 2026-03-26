@@ -76,7 +76,7 @@
     <button class="tab-btn active" id="tabCatalog" onclick="switchCatalogView('index.html', this)">Catalog</button>
     <button class="tab-btn" id="tabEditor" onclick="switchCatalogView('editor.html', this)">Editor</button>
     <button class="tab-btn" id="tabSetup" onclick="switchCatalogView('setup.html', this)">School Setup</button>
-    <a class="btn-standalone" href="http://127.0.0.1:5001" target="_blank" title="Open Course Catalog Wiki as a standalone app (no login required)">
+    <a class="btn-standalone" href="#" onclick="openStandalone(event)" title="Open Course Catalog Wiki as a standalone app (no login required)">
         <span class="icon">&#x1F517;</span> Standalone
     </a>
     <button class="tab-btn" id="btnSync" onclick="syncCoursesToDB()" style="margin-left:auto;background:#16a34a;color:#fff;border-color:#16a34a;">
@@ -152,6 +152,27 @@ function syncCoursesToDB() {
         hint.textContent = 'Sync failed: ' + err.message;
         hint.style.color = '#dc2626';
     });
+}
+
+function openStandalone(e) {
+    e.preventDefault();
+    // Bundle school config + courses into the standalone URL hash
+    // so the standalone page can pre-populate without re-setup
+    var payload = {};
+    try {
+        var sc = localStorage.getItem('school_config');
+        if (sc) payload.school_config = JSON.parse(sc);
+        var courses = localStorage.getItem('jhs_catalog_courses');
+        if (courses) payload.courses = JSON.parse(courses);
+        var info = localStorage.getItem('jhs_catalog_info');
+        if (info) payload.info = JSON.parse(info);
+    } catch (ex) {}
+
+    var url = 'http://127.0.0.1:5001';
+    if (payload.school_config || payload.courses) {
+        url += '#config=' + encodeURIComponent(JSON.stringify(payload));
+    }
+    window.open(url, '_blank');
 }
 </script>
 {% endblock %}
