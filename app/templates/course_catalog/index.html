@@ -68,6 +68,40 @@
         color: #fff;
     }
     .btn-standalone .icon { font-size: 1rem; }
+
+    /* Export & Share row */
+    .catalog-export-bar {
+        display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+        padding: 8px 0 4px;
+    }
+    .btn-export {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 6px 14px; border-radius: 6px; font-size: 0.78rem;
+        font-weight: 600; cursor: pointer; border: 2px solid; transition: all 0.2s;
+        text-decoration: none; background: #fff;
+    }
+    .btn-export.zip  { border-color: #0369a1; color: #0369a1; }
+    .btn-export.zip:hover  { background: #0369a1; color: #fff; }
+    .btn-export.embed { border-color: #16a34a; color: #16a34a; }
+    .btn-export.embed:hover { background: #16a34a; color: #fff; }
+
+    /* Embed modal */
+    .embed-overlay {
+        display:none; position:fixed; inset:0;
+        background:rgba(0,0,0,0.4); z-index:1000;
+        justify-content:center; align-items:center;
+    }
+    .embed-overlay.open { display:flex; }
+    .embed-modal {
+        background:#fff; border-radius:10px; padding:24px;
+        width:90%; max-width:560px; box-shadow:0 8px 30px rgba(0,0,0,0.2);
+    }
+    .embed-modal h3 { margin:0 0 12px; font-size:1.05rem; color:var(--primary-dark, #1A3D5C); }
+    .embed-modal textarea {
+        width:100%; height:100px; font-family:monospace; font-size:0.8rem;
+        padding:10px; border:1px solid #dde1e7; border-radius:6px; resize:vertical;
+    }
+    .embed-modal .btn-row { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
 </style>
 <meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}
@@ -76,7 +110,8 @@
     <button class="tab-btn active" id="tabCatalog" onclick="switchCatalogView('index.html', this)">Catalog</button>
     <button class="tab-btn" id="tabEditor" onclick="switchCatalogView('editor.html', this)">Editor</button>
     <button class="tab-btn" id="tabSetup" onclick="switchCatalogView('setup.html', this)">School Setup</button>
-    <a class="btn-standalone" href="#" onclick="openStandalone(event)" title="Open Course Catalog Wiki as a standalone app (no login required)">
+    <a class="btn-standalone" href="{{ url_for('course_catalog.public_catalog') }}" target="_blank"
+       onclick="injectConfigToPublic(event)" title="Open catalog as a standalone page (no login required)">
         <span class="icon">&#x1F517;</span> Standalone
     </a>
     <button class="tab-btn" id="btnSync" onclick="syncCoursesToDB()" style="margin-left:auto;background:#16a34a;color:#fff;border-color:#16a34a;">
@@ -84,12 +119,42 @@
     </button>
     <span class="tab-hint" id="syncHint">Sync your catalog to enable AI Course Recommendations</span>
 </div>
+
+<!-- Export & Share row -->
+<div class="catalog-export-bar">
+    <a class="btn-export zip" href="{{ url_for('course_catalog.export_zip') }}" title="Download catalog files as a ZIP folder">
+        <span>&#128230;</span> Export as Folder
+    </a>
+    <button class="btn-export embed" onclick="showEmbedModal()" title="Get embed code for Google Sites or any website">
+        <span>&#128279;</span> Embed Code
+    </button>
+</div>
+
 <div class="catalog-frame-wrap">
     <iframe id="catalogFrame"
             src="{{ url_for('static', filename='course_catalog/index.html') }}"
             title="Virtual Course Catalog"
             sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
             loading="lazy"></iframe>
+</div>
+
+<!-- Embed Code Modal -->
+<div class="embed-overlay" id="embedModal">
+    <div class="embed-modal">
+        <h3>Embed Code for Google Sites</h3>
+        <p style="font-size:0.85rem;color:#6b7280;margin-bottom:12px;">
+            Copy this code and paste it into a Google Sites "Embed" block, or any HTML page.
+            The catalog will display with your school's branding and courses.
+        </p>
+        <textarea id="embedCode" readonly onclick="this.select()"></textarea>
+        <div style="font-size:0.78rem;color:#9ca3af;margin-top:6px;">
+            <strong>Google Sites:</strong> Edit page &rarr; Insert &rarr; Embed &rarr; "Embed code" tab &rarr; paste
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-outline" onclick="document.getElementById('embedModal').classList.remove('open')">Close</button>
+            <button class="btn btn-primary" onclick="copyEmbed()">Copy to Clipboard</button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -154,10 +219,9 @@ function syncCoursesToDB() {
     });
 }
 
-function openStandalone(e) {
+function injectConfigToPublic(e) {
+    // Append config hash so the standalone page gets school identity + courses
     e.preventDefault();
-    // Bundle school config + courses into the standalone URL hash
-    // so the standalone page can pre-populate without re-setup
     var payload = {};
     try {
         var sc = localStorage.getItem('school_config');
@@ -168,11 +232,36 @@ function openStandalone(e) {
         if (info) payload.info = JSON.parse(info);
     } catch (ex) {}
 
-    var url = 'http://127.0.0.1:5001';
+    var url = '{{ url_for("course_catalog.public_catalog") }}';
     if (payload.school_config || payload.courses) {
         url += '#config=' + encodeURIComponent(JSON.stringify(payload));
     }
     window.open(url, '_blank');
 }
+
+/* ── Embed Code ─────────────────── */
+function showEmbedModal() {
+    var publicUrl = window.location.origin + '{{ url_for("course_catalog.public_catalog") }}';
+    var code = '<iframe src="' + publicUrl + '" '
+        + 'width="100%" height="800" '
+        + 'style="border:none;border-radius:8px;" '
+        + 'title="Course Catalog" '
+        + 'loading="lazy"></iframe>';
+    document.getElementById('embedCode').value = code;
+    document.getElementById('embedModal').classList.add('open');
+}
+
+function copyEmbed() {
+    var ta = document.getElementById('embedCode');
+    ta.select();
+    document.execCommand('copy');
+    var btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(function(){ btn.textContent = 'Copy to Clipboard'; }, 2000);
+}
+
+document.getElementById('embedModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+});
 </script>
 {% endblock %}
