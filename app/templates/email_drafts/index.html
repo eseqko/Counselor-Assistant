@@ -1,10 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Email Drafts{% endblock %}
-{% block page_title %}Email Drafting{% endblock %}
+{% block title %}Communication Drafts{% endblock %}
+{% block page_title %}Communication Drafts{% endblock %}
 
 {% block head %}
 <style>
-.email-layout { display:grid; grid-template-columns:280px 1fr; gap:20px; }
+/* Tab bar */
+.comm-tabs {
+    display:flex; gap:0; margin-bottom:20px;
+    background:var(--white); border-radius:10px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08); overflow:hidden;
+}
+.comm-tab {
+    flex:1; padding:14px 12px; text-align:center; cursor:pointer;
+    font-size:0.84rem; font-weight:600; border:none; background:transparent;
+    color:var(--gray); transition:all 0.15s; border-bottom:3px solid transparent;
+}
+.comm-tab:hover { background:var(--bg); color:var(--text); }
+.comm-tab.active { color:var(--primary); border-bottom-color:var(--primary); background:var(--bg); }
+.comm-tab .tab-icon { font-size:1.1rem; display:block; margin-bottom:2px; }
+
+.comm-layout { display:grid; grid-template-columns:260px 1fr; gap:20px; }
 
 /* Sidebar: templates */
 .tmpl-panel {
@@ -17,10 +32,17 @@
 .tmpl-item {
     padding:8px 10px; border-radius:6px; cursor:pointer;
     font-size:0.84rem; transition:background 0.15s;
+    display:flex; align-items:center; justify-content:space-between;
 }
 .tmpl-item:hover { background:var(--bg); }
 .tmpl-item.active { background:var(--primary); color:var(--white); }
 .tmpl-item .tmpl-name { font-weight:600; }
+.tmpl-item .tmpl-delete {
+    display:none; cursor:pointer; font-size:0.7rem; opacity:0.6;
+    background:none; border:none; color:inherit; padding:2px 4px;
+}
+.tmpl-item:hover .tmpl-delete.show { display:inline; }
+.tmpl-empty { font-size:0.82rem; color:var(--gray); padding:8px 0; }
 
 /* Composer */
 .composer {
@@ -74,26 +96,30 @@
 .save-modal h3 { margin:0 0 16px; font-size:1rem; }
 
 @media (max-width: 768px) {
-    .email-layout { grid-template-columns:1fr; }
+    .comm-layout { grid-template-columns:1fr; }
+    .comm-tabs { flex-wrap:wrap; }
+    .comm-tab { min-width:50%; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="email-layout">
+<!-- Section tabs -->
+<div class="comm-tabs">
+    {% for sec in sections %}
+    <button class="comm-tab{% if loop.first %} active{% endif %}" data-section="{{ sec.id }}" onclick="switchSection('{{ sec.id }}')">
+        <span class="tab-icon">{{ sec.icon|safe }}</span>
+        {{ sec.label }}
+    </button>
+    {% endfor %}
+</div>
+
+<div class="comm-layout">
 
     <!-- Template sidebar -->
     <div class="tmpl-panel">
         <h3>Templates</h3>
-        {% for cat in categories %}
-        <div class="tmpl-cat">{{ cat }}</div>
-        {% for t in templates if t.category == cat %}
-        <div class="tmpl-item" data-id="{{ t.id }}"
-             onclick="loadTemplate('{{ t.id }}')">
-            <div class="tmpl-name">{{ t.name }}</div>
-        </div>
-        {% endfor %}
-        {% endfor %}
+        <div id="tmpl-list"></div>
     </div>
 
     <!-- Composer -->
@@ -119,8 +145,8 @@
             {% endfor %}
         </div>
 
-        <!-- Subject -->
-        <div class="form-group">
+        <!-- Subject (hidden for Quick Messages) -->
+        <div class="form-group" id="subject-group">
             <label for="inp-subject">Subject</label>
             <input type="text" id="inp-subject" class="form-control"
                    placeholder="Email subject line...">
@@ -168,6 +194,11 @@
                 <option value="teacher">Teacher</option>
                 <option value="student">Student</option>
                 <option value="admin">Admin</option>
+                <option value="announcement">Announcement</option>
+                <option value="college_career">College & Career</option>
+                <option value="sel_wellness">SEL / Wellness</option>
+                <option value="academic">Academic</option>
+                <option value="event">Event</option>
                 <option value="custom">Custom</option>
             </select>
         </div>
@@ -185,11 +216,74 @@
 (function(){
     var BASE = "{{ url_for('email_drafts.index') }}".replace(/\/$/,'');
     var templates = {{ templates|tojson }};
+    var sections = {{ sections|tojson }};
+    var activeSection = sections[0].id;
     var lastFocused = null;
 
     /* Track which field was last focused for merge field insertion */
     document.getElementById('inp-body').addEventListener('focus', function(){ lastFocused = this; });
     document.getElementById('inp-subject').addEventListener('focus', function(){ lastFocused = this; });
+
+    /* ── Section switching ────────────────────── */
+    window.switchSection = function(sectionId) {
+        activeSection = sectionId;
+
+        /* Update tab active state */
+        document.querySelectorAll('.comm-tab').forEach(function(tab){
+            tab.classList.toggle('active', tab.dataset.section === sectionId);
+        });
+
+        /* Show/hide subject line based on section config */
+        var sec = sections.find(function(s){ return s.id === sectionId; });
+        var subjectGroup = document.getElementById('subject-group');
+        subjectGroup.style.display = sec && sec.has_subject ? 'block' : 'none';
+
+        /* Update placeholder */
+        if (sec) {
+            document.getElementById('inp-body').placeholder = sec.placeholder;
+        }
+
+        /* Rebuild template sidebar for this section */
+        buildTemplateList();
+
+        /* Clear active template highlight */
+        clearComposer();
+    };
+
+    /* ── Template sidebar ─────────────────────── */
+    function buildTemplateList() {
+        var container = document.getElementById('tmpl-list');
+        var sectionTemplates = templates.filter(function(t){ return t.section === activeSection; });
+
+        if (sectionTemplates.length === 0) {
+            container.innerHTML = '<div class="tmpl-empty">No templates for this section yet.</div>';
+            return;
+        }
+
+        /* Group by category */
+        var cats = [];
+        var catMap = {};
+        sectionTemplates.forEach(function(t){
+            var cat = t.category || 'custom';
+            if (!catMap[cat]) {
+                catMap[cat] = [];
+                cats.push(cat);
+            }
+            catMap[cat].push(t);
+        });
+
+        var html = '';
+        cats.forEach(function(cat){
+            html += '<div class="tmpl-cat">' + esc(cat.replace(/_/g, ' ')) + '</div>';
+            catMap[cat].forEach(function(t){
+                var deleteBtn = t.builtin ? '' :
+                    '<button class="tmpl-delete show" onclick="event.stopPropagation();deleteTemplate(\'' + t.id + '\')" title="Delete">&times;</button>';
+                html += '<div class="tmpl-item" data-id="' + t.id + '" onclick="loadTemplate(\'' + t.id + '\')">' +
+                    '<span class="tmpl-name">' + esc(t.name) + '</span>' + deleteBtn + '</div>';
+            });
+        });
+        container.innerHTML = html;
+    }
 
     /* ── Template loading ─────────────────────── */
     window.loadTemplate = function(id) {
@@ -202,6 +296,18 @@
             el.classList.toggle('active', el.dataset.id === id);
         });
         updatePreview();
+    };
+
+    /* ── Delete custom template ───────────────── */
+    window.deleteTemplate = function(id) {
+        if (!confirm('Delete this template?')) return;
+        fetch(BASE + '/api/templates/' + id, {
+            method:'DELETE',
+            headers:{'Content-Type':'application/json'}
+        }).then(function(r){ return r.json(); }).then(function(){
+            templates = templates.filter(function(t){ return t.id !== id; });
+            buildTemplateList();
+        });
     };
 
     /* ── Merge fields ─────────────────────────── */
@@ -239,7 +345,7 @@
 
     /* ── AI Draft ─────────────────────────────── */
     window.aiDraft = function() {
-        var context = prompt('Describe what this email should be about:');
+        var context = prompt('Describe what this communication should be about:');
         if (!context) return;
 
         var btn = document.getElementById('btn-ai');
@@ -249,7 +355,7 @@
         fetch(BASE + '/api/ai-draft', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({context:context, action:'draft'})
+            body: JSON.stringify({context:context, action:'draft', section:activeSection})
         }).then(function(r){ return r.json(); }).then(function(data){
             btn.textContent = 'AI Draft';
             btn.disabled = false;
@@ -274,7 +380,7 @@
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body: JSON.stringify({current_body:body, action:'improve',
-                                  context:'School counselor email'})
+                                  context:'School counselor communication', section:activeSection})
         }).then(function(r){ return r.json(); }).then(function(data){
             btn.textContent = 'AI Improve';
             btn.disabled = false;
@@ -289,7 +395,8 @@
 
     /* ── Copy ─────────────────────────────────── */
     window.copyToClipboard = function() {
-        var subject = document.getElementById('inp-subject').value;
+        var sec = sections.find(function(s){ return s.id === activeSection; });
+        var subject = (sec && sec.has_subject) ? document.getElementById('inp-subject').value : '';
         var body = document.getElementById('inp-body').value;
         var text = (subject ? 'Subject: ' + subject + '\n\n' : '') + body;
 
@@ -314,7 +421,8 @@
     function updatePreview() {
         var pane = document.getElementById('preview-pane');
         if (pane.style.display === 'none') return;
-        var subject = document.getElementById('inp-subject').value;
+        var sec = sections.find(function(s){ return s.id === activeSection; });
+        var subject = (sec && sec.has_subject) ? document.getElementById('inp-subject').value : '';
         var body = document.getElementById('inp-body').value;
         pane.innerHTML = (subject ? '<div class="subject-line">' + esc(subject) + '</div>' : '')
             + esc(body);
@@ -348,6 +456,7 @@
             headers:{'Content-Type':'application/json'},
             body: JSON.stringify({
                 name: name,
+                section: activeSection,
                 category: document.getElementById('save-category').value,
                 subject: document.getElementById('inp-subject').value,
                 body: document.getElementById('inp-body').value
@@ -355,14 +464,17 @@
         }).then(function(r){ return r.json(); }).then(function(t){
             if (t.error) { alert(t.error); return; }
             templates.push(t);
-            /* Reload page to show new template in sidebar */
-            window.location.reload();
+            closeSaveModal();
+            buildTemplateList();
         });
     };
 
     document.getElementById('save-modal').addEventListener('click', function(e){
         if (e.target === this) closeSaveModal();
     });
+
+    /* Initialize template list for first section */
+    buildTemplateList();
 })();
 </script>
 {% endblock %}
