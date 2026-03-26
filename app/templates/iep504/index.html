@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+{% block title %}IEP/504 Oversight{% endblock %}
+{% block page_title %}IEP/504 Oversight{% endblock %}
+
+{% block head %}
+<style>
+/* ── Stats bar ─────────────────────────────────── */
+.iep-stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.iep-stat {
+    flex:1; min-width:120px; text-align:center;
+    padding:14px 10px; border-radius:8px;
+    background:var(--white); box-shadow:0 1px 3px rgba(0,0,0,0.08);
+}
+.iep-stat .val { font-size:1.6rem; font-weight:700; }
+.iep-stat .lbl { font-size:0.75rem; text-transform:uppercase; color:var(--gray); letter-spacing:0.5px; margin-top:2px; }
+.iep-stat.iep-total .val  { color:#e6a200; }
+.iep-stat.s504-total .val { color:var(--primary); }
+.iep-stat.overdue .val    { color:var(--danger); }
+.iep-stat.due-soon .val   { color:var(--warning); }
+
+/* ── Filter bar ────────────────────────────────── */
+.iep-filters {
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+}
+.iep-filters .pill {
+    padding:6px 14px; border-radius:20px; font-size:0.82rem; font-weight:600;
+    border:1px solid var(--light-gray); background:var(--white); cursor:pointer;
+    transition:all 0.15s;
+}
+.iep-filters .pill:hover { background:var(--bg); }
+.iep-filters .pill.active { background:var(--primary); color:var(--white); border-color:var(--primary); }
+
+/* ── Lane (collapsible) ───────────────────────── */
+.iep-lane { margin-bottom:16px; }
+.iep-lane-header {
+    display:flex; align-items:center; gap:8px; padding:10px 16px;
+    background:var(--bg); border-radius:8px; cursor:pointer;
+    user-select:none; font-weight:600; font-size:0.9rem;
+}
+.iep-lane-header .chevron {
+    transition:transform 0.2s; font-size:0.7rem;
+}
+.iep-lane-header.collapsed .chevron { transform:rotate(-90deg); }
+.iep-lane-count {
+    margin-left:auto; font-size:0.75rem; font-weight:600;
+    padding:2px 8px; border-radius:10px; background:rgba(0,0,0,0.06);
+}
+.iep-lane-body { padding:8px 0; }
+.iep-lane-body.hidden { display:none; }
+.iep-lane-empty {
+    text-align:center; padding:20px; color:var(--gray); font-size:0.85rem;
+    font-style:italic;
+}
+
+/* ── Card ──────────────────────────────────────── */
+.iep-card {
+    display:flex; flex-direction:column; gap:8px;
+    padding:14px 16px; margin-bottom:8px;
+    background:var(--white); border-radius:8px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.06);
+    border-left:3px solid var(--primary);
+    transition:box-shadow 0.15s;
+}
+.iep-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+.iep-card.overdue  { border-left-color:var(--danger); }
+.iep-card.this-month { border-left-color:var(--warning); }
+.iep-card.next-30  { border-left-color:#17a2b8; }
+.iep-card.on-track { border-left-color:var(--success); }
+
+.iep-card-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.iep-card-name { font-weight:600; font-size:0.95rem; }
+.iep-card-due { font-size:0.78rem; color:var(--gray); margin-left:auto; white-space:nowrap; }
+.iep-card-accom {
+    font-size:0.84rem; color:var(--dark); line-height:1.4;
+    overflow:hidden; text-overflow:ellipsis;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
+.iep-card-actions {
+    display:flex; gap:6px; flex-wrap:wrap; margin-top:2px;
+}
+.iep-card-actions .btn { padding:4px 10px; font-size:0.75rem; }
+
+.badge-iep { background:#e6a200; color:#fff; }
+.badge-504 { background:var(--primary); color:#fff; }
+
+/* ── Modal ─────────────────────────────────────── */
+.iep-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.4); z-index:1000;
+    justify-content:center; align-items:center;
+}
+.iep-overlay.open { display:flex; }
+.iep-modal {
+    background:var(--white); border-radius:10px; padding:24px;
+    width:90%; max-width:540px; box-shadow:0 8px 30px rgba(0,0,0,0.2);
+    max-height:90vh; overflow-y:auto;
+}
+.iep-modal h3 { margin:0 0 16px; font-size:1.1rem; color:var(--primary-dark); }
+
+/* ── Type pills ──────────────────────────────── */
+.plan-pills { display:flex; gap:6px; margin-bottom:16px; }
+.plan-pills label {
+    flex:1; text-align:center; padding:8px 4px; border-radius:20px;
+    font-size:0.82rem; font-weight:600; cursor:pointer;
+    border:1px solid var(--light-gray); background:var(--white);
+    transition:all 0.15s;
+}
+.plan-pills input { display:none; }
+.plan-pills label.active-iep { background:#e6a200; color:#fff; border-color:#e6a200; }
+.plan-pills label.active-504 { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+/* ── PDF section in modal ────────────────────── */
+.pdf-section {
+    border:1px dashed var(--light-gray); border-radius:8px;
+    padding:12px; margin-bottom:16px; background:var(--bg);
+}
+.pdf-section .pdf-label { font-size:0.82rem; font-weight:600; margin-bottom:8px; }
+.pdf-section .pdf-status { font-size:0.8rem; color:var(--gray); margin-top:6px; }
+.pdf-section .btn { font-size:0.78rem; }
+.parse-spinner { display:none; margin-left:8px; }
+.parse-spinner.visible { display:inline; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats bar -->
+<div class="iep-stats">
+    <div class="iep-stat iep-total"><div class="val" id="stat-iep">0</div><div class="lbl">IEP Students</div></div>
+    <div class="iep-stat s504-total"><div class="val" id="stat-504">0</div><div class="lbl">504 Students</div></div>
+    <div class="iep-stat overdue"><div class="val" id="stat-overdue">0</div><div class="lbl">Overdue</div></div>
+    <div class="iep-stat due-soon"><div class="val" id="stat-due-soon">0</div><div class="lbl">Due This Month</div></div>
+</div>
+
+<!-- Filter bar + Add button -->
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+    <div class="iep-filters" id="iep-filters">
+        <span class="pill active" data-filter="all">All</span>
+        <span class="pill" data-filter="iep">IEP</span>
+        <span class="pill" data-filter="504">504</span>
+    </div>
+    <button class="btn btn-primary" onclick="openModal()">+ Add Record</button>
+</div>
+
+<!-- Lanes -->
+<div id="iep-lanes">
+    <div class="iep-lane" data-lane="overdue">
+        <div class="iep-lane-header" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:var(--danger);">Overdue</span>
+            <span class="iep-lane-count" id="lane-count-overdue">0</span>
+        </div>
+        <div class="iep-lane-body" id="lane-overdue"></div>
+    </div>
+    <div class="iep-lane" data-lane="this-month">
+        <div class="iep-lane-header" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:var(--warning);">This Month</span>
+            <span class="iep-lane-count" id="lane-count-this-month">0</span>
+        </div>
+        <div class="iep-lane-body" id="lane-this-month"></div>
+    </div>
+    <div class="iep-lane" data-lane="next-30">
+        <div class="iep-lane-header" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:#17a2b8;">Next 30 Days</span>
+            <span class="iep-lane-count" id="lane-count-next-30">0</span>
+        </div>
+        <div class="iep-lane-body" id="lane-next-30"></div>
+    </div>
+    <div class="iep-lane" data-lane="on-track">
+        <div class="iep-lane-header collapsed" onclick="toggleLane(this)">
+            <span class="chevron">&#9660;</span>
+            <span style="color:var(--success);">On Track</span>
+            <span class="iep-lane-count" id="lane-count-on-track">0</span>
+        </div>
+        <div class="iep-lane-body hidden" id="lane-on-track"></div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="iep-overlay" id="iep-modal">
+    <div class="iep-modal">
+        <h3 id="modal-title">Add IEP/504 Record</h3>
+        <input type="hidden" id="edit-id">
+        <input type="hidden" id="edit-student-id">
+
+        <!-- Student selector (only for new records) -->
+        <div class="form-group" id="student-select-group">
+            <label>Student</label>
+            <select id="inp-student" class="form-control">
+                <option value="">Select a student...</option>
+            </select>
+        </div>
+        <!-- Student name display (for editing) -->
+        <div class="form-group" id="student-display-group" style="display:none;">
+            <label>Student</label>
+            <div id="student-display-name" style="font-weight:600;padding:8px 0;"></div>
+        </div>
+
+        <label style="font-size:0.85rem;font-weight:600;margin-bottom:6px;display:block;">Plan Type</label>
+        <div class="plan-pills" id="plan-pills">
+            <label class="active-iep" onclick="pickPlan(this,'iep')"><input type="radio" name="plan-type" value="iep" checked><span>IEP</span></label>
+            <label onclick="pickPlan(this,'504')"><input type="radio" name="plan-type" value="504"><span>504</span></label>
+        </div>
+
+        <div class="form-group">
+            <label>Next Review Date</label>
+            <input type="date" id="inp-review-date" class="form-control">
+        </div>
+
+        <div class="form-group">
+            <label>Accommodations</label>
+            <textarea id="inp-accommodations" class="form-control" rows="4" placeholder="Enter accommodations or upload a PDF to auto-extract..."></textarea>
+        </div>
+
+        <!-- PDF Upload Section -->
+        <div class="pdf-section">
+            <div class="pdf-label">IEP at a Glance (PDF)</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="file" id="inp-pdf" accept=".pdf" style="font-size:0.82rem;flex:1;">
+                <button class="btn btn-outline" id="btn-upload" onclick="uploadPDF()" style="display:none;">Upload</button>
+            </div>
+            <div id="pdf-status" class="pdf-status"></div>
+            <div style="margin-top:8px;display:flex;gap:6px;" id="pdf-actions" class="hidden">
+                <button class="btn btn-primary btn-sm" onclick="parsePDF()">
+                    Extract Accommodations
+                    <span class="parse-spinner" id="parse-spinner">...</span>
+                </button>
+                <a class="btn btn-outline btn-sm" id="pdf-view-link" href="#" target="_blank">View PDF</a>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Notes</label>
+            <textarea id="inp-notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveRecord()">Save</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var BASE = "{{ url_for('iep504.index') }}".replace(/\/$/,'');
+    var allData = [];
+    var allStudents = [];
+    var activeFilter = 'all';
+
+    /* ── API helpers ──────────────────────────── */
+    function api(method, path, body) {
+        var opts = {method:method, headers:{'Content-Type':'application/json'}};
+        if (body) opts.body = JSON.stringify(body);
+        return fetch(BASE + path, opts).then(function(r){ return r.json(); });
+    }
+
+    /* ── Load data ───────────────────────────── */
+    function load() {
+        Promise.all([
+            api('GET', '/api'),
+            api('GET', '/api/students')
+        ]).then(function(results) {
+            allData = results[0];
+            allStudents = results[1];
+            render();
+        });
+    }
+
+    /* ── Lane assignment ─────────────────────── */
+    function laneFor(r) {
+        if (!r.next_review_date) return 'on-track';
+        var today = new Date(); today.setHours(0,0,0,0);
+        var rd = new Date(r.next_review_date + 'T00:00:00');
+
+        if (rd < today) return 'overdue';
+
+        // This month: same year & month
+        if (rd.getFullYear() === today.getFullYear() && rd.getMonth() === today.getMonth()) return 'this-month';
+
+        // Next 30 days
+        var d30 = new Date(today); d30.setDate(d30.getDate() + 30);
+        if (rd <= d30) return 'next-30';
+
+        return 'on-track';
+    }
+
+    function relDate(iso) {
+        if (!iso) return 'No date set';
+        var today = new Date(); today.setHours(0,0,0,0);
+        var d = new Date(iso + 'T00:00:00');
+        var diff = Math.round((d - today) / 86400000);
+        if (diff === 0) return 'Today';
+        if (diff === 1) return 'Tomorrow';
+        if (diff === -1) return 'Yesterday';
+        if (diff < -1) return Math.abs(diff) + ' days overdue';
+        return 'In ' + diff + ' days';
+    }
+
+    function planBadge(type) {
+        if (type === 'iep') return '<span class="badge badge-iep">IEP</span>';
+        return '<span class="badge badge-504">504</span>';
+    }
+
+    function gradeBadge(g) {
+        if (!g) return '';
+        return '<span class="badge badge-gray">'+g+'th</span>';
+    }
+
+    /* ── Card HTML ────────────────────────────── */
+    function cardHTML(r) {
+        var lane = laneFor(r);
+        var accomSnippet = r.accommodations_text
+            ? '<div class="iep-card-accom">' + esc(r.accommodations_text) + '</div>'
+            : '';
+
+        var actions = '<button class="btn btn-outline btn-sm" onclick="editRecord('+r.id+')">Edit</button>';
+        if (r.document_filename) {
+            actions += '<a class="btn btn-outline btn-sm" href="'+BASE+'/api/'+r.id+'/document" target="_blank">View PDF</a>';
+        }
+        actions += '<button class="btn btn-danger btn-sm" onclick="deleteRecord('+r.id+')">Delete</button>';
+
+        return '<div class="iep-card '+lane+'" data-id="'+r.id+'">'
+            + '<div class="iep-card-top">'
+            + '<span class="iep-card-name">'+esc(r.student_name)+'</span> '
+            + gradeBadge(r.grade_level) + ' ' + planBadge(r.plan_type)
+            + '<span class="iep-card-due">'+relDate(r.next_review_date)+'</span>'
+            + '</div>'
+            + accomSnippet
+            + (r.notes ? '<div style="font-size:0.8rem;color:var(--gray);margin-top:2px;">'+esc(r.notes)+'</div>' : '')
+            + '<div class="iep-card-actions">'+actions+'</div>'
+            + '</div>';
+    }
+
+    /* ── Render ───────────────────────────────── */
+    function render() {
+        var buckets = {'overdue':[], 'this-month':[], 'next-30':[], 'on-track':[]};
+        var filtered = allData.filter(function(r){
+            return activeFilter === 'all' || r.plan_type === activeFilter;
+        });
+        filtered.forEach(function(r){ buckets[laneFor(r)].push(r); });
+
+        ['overdue','this-month','next-30','on-track'].forEach(function(lane){
+            var el = document.getElementById('lane-'+lane);
+            var cnt = document.getElementById('lane-count-'+lane);
+            cnt.textContent = buckets[lane].length;
+            if (buckets[lane].length === 0) {
+                el.innerHTML = '<div class="iep-lane-empty">No records</div>';
+            } else {
+                el.innerHTML = buckets[lane].map(cardHTML).join('');
+            }
+        });
+
+        /* Stats (unfiltered) */
+        var stats = {iep:0, s504:0, overdue:0, dueSoon:0};
+        allData.forEach(function(r){
+            if (r.plan_type === 'iep') stats.iep++;
+            else stats.s504++;
+            var lane = laneFor(r);
+            if (lane === 'overdue') stats.overdue++;
+            if (lane === 'this-month') stats.dueSoon++;
+        });
+        document.getElementById('stat-iep').textContent = stats.iep;
+        document.getElementById('stat-504').textContent = stats.s504;
+        document.getElementById('stat-overdue').textContent = stats.overdue;
+        document.getElementById('stat-due-soon').textContent = stats.dueSoon;
+    }
+
+    function esc(s) { if (!s) return ''; var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    /* ── Actions ──────────────────────────────── */
+    window.deleteRecord = function(id) {
+        if (!confirm('Delete this IEP/504 record?')) return;
+        api('DELETE', '/api/'+id).then(function(){
+            allData = allData.filter(function(r){return r.id!==id;});
+            render();
+        });
+    };
+
+    /* ── Modal ────────────────────────────────── */
+    var currentEditId = null;
+
+    window.openModal = function(data) {
+        currentEditId = data ? data.id : null;
+        document.getElementById('modal-title').textContent = data ? 'Edit IEP/504 Record' : 'Add IEP/504 Record';
+        document.getElementById('edit-id').value = data ? data.id : '';
+
+        // Student selector vs display
+        if (data) {
+            document.getElementById('student-select-group').style.display = 'none';
+            document.getElementById('student-display-group').style.display = 'block';
+            document.getElementById('student-display-name').textContent = data.student_name + (data.student_id_number ? ' (' + data.student_id_number + ')' : '');
+            document.getElementById('edit-student-id').value = data.student_id;
+        } else {
+            document.getElementById('student-select-group').style.display = 'block';
+            document.getElementById('student-display-group').style.display = 'none';
+            populateStudentDropdown();
+        }
+
+        // Plan type
+        var planType = data ? data.plan_type : 'iep';
+        document.querySelectorAll('#plan-pills label').forEach(function(l){
+            var inp = l.querySelector('input');
+            l.className = '';
+            if (inp.value === planType) {
+                l.classList.add(planType === 'iep' ? 'active-iep' : 'active-504');
+                inp.checked = true;
+            }
+        });
+
+        document.getElementById('inp-review-date').value = data ? (data.next_review_date || '') : '';
+        document.getElementById('inp-accommodations').value = data ? data.accommodations_text : '';
+        document.getElementById('inp-notes').value = data ? data.notes : '';
+
+        // PDF state
+        var pdfActions = document.getElementById('pdf-actions');
+        var pdfStatus = document.getElementById('pdf-status');
+        var pdfViewLink = document.getElementById('pdf-view-link');
+        document.getElementById('inp-pdf').value = '';
+        document.getElementById('btn-upload').style.display = 'none';
+
+        if (data && data.document_filename) {
+            pdfStatus.textContent = 'Document uploaded';
+            pdfActions.classList.remove('hidden');
+            pdfViewLink.href = BASE + '/api/' + data.id + '/document';
+        } else {
+            pdfStatus.textContent = '';
+            pdfActions.classList.add('hidden');
+        }
+
+        document.getElementById('iep-modal').classList.add('open');
+    };
+
+    window.closeModal = function() {
+        document.getElementById('iep-modal').classList.remove('open');
+    };
+
+    window.editRecord = function(id) {
+        var r = allData.find(function(x){return x.id===id;});
+        if (r) openModal(r);
+    };
+
+    function populateStudentDropdown() {
+        var sel = document.getElementById('inp-student');
+        sel.innerHTML = '<option value="">Select a student...</option>';
+        allStudents.forEach(function(s){
+            var label = s.name + ' (' + s.student_id_number + ')';
+            if (s.grade_level) label += ' - Grade ' + s.grade_level;
+            var tags = [];
+            if (s.iep) tags.push('IEP');
+            if (s['504']) tags.push('504');
+            if (tags.length) label += ' [' + tags.join(', ') + ']';
+            if (s.has_record) label += ' (record exists)';
+            var opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = label;
+            opt.dataset.iep = s.iep ? '1' : '';
+            opt.dataset.s504 = s['504'] ? '1' : '';
+            sel.appendChild(opt);
+        });
+    }
+
+    // Auto-set plan type when student is selected
+    document.getElementById('inp-student').addEventListener('change', function(){
+        var opt = this.options[this.selectedIndex];
+        if (!opt || !opt.value) return;
+        var isIep = opt.dataset.iep === '1';
+        var is504 = opt.dataset.s504 === '1';
+        if (isIep && !is504) pickPlan(document.querySelector('#plan-pills label:first-child'), 'iep');
+        else if (is504 && !isIep) pickPlan(document.querySelector('#plan-pills label:last-child'), '504');
+    });
+
+    window.pickPlan = function(label, type) {
+        document.querySelectorAll('#plan-pills label').forEach(function(l){ l.className = ''; });
+        label.classList.add(type === 'iep' ? 'active-iep' : 'active-504');
+        label.querySelector('input').checked = true;
+    };
+
+    window.saveRecord = function() {
+        var editId = document.getElementById('edit-id').value;
+        var studentId = editId
+            ? document.getElementById('edit-student-id').value
+            : document.getElementById('inp-student').value;
+
+        if (!studentId) { alert('Please select a student.'); return; }
+
+        var planType = document.querySelector('#plan-pills input:checked');
+        var body = {
+            student_id: parseInt(studentId),
+            plan_type: planType ? planType.value : 'iep',
+            next_review_date: document.getElementById('inp-review-date').value || null,
+            accommodations_text: document.getElementById('inp-accommodations').value.trim(),
+            notes: document.getElementById('inp-notes').value.trim()
+        };
+
+        if (editId) {
+            api('PATCH', '/api/'+editId, body).then(function(r){
+                var i = allData.findIndex(function(x){return x.id===parseInt(editId);});
+                if (i>=0) allData[i] = r;
+                render(); closeModal();
+            });
+        } else {
+            api('POST', '/api', body).then(function(r){
+                if (r.error) { alert(r.error); return; }
+                allData.push(r);
+                // Refresh student list (has_record may have changed)
+                api('GET', '/api/students').then(function(s){ allStudents = s; });
+                render(); closeModal();
+            });
+        }
+    };
+
+    /* ── PDF Upload ───────────────────────────── */
+    document.getElementById('inp-pdf').addEventListener('change', function(){
+        document.getElementById('btn-upload').style.display = this.files.length ? 'inline-block' : 'none';
+    });
+
+    window.uploadPDF = function() {
+        var recordId = document.getElementById('edit-id').value;
+        if (!recordId) { alert('Please save the record first before uploading a PDF.'); return; }
+
+        var fileInput = document.getElementById('inp-pdf');
+        if (!fileInput.files.length) return;
+
+        var formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        var pdfStatus = document.getElementById('pdf-status');
+        pdfStatus.textContent = 'Uploading...';
+
+        fetch(BASE + '/api/' + recordId + '/upload', {
+            method: 'POST',
+            body: formData
+        }).then(function(r){ return r.json(); }).then(function(result){
+            if (result.error) {
+                pdfStatus.textContent = 'Error: ' + result.error;
+                return;
+            }
+            pdfStatus.textContent = 'Document uploaded successfully';
+            document.getElementById('pdf-actions').classList.remove('hidden');
+            document.getElementById('pdf-view-link').href = BASE + '/api/' + recordId + '/document';
+
+            // Update local data
+            var i = allData.findIndex(function(x){return x.id===parseInt(recordId);});
+            if (i>=0) allData[i].document_filename = result.filename;
+        });
+    };
+
+    window.parsePDF = function() {
+        var recordId = document.getElementById('edit-id').value;
+        if (!recordId) return;
+
+        var spinner = document.getElementById('parse-spinner');
+        var pdfStatus = document.getElementById('pdf-status');
+        spinner.classList.add('visible');
+        pdfStatus.textContent = 'Extracting accommodations...';
+
+        api('POST', '/api/' + recordId + '/parse').then(function(result){
+            spinner.classList.remove('visible');
+
+            if (result.error) {
+                pdfStatus.textContent = 'Error: ' + result.error;
+                return;
+            }
+
+            if (result.ai_available && result.accommodations) {
+                document.getElementById('inp-accommodations').value = result.accommodations;
+                pdfStatus.textContent = 'Accommodations extracted successfully';
+                // Update local data
+                var i = allData.findIndex(function(x){return x.id===parseInt(recordId);});
+                if (i>=0) allData[i].accommodations_text = result.accommodations;
+            } else if (result.raw_text) {
+                document.getElementById('inp-accommodations').value = result.raw_text;
+                pdfStatus.textContent = result.message || 'Raw text extracted (AI unavailable)';
+            } else {
+                pdfStatus.textContent = 'No text could be extracted from the PDF.';
+            }
+        }).catch(function(){
+            spinner.classList.remove('visible');
+            pdfStatus.textContent = 'Failed to parse PDF.';
+        });
+    };
+
+    /* ── Lane toggle ──────────────────────────── */
+    window.toggleLane = function(header) {
+        header.classList.toggle('collapsed');
+        var body = header.nextElementSibling;
+        body.classList.toggle('hidden');
+    };
+
+    /* ── Filter pills ─────────────────────────── */
+    document.getElementById('iep-filters').addEventListener('click', function(e){
+        if (!e.target.classList.contains('pill')) return;
+        document.querySelectorAll('#iep-filters .pill').forEach(function(p){ p.classList.remove('active'); });
+        e.target.classList.add('active');
+        activeFilter = e.target.dataset.filter;
+        render();
+    });
+
+    /* Close modal on overlay click */
+    document.getElementById('iep-modal').addEventListener('click', function(e){
+        if (e.target === this) closeModal();
+    });
+
+    /* ── Init ─────────────────────────────────── */
+    load();
+})();
+</script>
+{% endblock %}
