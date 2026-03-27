@@ -24,6 +24,7 @@ class User(UserMixin, db.Model):
     calendar_feed_token = db.Column(db.String(64), unique=True)
     external_ical_url = db.Column(db.String(500))
     school_config_json = db.Column(db.Text)  # JSON: school name, colors, mascot for catalog
+    google_token_json = db.Column(db.Text)  # OAuth 2.0 token JSON for Google APIs
 
     # Relationships
     notes = db.relationship('Note', backref='author', lazy='dynamic')

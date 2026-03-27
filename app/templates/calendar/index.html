@@ -7,16 +7,31 @@
 {% block content %}
 
 <div class="card">
-    <div class="card-header">
-        Calendar
+    <div class="card-header" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <span>Calendar</span>
         <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary">+ New Event</a>
-        <button class="btn btn-sm btn-outline-secondary" onclick="showFeedUrl()">Subscribe (Google Calendar)</button>
-        <button class="btn btn-sm btn-outline-danger" onclick="showImportModal()">Import Google Calendar</button>
+        {% if google_connected %}
+        <button class="btn btn-sm btn-outline" onclick="showCreateGoogleEvent()">+ Google Event</button>
+        {% endif %}
+        <a href="{{ url_for('availability.index') }}" class="btn btn-sm btn-outline">Scheduling</a>
+        <button class="btn btn-sm btn-outline-secondary" onclick="showFeedUrl()">Subscribe</button>
+        {% if not google_connected %}
+        <a href="{{ url_for('google_auth.authorize') }}" class="btn btn-sm btn-outline-danger">Connect Google Calendar</a>
+        {% endif %}
     </div>
     <div class="card-body">
-        {% if current_user.external_ical_url %}
+        {% if google_connected %}
+        <div style="margin-bottom:12px; padding:8px 12px; background:#e8f5e9; border-radius:4px; font-size:13px; display:flex; align-items:center; gap:8px;">
+            <span style="color:#2e7d32;">Google Calendar connected (via OAuth)</span>
+            <form method="POST" action="{{ url_for('google_auth.disconnect') }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline" style="font-size:12px;">Disconnect</button>
+            </form>
+        </div>
+        {% elif current_user.external_ical_url %}
         <div style="margin-bottom:12px; padding:8px 12px; background:#fce4ec; border-radius:4px; font-size:13px; display:flex; align-items:center; gap:8px;">
-            <span style="color:#c62828;">Google Calendar connected</span>
+            <span style="color:#c62828;">Google Calendar connected (read-only via iCal)</span>
+            <a href="{{ url_for('google_auth.authorize') }}" class="btn btn-sm btn-outline" style="font-size:12px;">Upgrade to Full Access</a>
             <form method="POST" action="{{ url_for('calendar.external_ical') }}" style="margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size:12px;">Disconnect</button>
@@ -51,11 +66,12 @@
     </div>
 </div>
 
-<!-- Import Google Calendar Modal -->
+{% if not google_connected %}
+<!-- Import Google Calendar Modal (iCal fallback) -->
 <div id="import-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
     <div style="background:#fff; max-width:550px; margin:100px auto; border-radius:8px; padding:24px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
-        <h5>Import Google Calendar</h5>
-        <p style="font-size:14px; color:#666;">Paste your Google Calendar's <strong>secret address in iCal format</strong> to see those events here.</p>
+        <h5>Import Google Calendar (Read-Only)</h5>
+        <p style="font-size:14px; color:#666;">For full read/write access, <a href="{{ url_for('google_auth.authorize') }}">connect with OAuth</a> instead.</p>
         <form method="POST" action="{{ url_for('calendar.external_ical') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="display:flex; gap:8px;">
@@ -65,19 +81,51 @@
                 <button type="submit" class="btn btn-sm btn-primary">Save</button>
             </div>
         </form>
-        <hr>
-        <p style="font-size:13px; color:#666; margin-bottom:4px;"><strong>How to find your secret address:</strong></p>
-        <ol style="font-size:13px; color:#666; padding-left:20px;">
-            <li>Open <strong>Google Calendar</strong> on your computer</li>
-            <li>Click the <strong>three dots</strong> next to your calendar name and select <strong>"Settings and sharing"</strong></li>
-            <li>Scroll to <strong>"Integrate calendar"</strong></li>
-            <li>Copy the <strong>"Secret address in iCal format"</strong> URL</li>
-        </ol>
         <div style="text-align:right; margin-top:12px;">
             <button class="btn btn-sm btn-secondary" onclick="closeImportModal()">Close</button>
         </div>
     </div>
 </div>
+{% endif %}
+
+<!-- Create Google Calendar Event Modal -->
+{% if google_connected %}
+<div id="gcal-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
+    <div style="background:#fff; max-width:550px; margin:80px auto; border-radius:8px; padding:24px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <h5>Create Google Calendar Event</h5>
+        <div style="margin-bottom:12px;">
+            <label style="font-size:13px;font-weight:600;">Title *</label>
+            <input type="text" id="gcal-title" class="form-control" placeholder="Meeting with...">
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+            <div>
+                <label style="font-size:13px;font-weight:600;">Start</label>
+                <input type="datetime-local" id="gcal-start" class="form-control">
+            </div>
+            <div>
+                <label style="font-size:13px;font-weight:600;">End</label>
+                <input type="datetime-local" id="gcal-end" class="form-control">
+            </div>
+        </div>
+        <div style="margin-bottom:12px;">
+            <label style="font-size:13px;font-weight:600;">Location</label>
+            <input type="text" id="gcal-location" class="form-control" placeholder="Office, Room 201...">
+        </div>
+        <div style="margin-bottom:12px;">
+            <label style="font-size:13px;font-weight:600;">Description</label>
+            <textarea id="gcal-desc" class="form-control" rows="3" placeholder="Meeting notes..."></textarea>
+        </div>
+        <div style="margin-bottom:12px;">
+            <label style="font-size:13px;font-weight:600;">Invite (emails, comma-separated)</label>
+            <input type="text" id="gcal-attendees" class="form-control" placeholder="parent@email.com, teacher@school.edu">
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button class="btn btn-sm btn-outline" onclick="closeGcalModal()">Cancel</button>
+            <button class="btn btn-sm btn-primary" id="gcal-save-btn" onclick="saveGoogleEvent()">Create Event</button>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% endblock %}
 {% block scripts %}
@@ -85,10 +133,19 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
+    var googleConnected = {{ 'true' if google_connected else 'false' }};
+
     var eventSources = [
         { url: '{{ url_for("calendar.get_events") }}' },
-        { url: '{{ url_for("calendar.get_external_events") }}' }
     ];
+
+    if (googleConnected) {
+        eventSources.push({ url: '{{ url_for("calendar.get_google_events") }}' });
+    }
+    {% if not google_connected and current_user.external_ical_url %}
+    eventSources.push({ url: '{{ url_for("calendar.get_external_events") }}' });
+    {% endif %}
+
     var calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         headerToolbar: {
@@ -100,9 +157,12 @@ document.addEventListener('DOMContentLoaded', function() {
         editable: false,
         selectable: true,
         eventClick: function(info) {
-            if (info.event.extendedProps && info.event.extendedProps.source === 'google') {
-                return; // Google events are read-only
+            var props = info.event.extendedProps || {};
+            if (props.source === 'google' && props.html_link) {
+                window.open(props.html_link, '_blank');
+                return;
             }
+            if (props.source === 'google') return;
             window.location.href = '/calendar/' + info.event.id + '/edit';
         },
         select: function(info) {
@@ -113,34 +173,85 @@ document.addEventListener('DOMContentLoaded', function() {
     calendar.render();
 });
 
+/* Feed URL */
 function showFeedUrl() {
     fetch('{{ url_for("calendar.feed_url") }}')
-        .then(r => r.json())
-        .then(data => {
+        .then(function(r){ return r.json(); })
+        .then(function(data){
             document.getElementById('feed-url-input').value = data.feed_url;
             document.getElementById('feed-modal').style.display = 'block';
             document.getElementById('copy-confirm').style.display = 'none';
         });
 }
-
 function copyFeedUrl() {
     var input = document.getElementById('feed-url-input');
-    input.select();
-    navigator.clipboard.writeText(input.value).then(function() {
+    navigator.clipboard.writeText(input.value).then(function(){
         document.getElementById('copy-confirm').style.display = 'block';
     });
 }
+function closeFeedModal() { document.getElementById('feed-modal').style.display = 'none'; }
 
-function closeFeedModal() {
-    document.getElementById('feed-modal').style.display = 'none';
-}
-
+/* iCal import (fallback) */
 function showImportModal() {
-    document.getElementById('import-modal').style.display = 'block';
+    var el = document.getElementById('import-modal');
+    if (el) el.style.display = 'block';
+}
+function closeImportModal() {
+    var el = document.getElementById('import-modal');
+    if (el) el.style.display = 'none';
 }
 
-function closeImportModal() {
-    document.getElementById('import-modal').style.display = 'none';
+/* Google Calendar event creation */
+function showCreateGoogleEvent() {
+    var el = document.getElementById('gcal-modal');
+    if (!el) return;
+    // Pre-fill start time with next hour
+    var now = new Date();
+    now.setHours(now.getHours() + 1, 0, 0, 0);
+    var end = new Date(now.getTime() + 60*60*1000);
+    document.getElementById('gcal-start').value = toLocalISO(now);
+    document.getElementById('gcal-end').value = toLocalISO(end);
+    el.style.display = 'block';
+}
+function closeGcalModal() { document.getElementById('gcal-modal').style.display = 'none'; }
+
+function toLocalISO(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' +
+        String(d.getDate()).padStart(2,'0') + 'T' +
+        String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+function saveGoogleEvent() {
+    var title = document.getElementById('gcal-title').value.trim();
+    if (!title) { alert('Title is required.'); return; }
+
+    var btn = document.getElementById('gcal-save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    var data = {
+        title: title,
+        start: document.getElementById('gcal-start').value,
+        end: document.getElementById('gcal-end').value,
+        location: document.getElementById('gcal-location').value,
+        description: document.getElementById('gcal-desc').value,
+        attendees: document.getElementById('gcal-attendees').value,
+    };
+
+    fetch('{{ url_for("calendar.create_google_event") }}', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r){ return r.json(); }).then(function(result){
+        btn.disabled = false;
+        btn.textContent = 'Create Event';
+        if (result.error) { alert(result.error); return; }
+        closeGcalModal();
+        location.reload();
+    }).catch(function(){
+        btn.disabled = false;
+        btn.textContent = 'Create Event';
+    });
 }
 </script>
 {% endblock %}

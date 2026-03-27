@@ -72,6 +72,8 @@ def create_app(config_class=Config):
     from app.routes.iep504 import iep504_bp
     from app.routes.meeting_prep import meeting_prep_bp
     from app.routes.email_drafts import email_drafts_bp
+    from app.routes.google_auth import google_auth_bp
+    from app.routes.availability import availability_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -91,6 +93,8 @@ def create_app(config_class=Config):
     app.register_blueprint(iep504_bp, url_prefix='/iep504')
     app.register_blueprint(meeting_prep_bp, url_prefix='/meeting-prep')
     app.register_blueprint(email_drafts_bp, url_prefix='/email-drafts')
+    app.register_blueprint(google_auth_bp, url_prefix='/google')
+    app.register_blueprint(availability_bp, url_prefix='/scheduling')
 
     # Security headers
     @app.after_request
@@ -120,7 +124,7 @@ def create_app(config_class=Config):
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
-        from app.models import attendance, grade, iep504
+        from app.models import attendance, grade, iep504, availability
         db.create_all()
 
         # Auto-migrate: add any missing columns to existing tables

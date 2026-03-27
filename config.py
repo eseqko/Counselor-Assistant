@@ -34,3 +34,9 @@ class Config:
     UPLOAD_FOLDER = os.path.join(DATA_DIR, 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB max upload
     BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
+
+    # Google OAuth 2.0 — place credentials.json in data/ directory
+    GOOGLE_CREDENTIALS_FILE = os.path.join(DATA_DIR, 'google_credentials.json')
+    GOOGLE_SCOPES = [
+        'https://www.googleapis.com/auth/calendar',
+    ]
