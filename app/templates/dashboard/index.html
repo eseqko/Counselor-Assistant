@@ -30,6 +30,41 @@
     {% endif %}
 </div>
 
+<!-- Action Items (Smart Alerts) -->
+{% if alerts %}
+<div class="card" id="action-items-panel">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Today's Action Items
+            {% if alert_counts.get('critical') %}<span class="alert-badge critical">{{ alert_counts.critical }} critical</span>{% endif %}
+            {% if alert_counts.get('high') %}<span class="alert-badge high">{{ alert_counts.high }} high</span>{% endif %}
+        </span>
+        <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-sm btn-outline" onclick="refreshAlerts()" title="Refresh">&#8635;</button>
+            <button class="btn btn-sm btn-outline" onclick="toggleAlertPanel()" id="alert-toggle">Collapse</button>
+        </div>
+    </div>
+    <div class="card-body" id="alert-list">
+        {% for alert in alerts %}
+        <div class="alert-item priority-{{ alert.priority_label }}">
+            <div class="alert-priority-dot"></div>
+            <div class="alert-content">
+                <div class="alert-title">
+                    <span class="alert-category-tag">{{ alert.category }}</span>
+                    {{ alert.title }}
+                </div>
+                {% if alert.detail %}
+                <div class="alert-detail">{{ alert.detail }}</div>
+                {% endif %}
+            </div>
+            {% if alert.action_url %}
+            <a href="{{ alert.action_url }}" class="btn btn-sm btn-outline alert-action">{{ alert.action_label or 'View' }}</a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- Use of Time Bar -->
 {% if total_minutes > 0 %}
 <div class="card">
@@ -234,6 +269,38 @@
 </div>
 
 <style>
+/* Action Items / Smart Alerts */
+.alert-badge { font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:6px; }
+.alert-badge.critical { background:#fde8e8; color:#c62828; }
+.alert-badge.high { background:#fff3e0; color:#e65100; }
+
+.alert-item {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 12px; border-radius:6px; margin-bottom:4px;
+    transition: background 0.15s;
+}
+.alert-item:hover { background:var(--bg); }
+
+.alert-priority-dot {
+    width:10px; height:10px; border-radius:50%; flex-shrink:0;
+}
+.alert-item.priority-critical .alert-priority-dot { background:#c62828; }
+.alert-item.priority-high .alert-priority-dot { background:#e65100; }
+.alert-item.priority-medium .alert-priority-dot { background:#f9a825; }
+.alert-item.priority-low .alert-priority-dot { background:#90a4ae; }
+
+.alert-content { flex:1; min-width:0; }
+.alert-title { font-size:0.88rem; font-weight:600; }
+.alert-detail { font-size:0.82rem; color:var(--gray); margin-top:2px; }
+
+.alert-category-tag {
+    display:inline-block; font-size:0.68rem; text-transform:uppercase;
+    letter-spacing:0.5px; font-weight:700; color:var(--gray);
+    background:var(--bg); padding:1px 6px; border-radius:3px; margin-right:4px;
+}
+
+.alert-action { flex-shrink:0; font-size:0.78rem; }
+
 .schedule-item {
     padding: 8px 0;
     border-bottom: 1px solid #E8ECF0;
@@ -320,5 +387,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+/* Alert panel controls */
+function toggleAlertPanel() {
+    var list = document.getElementById('alert-list');
+    var btn = document.getElementById('alert-toggle');
+    if (list.style.display === 'none') {
+        list.style.display = 'block';
+        btn.textContent = 'Collapse';
+    } else {
+        list.style.display = 'none';
+        btn.textContent = 'Expand';
+    }
+}
+function refreshAlerts() {
+    fetch('/alerts/api/alerts/refresh', {method:'POST'})
+        .then(function(){ location.reload(); });
+}
 </script>
 {% endblock %}

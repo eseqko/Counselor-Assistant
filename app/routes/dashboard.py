@@ -7,6 +7,7 @@ from app.models.note import Note
 from app.models.activity import Activity
 from app.models.service_record import ServiceRecord
 from app.models.transcript import TranscriptRecord
+from app.utils.alert_engine import get_alerts
 from datetime import datetime, date, timedelta, timezone
 import requests as http_requests
 import pytz
@@ -253,6 +254,13 @@ def index():
                     grad_risk[rl] += 1
     grad_at_risk_total = grad_risk['critical'] + grad_risk['at-risk']
 
+    # Smart alerts
+    alerts = get_alerts(current_user)
+    alert_counts = {}
+    for a in alerts:
+        p = a.get('priority_label', 'low')
+        alert_counts[p] = alert_counts.get(p, 0) + 1
+
     return render_template('dashboard/index.html',
         today=today,
         total_students=total_students,
@@ -271,6 +279,8 @@ def index():
         week_activities=week_activities,
         grad_risk=grad_risk,
         grad_at_risk_total=grad_at_risk_total,
+        alerts=alerts,
+        alert_counts=alert_counts,
     )
 
 

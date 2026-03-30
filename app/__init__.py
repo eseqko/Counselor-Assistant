@@ -74,6 +74,7 @@ def create_app(config_class=Config):
     from app.routes.email_drafts import email_drafts_bp
     from app.routes.google_auth import google_auth_bp
     from app.routes.availability import availability_bp
+    from app.routes.alerts import alerts_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -95,6 +96,7 @@ def create_app(config_class=Config):
     app.register_blueprint(email_drafts_bp, url_prefix='/email-drafts')
     app.register_blueprint(google_auth_bp, url_prefix='/google')
     app.register_blueprint(availability_bp, url_prefix='/scheduling')
+    app.register_blueprint(alerts_bp, url_prefix='/alerts')
 
     # Security headers
     @app.after_request
@@ -125,6 +127,7 @@ def create_app(config_class=Config):
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
         from app.models import attendance, grade, iep504, availability
+        from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 
         # Auto-migrate: add any missing columns to existing tables
