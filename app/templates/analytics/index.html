@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% block title %}Data Visualizations{% endblock %}
+{% block page_title %}Data Visualizations{% endblock %}
+{% block head %}
+<style>
+.analytics-toolbar {
+    display:flex; gap:8px; align-items:center; margin-bottom:20px; flex-wrap:wrap;
+}
+.range-btn {
+    padding:6px 14px; border:1px solid var(--light-gray); border-radius:6px;
+    background:var(--white); cursor:pointer; font-size:0.84rem; font-weight:600;
+    transition:all 0.15s;
+}
+.range-btn:hover { border-color:var(--primary); color:var(--primary); }
+.range-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+@media (max-width:900px) { .chart-grid { grid-template-columns:1fr; } }
+
+.chart-card {
+    background:var(--white); border-radius:10px; padding:20px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);
+}
+.chart-card h3 {
+    font-size:0.92rem; color:var(--primary-dark); margin:0 0 4px;
+}
+.chart-card .chart-subtitle {
+    font-size:0.78rem; color:var(--gray); margin-bottom:12px;
+}
+.chart-card canvas { max-height:280px; }
+
+.chart-card.full { grid-column:1/-1; }
+
+.kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+.kpi-card {
+    background:var(--white); border-radius:10px; padding:16px; text-align:center;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);
+}
+.kpi-value { font-size:1.6rem; font-weight:800; color:var(--primary-dark); }
+.kpi-label { font-size:0.78rem; color:var(--gray); margin-top:2px; }
+
+.section-header {
+    font-size:1.05rem; font-weight:700; color:var(--text); margin:24px 0 12px;
+    padding-bottom:6px; border-bottom:2px solid var(--light-gray);
+}
+.section-header:first-of-type { margin-top:0; }
+
+.print-btn { margin-left:auto; }
+@media print {
+    .analytics-toolbar, .sidebar, .top-bar, .print-btn { display:none !important; }
+    .chart-grid { break-inside:avoid; }
+    .chart-card { break-inside:avoid; box-shadow:none; border:1px solid #ddd; }
+}
+
+.loading-overlay {
+    text-align:center; padding:60px 20px; color:var(--gray);
+    font-size:0.95rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-toolbar">
+    <button class="range-btn" data-range="30" onclick="loadData('30')">30 Days</button>
+    <button class="range-btn" data-range="90" onclick="loadData('90')">90 Days</button>
+    <button class="range-btn" data-range="semester" onclick="loadData('semester')">Semester</button>
+    <button class="range-btn active" data-range="year" onclick="loadData('year')">School Year</button>
+    <button class="btn btn-sm btn-outline print-btn" onclick="window.print()">Print / Export</button>
+</div>
+
+<div id="analytics-content">
+    <div class="loading-overlay">Loading analytics data...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script>
+(function(){
+    var BASE = "{{ url_for('analytics.index') }}".replace(/\/$/,'');
+    var charts = [];
+    var currentRange = 'year';
+
+    /* Color palettes */
+    var COLORS = ['#4A90D9','#2ECC71','#F39C12','#E74C3C','#9B59B6','#1ABC9C','#E67E22','#34495E','#E91E63','#607D8B'];
+    var COLORS_ALPHA = COLORS.map(function(c){ return c + '40'; });
+
+    window.loadData = function(range) {
+        currentRange = range || 'year';
+        document.querySelectorAll('.range-btn').forEach(function(b){
+            b.classList.toggle('active', b.dataset.range === currentRange);
+        });
+
+        document.getElementById('analytics-content').innerHTML =
+            '<div class="loading-overlay">Loading analytics data...</div>';
+
+        // Destroy existing charts
+        charts.forEach(function(c){ c.destroy(); });
+        charts = [];
+
+        fetch(BASE + '/api/data?range=' + currentRange)
+            .then(function(r){ return r.json(); })
+            .then(function(data){ render(data); })
+            .catch(function(){ document.getElementById('analytics-content').innerHTML =
+                '<div class="loading-overlay">Failed to load data.</div>'; });
+    };
+
+    function render(data) {
+        var c = data.caseload || {};
+        var ac = data.academic || {};
+        var at = data.attendance || {};
+        var sv = data.services || {};
+        var av = data.activities || {};
+        var cn = data.contacts || {};
+        var fu = data.followups || {};
+
+        var html = '';
+
+        /* ── KPIs ─────────────────────────────── */
+        html += '<div class="kpi-row">';
+        html += kpi(c.total || 0, 'Active Students');
+        html += kpi(sv.total_services || 0, 'Services Delivered');
+        html += kpi(sv.total_hours || 0, 'Service Hours');
+        html += kpi(cn.unique_students || 0, 'Students Contacted');
+        html += kpi(cn.total_notes || 0, 'Counseling Notes');
+        html += kpi(fu.completion_rate ? fu.completion_rate + '%' : '0%', 'Follow-Up Rate');
+        html += kpi(ac.avg_gpa || '--', 'Avg GPA');
+        html += kpi((at.chronic_absenteeism_pct || 0) + '%', 'Chronic Absence');
+        html += '</div>';
+
+        /* ── Caseload ─────────────────────────── */
+        html += '<div class="section-header">Caseload Overview</div>';
+        html += '<div class="chart-grid">';
+        html += chartCard('chart-grade-dist', 'Grade Level Distribution', 'Students per grade level');
+        html += chartCard('chart-demographics', 'Student Demographics', 'IEP, 504, EL breakdown');
+        html += '</div>';
+
+        /* ── Academic ─────────────────────────── */
+        html += '<div class="section-header">Academic Performance</div>';
+        html += '<div class="chart-grid">';
+        html += chartCard('chart-gpa', 'GPA Distribution', 'Across your caseload');
+        html += chartCard('chart-failing', 'Failing/Near-Failing by Subject', ac.total_failing ? ac.total_failing + ' total' : 'No failing grades');
+        html += '</div>';
+
+        /* ── Attendance ───────────────────────── */
+        html += '<div class="section-header">Attendance</div>';
+        html += '<div class="chart-grid">';
+        html += chartCard('chart-attend-trend', 'Monthly Attendance Trend', 'Present vs Absent vs Tardy', true);
+        html += chartCard('chart-top-absent', 'Most Absences', 'Top 10 students by absence count');
+        html += '</div>';
+
+        /* ── Services & Impact ────────────────── */
+        html += '<div class="section-header">Services & Impact</div>';
+        html += '<div class="chart-grid">';
+        html += chartCard('chart-svc-type', 'Services by Type', sv.total_services + ' total services');
+        html += chartCard('chart-svc-domain', 'ASCA Domain Alignment', 'Academic / Career / Social-Emotional');
+        html += '</div>';
+
+        /* ── Use of Time ──────────────────────── */
+        html += '<div class="section-header">Use of Time</div>';
+        html += '<div class="chart-grid">';
+        html += chartCard('chart-uot', 'Time Allocation (Hours)', 'ASCA 4-quadrant breakdown');
+        html += chartCard('chart-delivery', 'Delivery Method', 'Individual / Group / Classroom / School-wide');
+        html += '</div>';
+
+        /* ── Contacts & Follow-ups ────────────── */
+        html += '<div class="section-header">Contacts & Follow-ups</div>';
+        html += '<div class="chart-grid">';
+        html += chartCard('chart-contacts', 'Weekly Student Contacts', 'Notes per week', true);
+        html += chartCard('chart-note-type', 'Contacts by Type', 'Note type breakdown');
+        html += chartCard('chart-weekly-hours', 'Weekly Hours Logged', 'Activity log hours per week', true);
+        html += chartCard('chart-followups', 'Follow-up Status', fu.total + ' total follow-ups');
+        html += '</div>';
+
+        document.getElementById('analytics-content').innerHTML = html;
+
+        /* ── Create charts ────────────────────── */
+        // Caseload
+        if (c.grade_distribution) {
+            charts.push(bar('chart-grade-dist', c.grade_distribution.labels, c.grade_distribution.values, 'Students'));
+        }
+        if (c.demographics) {
+            charts.push(doughnut('chart-demographics', c.demographics.labels, c.demographics.values));
+        }
+
+        // Academic
+        if (ac.gpa_distribution) {
+            charts.push(bar('chart-gpa', ac.gpa_distribution.labels, ac.gpa_distribution.values, 'Students'));
+        }
+        if (ac.failing_by_subject && ac.failing_by_subject.labels.length) {
+            charts.push(horizontalBar('chart-failing', ac.failing_by_subject.labels, ac.failing_by_subject.values, 'Students'));
+        }
+
+        // Attendance
+        if (at.monthly_trend && at.monthly_trend.labels.length) {
+            charts.push(stackedBar('chart-attend-trend', at.monthly_trend.labels, [
+                {label:'Present', data:at.monthly_trend.present, color:'#2ECC71'},
+                {label:'Absent', data:at.monthly_trend.absent, color:'#E74C3C'},
+                {label:'Tardy', data:at.monthly_trend.tardy, color:'#F39C12'},
+            ]));
+        }
+        if (at.top_absent_students && at.top_absent_students.labels.length) {
+            charts.push(horizontalBar('chart-top-absent', at.top_absent_students.labels, at.top_absent_students.values, 'Absences'));
+        }
+
+        // Services
+        if (sv.by_type && sv.by_type.labels.length) {
+            charts.push(horizontalBar('chart-svc-type', sv.by_type.labels, sv.by_type.values, 'Count'));
+        }
+        if (sv.by_domain) {
+            charts.push(doughnut('chart-svc-domain', sv.by_domain.labels, sv.by_domain.values));
+        }
+
+        // Use of Time
+        if (av.use_of_time && av.use_of_time.labels.length) {
+            charts.push(doughnut('chart-uot', av.use_of_time.labels, av.use_of_time.values));
+        }
+        if (av.by_delivery && av.by_delivery.labels.length) {
+            charts.push(pie('chart-delivery', av.by_delivery.labels, av.by_delivery.values));
+        }
+
+        // Contacts
+        if (cn.weekly_contacts && cn.weekly_contacts.labels.length) {
+            charts.push(line('chart-contacts', cn.weekly_contacts.labels, cn.weekly_contacts.values, 'Contacts'));
+        }
+        if (cn.by_type && cn.by_type.labels.length) {
+            charts.push(horizontalBar('chart-note-type', cn.by_type.labels, cn.by_type.values, 'Notes'));
+        }
+        if (av.weekly_hours && av.weekly_hours.labels.length) {
+            charts.push(line('chart-weekly-hours', av.weekly_hours.labels, av.weekly_hours.values, 'Hours'));
+        }
+
+        // Follow-ups
+        if (fu.total) {
+            charts.push(doughnut('chart-followups', ['Completed','Overdue','Pending'],
+                [fu.completed, fu.overdue, fu.pending]));
+        }
+    }
+
+    /* ── Chart builders ───────────────────────── */
+    function bar(id, labels, values, label) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el, {
+            type:'bar',
+            data:{labels:labels, datasets:[{label:label, data:values,
+                backgroundColor:COLORS_ALPHA.slice(0,values.length),
+                borderColor:COLORS.slice(0,values.length), borderWidth:1}]},
+            options:{responsive:true, plugins:{legend:{display:false}},
+                scales:{y:{beginAtZero:true, ticks:{precision:0}}}}
+        });
+    }
+
+    function horizontalBar(id, labels, values, label) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el, {
+            type:'bar',
+            data:{labels:labels, datasets:[{label:label, data:values,
+                backgroundColor:COLORS_ALPHA.slice(0,values.length),
+                borderColor:COLORS.slice(0,values.length), borderWidth:1}]},
+            options:{indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
+                scales:{x:{beginAtZero:true, ticks:{precision:0}}}}
+        });
+    }
+
+    function stackedBar(id, labels, datasets) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el, {
+            type:'bar',
+            data:{labels:labels, datasets:datasets.map(function(ds){
+                return {label:ds.label, data:ds.data,
+                    backgroundColor:ds.color+'80', borderColor:ds.color, borderWidth:1};
+            })},
+            options:{responsive:true, plugins:{legend:{position:'bottom'}},
+                scales:{x:{stacked:true}, y:{stacked:true, beginAtZero:true, ticks:{precision:0}}}}
+        });
+    }
+
+    function line(id, labels, values, label) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el, {
+            type:'line',
+            data:{labels:labels, datasets:[{label:label, data:values,
+                borderColor:COLORS[0], backgroundColor:COLORS_ALPHA[0],
+                fill:true, tension:0.3, pointRadius:3}]},
+            options:{responsive:true, plugins:{legend:{display:false}},
+                scales:{y:{beginAtZero:true, ticks:{precision:0}}}}
+        });
+    }
+
+    function doughnut(id, labels, values) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el, {
+            type:'doughnut',
+            data:{labels:labels, datasets:[{data:values,
+                backgroundColor:COLORS.slice(0,values.length),
+                borderWidth:2}]},
+            options:{responsive:true, plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}}
+        });
+    }
+
+    function pie(id, labels, values) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el, {
+            type:'pie',
+            data:{labels:labels, datasets:[{data:values,
+                backgroundColor:COLORS.slice(0,values.length),
+                borderWidth:2}]},
+            options:{responsive:true, plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}}
+        });
+    }
+
+    /* ── HTML helpers ─────────────────────────── */
+    function kpi(value, label) {
+        return '<div class="kpi-card"><div class="kpi-value">'+value+'</div><div class="kpi-label">'+label+'</div></div>';
+    }
+    function chartCard(id, title, subtitle, full) {
+        return '<div class="chart-card'+(full?' full':'')+'"><h3>'+title+'</h3>' +
+            '<div class="chart-subtitle">'+subtitle+'</div>' +
+            '<canvas id="'+id+'"></canvas></div>';
+    }
+
+    /* Initial load */
+    loadData('year');
+})();
+</script>
+{% endblock %}

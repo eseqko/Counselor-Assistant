@@ -75,6 +75,7 @@ def create_app(config_class=Config):
     from app.routes.google_auth import google_auth_bp
     from app.routes.availability import availability_bp
     from app.routes.alerts import alerts_bp
+    from app.routes.analytics import analytics_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -97,6 +98,7 @@ def create_app(config_class=Config):
     app.register_blueprint(google_auth_bp, url_prefix='/google')
     app.register_blueprint(availability_bp, url_prefix='/scheduling')
     app.register_blueprint(alerts_bp, url_prefix='/alerts')
+    app.register_blueprint(analytics_bp, url_prefix='/analytics')
 
     # Security headers
     @app.after_request
