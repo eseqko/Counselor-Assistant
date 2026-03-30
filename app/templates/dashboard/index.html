@@ -192,11 +192,32 @@
 
             <script>
             function toggleFollowUp(noteId, checkbox) {
+                // Immediately hide the item with a fade
+                var row = document.getElementById('followup-' + noteId);
+                if (row && checkbox.checked) {
+                    row.style.transition = 'opacity 0.3s, max-height 0.3s';
+                    row.style.opacity = '0';
+                    row.style.maxHeight = '0';
+                    row.style.overflow = 'hidden';
+                    row.style.padding = '0';
+                    row.style.marginBottom = '0';
+                }
+
+                // Update the follow-up count badge
+                var countEl = document.getElementById('follow-up-count');
+                if (countEl && checkbox.checked) {
+                    var current = parseInt(countEl.textContent) || 0;
+                    countEl.textContent = Math.max(0, current - 1);
+                }
+
                 fetch('/dashboard/follow-up/' + noteId + '/toggle-complete', {method: 'POST'})
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        // Reload to reflect archive/restore changes
-                        location.reload();
+                        // If unchecking (restoring), reload to move it back
+                        if (!checkbox.checked) {
+                            location.reload();
+                        }
+                        // If checking off, no reload needed — it's already hidden
                     });
             }
             </script>
