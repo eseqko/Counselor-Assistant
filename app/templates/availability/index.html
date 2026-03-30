@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Availability & Scheduling{% endblock %}
+{% block page_title %}Availability & Scheduling{% endblock %}
+
+{% block head %}
+<style>
+.avail-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:768px) { .avail-grid { grid-template-columns:1fr; } }
+
+.slot-card {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; background:var(--bg); border-radius:6px; margin-bottom:6px;
+}
+.slot-card .day { font-weight:700; min-width:90px; }
+.slot-card .time { color:var(--gray); font-size:0.88rem; }
+.slot-card .duration { font-size:0.78rem; color:var(--primary); }
+
+.booking-card {
+    padding:12px 14px; background:var(--bg); border-radius:8px;
+    margin-bottom:8px; border-left:3px solid var(--primary);
+}
+.booking-card.cancelled { border-left-color:var(--gray); opacity:0.5; }
+.booking-header { display:flex; justify-content:space-between; align-items:center; }
+.booking-name { font-weight:700; }
+.booking-meta { font-size:0.82rem; color:var(--gray); margin-top:4px; }
+
+.share-box {
+    background:#e8f5e9; border-radius:8px; padding:14px;
+    margin-bottom:20px; display:flex; align-items:center; gap:10px;
+}
+.share-box input { flex:1; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:0.84rem; }
+
+.no-items { color:var(--gray); font-size:0.88rem; padding:16px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Booking link share -->
+<div class="share-box">
+    <strong>Booking Link:</strong>
+    <input type="text" id="booking-url" readonly
+           value="{{ url_for('availability.public_booking_page', token=booking_token, _external=True) }}">
+    <button class="btn btn-sm btn-primary" onclick="copyBookingUrl()">Copy</button>
+</div>
+
+{% if not google_connected %}
+<div style="background:#fff3cd; padding:12px 16px; border-radius:8px; margin-bottom:20px; font-size:0.88rem;">
+    <strong>Tip:</strong> Connect your Google Calendar to automatically check for conflicts when
+    parents book appointments.
+    <a href="{{ url_for('google_auth.authorize') }}" class="btn btn-sm btn-outline" style="margin-left:8px;">Connect Google</a>
+</div>
+{% endif %}
+
+<div class="avail-grid">
+    <!-- Left: Availability Slots -->
+    <div class="card">
+        <div class="card-header">
+            Weekly Availability
+            <button class="btn btn-sm btn-primary" onclick="openAddSlot()">+ Add Slot</button>
+        </div>
+        <div class="card-body">
+            <div id="slots-list">
+                {% if slots %}
+                    {% for slot in slots %}
+                    <div class="slot-card" id="slot-{{ slot.id }}">
+                        <div>
+                            <span class="day">{{ day_names[slot.day_of_week] }}</span>
+                            <span class="time">{{ slot.start_time }} - {{ slot.end_time }}</span>
+                            <span class="duration">({{ slot.slot_duration }}min slots)</span>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteSlot({{ slot.id }})">&times;</button>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-items" id="no-slots">No availability set. Add your weekly time slots above.</div>
+                {% endif %}
+            </div>
+
+            <!-- Add slot form (hidden) -->
+            <div id="add-slot-form" style="display:none; margin-top:16px; padding:16px; background:var(--bg); border-radius:8px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end;">
+                    <div>
+                        <label style="font-size:0.82rem;font-weight:600;">Day</label>
+                        <select id="slot-day" class="form-control">
+                            {% for name in day_names[:5] %}
+                            <option value="{{ loop.index0 }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.82rem;font-weight:600;">Start</label>
+                        <input type="time" id="slot-start" class="form-control" value="08:00">
+                    </div>
+                    <div>
+                        <label style="font-size:0.82rem;font-weight:600;">End</label>
+                        <input type="time" id="slot-end" class="form-control" value="11:00">
+                    </div>
+                    <div>
+                        <label style="font-size:0.82rem;font-weight:600;">Duration</label>
+                        <select id="slot-duration" class="form-control">
+                            <option value="15">15 min</option>
+                            <option value="30" selected>30 min</option>
+                            <option value="45">45 min</option>
+                            <option value="60">60 min</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top:10px; display:flex; gap:8px;">
+                    <button class="btn btn-sm btn-primary" onclick="saveSlot()">Save</button>
+                    <button class="btn btn-sm btn-outline" onclick="closeAddSlot()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Upcoming Bookings -->
+    <div class="card">
+        <div class="card-header">Upcoming Bookings</div>
+        <div class="card-body" id="bookings-list">
+            {% if bookings %}
+                {% for b in bookings %}
+                <div class="booking-card" id="booking-{{ b.id }}">
+                    <div class="booking-header">
+                        <span class="booking-name">{{ b.booker_name }}</span>
+                        <span style="font-size:0.82rem;">{{ b.appointment_date.strftime('%b %d') }} at {{ b.start_time }}</span>
+                    </div>
+                    <div class="booking-meta">
+                        {% if b.student_name %}Student: {{ b.student_name }} | {% endif %}
+                        {{ dict(meeting_types).get(b.meeting_type, b.meeting_type) }}
+                        {% if b.booker_email %} | {{ b.booker_email }}{% endif %}
+                    </div>
+                    {% if b.notes %}
+                    <div class="booking-meta">{{ b.notes }}</div>
+                    {% endif %}
+                    <div style="margin-top:6px;">
+                        <button class="btn btn-sm btn-outline-danger" onclick="cancelBooking({{ b.id }})">Cancel</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-items">No upcoming bookings.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var BASE = "{{ url_for('availability.index') }}".replace(/\/$/,'');
+
+function copyBookingUrl() {
+    var input = document.getElementById('booking-url');
+    navigator.clipboard.writeText(input.value);
+    input.select();
+}
+
+function openAddSlot() {
+    document.getElementById('add-slot-form').style.display = 'block';
+}
+function closeAddSlot() {
+    document.getElementById('add-slot-form').style.display = 'none';
+}
+
+function saveSlot() {
+    var data = {
+        day_of_week: parseInt(document.getElementById('slot-day').value),
+        start_time: document.getElementById('slot-start').value,
+        end_time: document.getElementById('slot-end').value,
+        slot_duration: parseInt(document.getElementById('slot-duration').value),
+    };
+    fetch(BASE + '/api/slots', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r){ return r.json(); }).then(function(slot){
+        if (slot.error) { alert(slot.error); return; }
+        location.reload();
+    });
+}
+
+function deleteSlot(id) {
+    if (!confirm('Remove this availability slot?')) return;
+    fetch(BASE + '/api/slots/' + id, { method:'DELETE' })
+        .then(function(){ location.reload(); });
+}
+
+function cancelBooking(id) {
+    if (!confirm('Cancel this booking? The attendee will be notified if Google Calendar is connected.')) return;
+    fetch(BASE + '/api/bookings/' + id + '/cancel', { method:'POST' })
+        .then(function(){ location.reload(); });
+}
+</script>
+{% endblock %}

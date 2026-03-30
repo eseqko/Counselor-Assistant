@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
 from flask_login import login_required, current_user
-from app import db
+from app import db, csrf
 from app.models.calendar_event import CalendarEvent
 from app.models.student import Student
 from app.models.user import User
 from app.utils.audit import log_action
+from app.utils import google_client, google_calendar
 from datetime import datetime, date, timedelta, timezone
 from dateutil.rrule import rrulestr
 import pytz
@@ -28,10 +29,12 @@ def index():
     else:
         current_date = date.today()
 
+    google_connected = google_client.is_connected(current_user)
     return render_template('calendar/index.html',
         current_date=current_date, view=view,
         event_types=CalendarEvent.EVENT_TYPES,
-        event_colors=CalendarEvent.EVENT_COLORS)
+        event_colors=CalendarEvent.EVENT_COLORS,
+        google_connected=google_connected)
 
 
 @calendar_bp.route('/events')
@@ -218,6 +221,62 @@ def ical_feed(token):
     ics_content = '\r\n'.join(lines) + '\r\n'
     return Response(ics_content, mimetype='text/calendar',
                     headers={'Content-Disposition': 'inline; filename="calendar.ics"'})
+
+
+@calendar_bp.route('/google-events')
+@login_required
+def get_google_events():
+    """Fetch events via Google Calendar API (OAuth) — preferred over iCal."""
+    if not google_client.is_connected(current_user):
+        return jsonify([])
+
+    start = request.args.get('start', '')
+    end = request.args.get('end', '')
+    events = google_calendar.list_events(current_user, time_min=start or None,
+                                         time_max=end or None)
+    return jsonify(events)
+
+
+@calendar_bp.route('/api/create-google-event', methods=['POST'])
+@csrf.exempt
+@login_required
+def create_google_event():
+    """Create an event on Google Calendar from the app."""
+    if not google_client.is_connected(current_user):
+        return jsonify({'error': 'Google Calendar not connected.'}), 400
+
+    data = request.get_json(silent=True) or {}
+    summary = data.get('title', '').strip()
+    if not summary:
+        return jsonify({'error': 'Title is required.'}), 400
+
+    try:
+        start_dt = datetime.fromisoformat(data['start'])
+        end_str = data.get('end', '')
+        end_dt = datetime.fromisoformat(end_str) if end_str else start_dt + timedelta(hours=1)
+    except (ValueError, KeyError):
+        return jsonify({'error': 'Invalid date/time.'}), 400
+
+    attendees = data.get('attendees', [])
+    if isinstance(attendees, str):
+        attendees = [e.strip() for e in attendees.split(',') if e.strip()]
+
+    gcal_event = google_calendar.create_event(
+        current_user, summary, start_dt, end_dt,
+        description=data.get('description', ''),
+        location=data.get('location', ''),
+        attendees=attendees or None,
+        all_day=data.get('all_day', False),
+    )
+
+    if not gcal_event:
+        return jsonify({'error': 'Failed to create Google Calendar event.'}), 500
+
+    return jsonify({
+        'ok': True,
+        'google_event_id': gcal_event.get('id'),
+        'html_link': gcal_event.get('htmlLink', ''),
+    }), 201
 
 
 @calendar_bp.route('/external-ical', methods=['GET', 'POST'])

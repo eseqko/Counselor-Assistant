@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book an Appointment — {{ counselor.display_name }}</title>
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+               background:#f5f7fa; color:#333; line-height:1.5; }
+
+        .container { max-width:640px; margin:40px auto; padding:0 20px; }
+
+        .header { text-align:center; margin-bottom:32px; }
+        .header h1 { font-size:1.5rem; color:#2c3e50; }
+        .header .subtitle { color:#7f8c8d; font-size:0.95rem; margin-top:4px; }
+
+        .card { background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);
+                padding:24px; margin-bottom:20px; }
+        .card h2 { font-size:1.1rem; color:#2c3e50; margin-bottom:16px;
+                    padding-bottom:8px; border-bottom:2px solid #eee; }
+
+        label { display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#2c3e50; }
+        input, select, textarea {
+            width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:6px;
+            font-size:0.92rem; margin-bottom:14px; font-family:inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline:none; border-color:#4A90D9; }
+
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        @media (max-width:480px) { .form-row { grid-template-columns:1fr; } }
+
+        .btn { padding:12px 24px; border:none; border-radius:8px; font-size:0.95rem;
+               font-weight:600; cursor:pointer; transition:all 0.15s; }
+        .btn-primary { background:#4A90D9; color:#fff; }
+        .btn-primary:hover { background:#357ABD; }
+        .btn-primary:disabled { background:#b0c4de; cursor:not-allowed; }
+
+        /* Date picker */
+        .date-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; margin-bottom:16px; }
+        .date-btn {
+            padding:10px; border:1px solid #ddd; border-radius:8px; background:#fff;
+            cursor:pointer; text-align:center; transition:all 0.15s;
+        }
+        .date-btn:hover { border-color:#4A90D9; background:#ebf5ff; }
+        .date-btn.active { border-color:#4A90D9; background:#4A90D9; color:#fff; }
+        .date-btn .day-name { font-size:0.78rem; color:#7f8c8d; }
+        .date-btn.active .day-name { color:#dde9f7; }
+        .date-btn .date-num { font-size:1rem; font-weight:700; }
+
+        /* Time slots */
+        .time-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin-bottom:16px; }
+        .time-btn {
+            padding:8px 12px; border:1px solid #ddd; border-radius:6px; background:#fff;
+            cursor:pointer; text-align:center; font-size:0.88rem; transition:all 0.15s;
+        }
+        .time-btn:hover { border-color:#4A90D9; background:#ebf5ff; }
+        .time-btn.active { border-color:#4A90D9; background:#4A90D9; color:#fff; }
+
+        .empty-msg { color:#7f8c8d; font-size:0.88rem; padding:12px 0; text-align:center; }
+
+        .success-msg {
+            display:none; text-align:center; padding:40px 20px;
+            background:#e8f5e9; border-radius:12px; margin-top:20px;
+        }
+        .success-msg h2 { color:#2e7d32; margin-bottom:8px; }
+        .success-msg p { color:#4caf50; }
+
+        .loading { text-align:center; padding:20px; color:#7f8c8d; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Book an Appointment</h1>
+        <div class="subtitle">{{ counselor.display_name }}{% if counselor.school_name %} — {{ counselor.school_name }}{% endif %}</div>
+    </div>
+
+    <div id="booking-form">
+        <!-- Step 1: Select date -->
+        <div class="card" id="step-date">
+            <h2>1. Select a Date</h2>
+            <div id="date-grid" class="date-grid">
+                <div class="loading">Loading available dates...</div>
+            </div>
+        </div>
+
+        <!-- Step 2: Select time -->
+        <div class="card" id="step-time" style="display:none;">
+            <h2>2. Select a Time</h2>
+            <div id="time-grid" class="time-grid"></div>
+        </div>
+
+        <!-- Step 3: Your information -->
+        <div class="card" id="step-info" style="display:none;">
+            <h2>3. Your Information</h2>
+            <div class="form-row">
+                <div>
+                    <label>Your Name *</label>
+                    <input type="text" id="inp-name" placeholder="Full name" required>
+                </div>
+                <div>
+                    <label>Relationship</label>
+                    <select id="inp-relationship">
+                        <option value="parent">Parent/Guardian</option>
+                        <option value="student">Student</option>
+                        <option value="teacher">Teacher</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div>
+                    <label>Email</label>
+                    <input type="email" id="inp-email" placeholder="your@email.com">
+                </div>
+                <div>
+                    <label>Phone</label>
+                    <input type="tel" id="inp-phone" placeholder="(555) 123-4567">
+                </div>
+            </div>
+            <label>Student Name</label>
+            <input type="text" id="inp-student" placeholder="Student's full name">
+            <label>Meeting Type</label>
+            <select id="inp-type">
+                {% for val, label in meeting_types %}
+                <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+            <label>Notes (optional)</label>
+            <textarea id="inp-notes" rows="3" placeholder="Anything the counselor should know..."></textarea>
+            <button class="btn btn-primary" id="btn-confirm" onclick="confirmBooking()" style="width:100%;margin-top:8px;">
+                Confirm Appointment
+            </button>
+        </div>
+    </div>
+
+    <div class="success-msg" id="success-msg">
+        <h2>Appointment Confirmed!</h2>
+        <p id="success-detail"></p>
+    </div>
+</div>
+
+<script>
+(function(){
+    var BASE = window.location.pathname.replace(/\/$/, '');
+    var allSlots = [];
+    var selectedDate = null;
+    var selectedSlot = null;
+
+    // Load available slots
+    fetch(BASE + '/slots')
+        .then(function(r){ return r.json(); })
+        .then(function(slots){
+            allSlots = slots;
+            renderDates();
+        });
+
+    function renderDates() {
+        var grid = document.getElementById('date-grid');
+        if (!allSlots.length) {
+            grid.innerHTML = '<div class="empty-msg">No availability at this time. Please check back later.</div>';
+            return;
+        }
+
+        // Group by date
+        var dates = [];
+        var seen = {};
+        allSlots.forEach(function(s){
+            if (!seen[s.date]) {
+                seen[s.date] = true;
+                dates.push({ date:s.date, day_name:s.day_name });
+            }
+        });
+
+        grid.innerHTML = '';
+        dates.forEach(function(d){
+            var parts = d.date.split('-');
+            var month = parseInt(parts[1]);
+            var day = parseInt(parts[2]);
+            var months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+            var btn = document.createElement('button');
+            btn.className = 'date-btn';
+            btn.innerHTML = '<div class="day-name">' + d.day_name + '</div>' +
+                            '<div class="date-num">' + months[month] + ' ' + day + '</div>';
+            btn.onclick = function(){ selectDate(d.date); };
+            grid.appendChild(btn);
+        });
+    }
+
+    window.selectDate = function(dateStr) {
+        selectedDate = dateStr;
+        selectedSlot = null;
+
+        // Highlight selected date
+        document.querySelectorAll('.date-btn').forEach(function(btn, i){
+            var dates = [];
+            var seen = {};
+            allSlots.forEach(function(s){ if (!seen[s.date]) { seen[s.date]=true; dates.push(s.date); }});
+            btn.classList.toggle('active', dates[i] === dateStr);
+        });
+
+        // Show time slots for this date
+        var timeGrid = document.getElementById('time-grid');
+        var daySlots = allSlots.filter(function(s){ return s.date === dateStr; });
+
+        if (!daySlots.length) {
+            timeGrid.innerHTML = '<div class="empty-msg">No slots available on this date.</div>';
+        } else {
+            timeGrid.innerHTML = '';
+            daySlots.forEach(function(s){
+                var btn = document.createElement('button');
+                btn.className = 'time-btn';
+                btn.textContent = s.display;
+                btn.onclick = function(){ selectTime(s); };
+                timeGrid.appendChild(btn);
+            });
+        }
+
+        document.getElementById('step-time').style.display = 'block';
+        document.getElementById('step-info').style.display = 'none';
+    };
+
+    window.selectTime = function(slot) {
+        selectedSlot = slot;
+
+        document.querySelectorAll('.time-btn').forEach(function(btn){
+            btn.classList.toggle('active', btn.textContent === slot.display);
+        });
+
+        document.getElementById('step-info').style.display = 'block';
+        document.getElementById('step-info').scrollIntoView({ behavior:'smooth' });
+    };
+
+    window.confirmBooking = function() {
+        var name = document.getElementById('inp-name').value.trim();
+        if (!name) { alert('Please enter your name.'); return; }
+        if (!selectedDate || !selectedSlot) { alert('Please select a date and time.'); return; }
+
+        var btn = document.getElementById('btn-confirm');
+        btn.disabled = true;
+        btn.textContent = 'Booking...';
+
+        var data = {
+            name: name,
+            email: document.getElementById('inp-email').value.trim(),
+            phone: document.getElementById('inp-phone').value.trim(),
+            relationship: document.getElementById('inp-relationship').value,
+            student_name: document.getElementById('inp-student').value.trim(),
+            meeting_type: document.getElementById('inp-type').value,
+            notes: document.getElementById('inp-notes').value.trim(),
+            date: selectedDate,
+            start_time: selectedSlot.start_time,
+            end_time: selectedSlot.end_time,
+        };
+
+        fetch(BASE + '/confirm', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(data)
+        }).then(function(r){ return r.json(); }).then(function(result){
+            if (result.error) {
+                alert(result.error);
+                btn.disabled = false;
+                btn.textContent = 'Confirm Appointment';
+                return;
+            }
+            document.getElementById('booking-form').style.display = 'none';
+            document.getElementById('success-msg').style.display = 'block';
+            document.getElementById('success-detail').textContent = result.message;
+        }).catch(function(){
+            btn.disabled = false;
+            btn.textContent = 'Confirm Appointment';
+            alert('Something went wrong. Please try again.');
+        });
+    };
+})();
+</script>
+</body>
+</html>
