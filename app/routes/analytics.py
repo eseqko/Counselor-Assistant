@@ -159,11 +159,11 @@ def _academic_data(student_ids):
         elif g.letter_grade in ('D', 'D-', 'D+'):
             failing_d[subj] = failing_d.get(subj, 0) + 1
 
-    # Combine and sort by total count descending, take top 8
+    # Combine and sort by total count descending
     all_subjects = set(list(failing_f.keys()) + list(failing_d.keys()))
     combined = [(s, failing_f.get(s, 0) + failing_d.get(s, 0)) for s in all_subjects]
-    sorted_failing = sorted(combined, key=lambda x: -x[1])[:8]
-    top_subjects = [f[0] for f in sorted_failing]
+    sorted_failing = sorted(combined, key=lambda x: -x[1])
+    all_subjects_sorted = [f[0] for f in sorted_failing]
 
     return {
         'gpa_distribution': {
@@ -171,9 +171,9 @@ def _academic_data(student_ids):
             'values': list(gpa_buckets.values()),
         },
         'failing_by_subject': {
-            'labels': top_subjects,
-            'f_values': [failing_f.get(s, 0) for s in top_subjects],
-            'd_values': [failing_d.get(s, 0) for s in top_subjects],
+            'labels': all_subjects_sorted,
+            'f_values': [failing_f.get(s, 0) for s in all_subjects_sorted],
+            'd_values': [failing_d.get(s, 0) for s in all_subjects_sorted],
         },
         'avg_gpa': round(sum(student_gpas.values()) / len(student_gpas), 2) if student_gpas else 0,
         'total_failing': sum(failing_f.values()) + sum(failing_d.values()),
