@@ -74,8 +74,10 @@ def _caseload_data(students):
             iep_count += 1
         if s.section_504:
             s504_count += 1
-        if s.el_status and s.el_status not in ('EO', 'RFEP', ''):
+        if s.el_status and s.el_status in ('Newcomer', 'LTEL', 'EL 1', 'EL 2', 'EL 3'):
             el_count += 1
+
+    gen_ed = total - iep_count - s504_count - el_count
 
     return {
         'total': total,
@@ -85,8 +87,7 @@ def _caseload_data(students):
         },
         'demographics': {
             'labels': ['IEP', '504 Plan', 'English Learner', 'Gen Ed'],
-            'values': [iep_count, s504_count, el_count,
-                       max(0, total - iep_count - s504_count)],
+            'values': [iep_count, s504_count, el_count, max(0, gen_ed)],
         },
     }
 
@@ -124,15 +125,21 @@ def _academic_data(student_ids):
         else:
             gpa_buckets['< 1.0'] += 1
 
-    # Failing grades by subject
-    failing = {}
+    # Failing grades by subject — separate F and D counts
+    failing_f = {}
+    failing_d = {}
     for g in grades:
-        if g.letter_grade in ('F', 'D', 'D-', 'D+'):
-            subj = g.subject_area or g.course_name or 'Unknown'
-            failing[subj] = failing.get(subj, 0) + 1
+        subj = g.subject_area or g.course_name or 'Unknown'
+        if g.letter_grade == 'F':
+            failing_f[subj] = failing_f.get(subj, 0) + 1
+        elif g.letter_grade in ('D', 'D-', 'D+'):
+            failing_d[subj] = failing_d.get(subj, 0) + 1
 
-    # Sort by count descending, take top 8
-    sorted_failing = sorted(failing.items(), key=lambda x: -x[1])[:8]
+    # Combine and sort by total count descending, take top 8
+    all_subjects = set(list(failing_f.keys()) + list(failing_d.keys()))
+    combined = [(s, failing_f.get(s, 0) + failing_d.get(s, 0)) for s in all_subjects]
+    sorted_failing = sorted(combined, key=lambda x: -x[1])[:8]
+    top_subjects = [f[0] for f in sorted_failing]
 
     return {
         'gpa_distribution': {
@@ -140,11 +147,12 @@ def _academic_data(student_ids):
             'values': list(gpa_buckets.values()),
         },
         'failing_by_subject': {
-            'labels': [f[0] for f in sorted_failing],
-            'values': [f[1] for f in sorted_failing],
+            'labels': top_subjects,
+            'f_values': [failing_f.get(s, 0) for s in top_subjects],
+            'd_values': [failing_d.get(s, 0) for s in top_subjects],
         },
         'avg_gpa': round(sum(student_gpas.values()) / len(student_gpas), 2) if student_gpas else 0,
-        'total_failing': sum(failing.values()),
+        'total_failing': sum(failing_f.values()) + sum(failing_d.values()),
     }
 
 
