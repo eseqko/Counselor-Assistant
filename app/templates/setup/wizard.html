@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome - Counselor Assistant Setup</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+     background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+     min-height:100vh;color:#333;display:flex;align-items:center;justify-content:center}
+.wizard{background:#fff;border-radius:16px;width:680px;max-width:95vw;
+        box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;position:relative}
+.wizard-header{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;
+               padding:32px 40px 24px;text-align:center}
+.wizard-header h1{font-size:1.6rem;margin-bottom:6px;font-weight:700}
+.wizard-header p{opacity:.85;font-size:.9rem}
+
+/* Progress bar */
+.progress-bar{display:flex;padding:0 40px;margin-top:-14px;position:relative;z-index:2}
+.progress-step{flex:1;text-align:center;position:relative}
+.progress-step .dot{width:28px;height:28px;border-radius:50%;background:#e5e7eb;
+                    border:3px solid #fff;display:inline-flex;align-items:center;
+                    justify-content:center;font-size:.75rem;font-weight:700;color:#9ca3af;
+                    position:relative;z-index:2;transition:all .3s}
+.progress-step.active .dot{background:#2563eb;color:#fff}
+.progress-step.done .dot{background:#10b981;color:#fff}
+.progress-step .label{display:block;font-size:.7rem;color:#6b7280;margin-top:6px}
+.progress-step.active .label{color:#2563eb;font-weight:600}
+.progress-line{position:absolute;top:14px;left:14%;right:14%;height:3px;background:#e5e7eb;z-index:1}
+.progress-line .fill{height:100%;background:#2563eb;transition:width .4s;width:0%}
+
+/* Steps */
+.step{display:none;padding:32px 40px 24px;animation:fadeIn .3s}
+.step.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.step h2{font-size:1.2rem;margin-bottom:4px;color:#1e293b}
+.step .desc{color:#64748b;font-size:.85rem;margin-bottom:20px}
+
+/* Form elements */
+.form-row{margin-bottom:16px}
+.form-row label{display:block;font-size:.8rem;font-weight:600;color:#374151;margin-bottom:4px}
+.form-row input[type="text"],.form-row input[type="password"],.form-row input[type="date"],
+.form-row select{width:100%;padding:10px 12px;border:1.5px solid #d1d5db;border-radius:8px;
+                  font-size:.9rem;transition:border-color .2s}
+.form-row input:focus,.form-row select:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.form-row .hint{font-size:.75rem;color:#9ca3af;margin-top:3px}
+.form-row.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Grade level checkboxes */
+.grade-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+.grade-check{display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer}
+.grade-check input{accent-color:#2563eb;width:16px;height:16px}
+
+/* File upload */
+.file-drop{border:2px dashed #d1d5db;border-radius:10px;padding:28px;text-align:center;
+           cursor:pointer;transition:all .2s;background:#f9fafb}
+.file-drop:hover,.file-drop.dragover{border-color:#2563eb;background:#eff6ff}
+.file-drop .icon{font-size:2rem;margin-bottom:8px;display:block}
+.file-drop .main-text{font-weight:600;color:#374151;margin-bottom:4px}
+.file-drop .sub-text{font-size:.8rem;color:#9ca3af}
+.file-info{margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:8px;
+           font-size:.85rem;color:#15803d;display:none}
+.file-info.show{display:block}
+
+/* Import preview */
+.import-preview{margin-top:16px;display:none}
+.import-preview.show{display:block}
+.import-preview table{width:100%;border-collapse:collapse;font-size:.8rem}
+.import-preview th{text-align:left;padding:6px 8px;background:#f1f5f9;font-weight:600;color:#475569}
+.import-preview td{padding:6px 8px;border-bottom:1px solid #e5e7eb}
+
+/* Navigation */
+.wizard-nav{display:flex;justify-content:space-between;padding:16px 40px 28px;align-items:center}
+.btn{padding:10px 24px;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;
+     border:none;transition:all .2s}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-primary:hover{background:#1d4ed8}
+.btn-secondary{background:#f1f5f9;color:#475569}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-skip{background:none;color:#9ca3af;font-size:.8rem;text-decoration:underline;
+          cursor:pointer;border:none;padding:0}
+.btn-skip:hover{color:#6b7280}
+
+/* Welcome step */
+.welcome-features{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}
+.wf-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center}
+.wf-card .wf-icon{font-size:1.5rem;margin-bottom:6px;display:block}
+.wf-card .wf-title{font-weight:600;font-size:.85rem;color:#1e293b;margin-bottom:3px}
+.wf-card .wf-desc{font-size:.75rem;color:#64748b}
+
+/* Finish step */
+.finish-summary{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:20px;margin:16px 0}
+.finish-summary .check{color:#16a34a;font-weight:700;margin-right:6px}
+.finish-summary li{list-style:none;padding:4px 0;font-size:.9rem}
+
+/* FERPA badge */
+.ferpa-badge{display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;
+             border:1px solid #86efac;padding:4px 12px;border-radius:20px;font-size:.75rem;
+             font-weight:600;color:#15803d;margin-top:8px}
+
+/* Password strength */
+.pw-strength{height:4px;border-radius:2px;background:#e5e7eb;margin-top:4px;overflow:hidden}
+.pw-strength .pw-bar{height:100%;transition:width .3s, background .3s;width:0}
+
+@media(max-width:600px){
+    .wizard-header{padding:24px 20px 18px}
+    .step{padding:24px 20px 16px}
+    .wizard-nav{padding:12px 20px 20px}
+    .welcome-features{grid-template-columns:1fr}
+    .grade-grid{grid-template-columns:repeat(3,1fr)}
+    .form-row.two-col{grid-template-columns:1fr}
+    .progress-bar{padding:0 20px}
+}
+</style>
+</head>
+<body>
+
+<div class="wizard">
+    <div class="wizard-header">
+        <h1>Counselor Assistant</h1>
+        <p>100% Local &middot; FERPA Compliant &middot; No Cloud</p>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-bar">
+        <div class="progress-line"><div class="fill" id="progressFill"></div></div>
+        <div class="progress-step active" data-step="0"><span class="dot">1</span><span class="label">Welcome</span></div>
+        <div class="progress-step" data-step="1"><span class="dot">2</span><span class="label">Profile</span></div>
+        <div class="progress-step" data-step="2"><span class="dot">3</span><span class="label">School</span></div>
+        <div class="progress-step" data-step="3"><span class="dot">4</span><span class="label">Import</span></div>
+        <div class="progress-step" data-step="4"><span class="dot">5</span><span class="label">Finish</span></div>
+    </div>
+
+    <form id="setupForm" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="step" value="complete">
+
+        <!-- Step 0: Welcome -->
+        <div class="step active" data-step="0">
+            <h2>Welcome to Counselor Assistant</h2>
+            <p class="desc">Let's get your workspace set up. This takes about 2 minutes &mdash; and every step can be skipped.</p>
+
+            <div class="welcome-features">
+                <div class="wf-card">
+                    <span class="wf-icon">&#128203;</span>
+                    <div class="wf-title">Caseload Management</div>
+                    <div class="wf-desc">Student profiles, notes, service logs, IEP/504 tracking</div>
+                </div>
+                <div class="wf-card">
+                    <span class="wf-icon">&#128197;</span>
+                    <div class="wf-title">Scheduling & Calendar</div>
+                    <div class="wf-desc">Booking pages, availability, Google Calendar sync</div>
+                </div>
+                <div class="wf-card">
+                    <span class="wf-icon">&#128200;</span>
+                    <div class="wf-title">Analytics & Reports</div>
+                    <div class="wf-desc">14 interactive charts, ASCA-aligned reports</div>
+                </div>
+                <div class="wf-card">
+                    <span class="wf-icon">&#128274;</span>
+                    <div class="wf-title">FERPA Compliant</div>
+                    <div class="wf-desc">Everything stored locally on your computer</div>
+                </div>
+            </div>
+
+            <div class="ferpa-badge">&#128274; Your data never leaves this computer</div>
+        </div>
+
+        <!-- Step 1: Profile -->
+        <div class="step" data-step="1">
+            <h2>Your Profile</h2>
+            <p class="desc">This is how you'll appear in the app. You can change these anytime in Settings.</p>
+
+            <div class="form-row">
+                <label for="display_name">Your Name</label>
+                <input type="text" id="display_name" name="display_name" placeholder="e.g. Ms. Rodriguez">
+            </div>
+            <div class="form-row">
+                <label for="school_name">School Name</label>
+                <input type="text" id="school_name" name="school_name" placeholder="e.g. Lincoln High School">
+            </div>
+            <div class="form-row two-col">
+                <div>
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" placeholder="e.g. mrodriguez" value="counselor">
+                    <div class="hint">For login (min 3 characters)</div>
+                </div>
+                <div>
+                    <label for="counselor_title">Title</label>
+                    <select id="counselor_title" name="counselor_title">
+                        <option value="">Select...</option>
+                        <option value="School Counselor">School Counselor</option>
+                        <option value="Lead Counselor">Lead Counselor</option>
+                        <option value="Department Chair">Department Chair</option>
+                        <option value="College Counselor">College Counselor</option>
+                        <option value="Career Counselor">Career Counselor</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <label for="password">Set Password</label>
+                <input type="password" id="password" name="password" placeholder="Min 8 characters">
+                <div class="pw-strength"><div class="pw-bar" id="pwBar"></div></div>
+                <div class="hint">Choose a strong password. Default is <code>changeme</code> if skipped.</div>
+            </div>
+        </div>
+
+        <!-- Step 2: School Config -->
+        <div class="step" data-step="2">
+            <h2>School Configuration</h2>
+            <p class="desc">Help the app understand your school context. All optional.</p>
+
+            <div class="form-row two-col">
+                <div>
+                    <label for="school_year_start">School Year Start</label>
+                    <input type="date" id="school_year_start" name="school_year_start">
+                </div>
+                <div>
+                    <label for="school_year_end">School Year End</label>
+                    <input type="date" id="school_year_end" name="school_year_end">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <label>Grade Levels You Serve</label>
+                <div class="grade-grid">
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="6"> 6th</label>
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="7"> 7th</label>
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="8"> 8th</label>
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="9"> 9th</label>
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="10"> 10th</label>
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="11"> 11th</label>
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="12"> 12th</label>
+                    <label class="grade-check"><input type="checkbox" name="grade_levels" value="all"> All</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Import Students -->
+        <div class="step" data-step="3">
+            <h2>Import Your Caseload</h2>
+            <p class="desc">Upload a CSV or Excel file with your student roster. You can always do this later from Settings.</p>
+
+            <div class="file-drop" id="fileDrop" onclick="document.getElementById('csvFile').click()">
+                <span class="icon">&#128196;</span>
+                <div class="main-text">Drop your CSV or Excel file here</div>
+                <div class="sub-text">or click to browse &middot; Supports .csv and .xlsx</div>
+                <input type="file" id="csvFile" name="import_file" accept=".csv,.xlsx,.xls" hidden>
+            </div>
+
+            <div class="file-info" id="fileInfo"></div>
+
+            <div class="import-preview" id="importPreview">
+                <p style="font-size:.85rem;color:#374151;font-weight:600;margin-bottom:8px">File Preview</p>
+                <table>
+                    <thead><tr id="previewHead"></tr></thead>
+                </table>
+                <p id="previewCount" style="font-size:.8rem;color:#64748b;margin-top:8px"></p>
+                <p style="font-size:.75rem;color:#9ca3af;margin-top:8px">
+                    The file will be imported after setup via the Data Import tool, where you can map columns.
+                    For now, we're just confirming the file looks right.
+                </p>
+            </div>
+        </div>
+
+        <!-- Step 4: Finish -->
+        <div class="step" data-step="4">
+            <h2>You're All Set!</h2>
+            <p class="desc">Here's a summary of your setup. Click "Launch" to start using Counselor Assistant.</p>
+
+            <ul class="finish-summary" id="finishSummary">
+                <!-- Populated by JS -->
+            </ul>
+
+            <p style="font-size:.85rem;color:#64748b;margin-top:16px">
+                You can change any of these settings later. Head to <strong>Settings</strong> in the sidebar
+                to update your profile, import data, or manage backups.
+            </p>
+        </div>
+
+    </form>
+
+    <!-- Navigation -->
+    <div class="wizard-nav">
+        <div>
+            <button type="button" class="btn btn-secondary" id="btnBack" style="display:none" onclick="goStep(-1)">Back</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+            <button type="button" class="btn-skip" id="btnSkip" style="display:none" onclick="goStep(1)">Skip this step</button>
+            <button type="button" class="btn btn-primary" id="btnNext" onclick="goStep(1)">Get Started</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var current = 0;
+var totalSteps = 5;
+var steps = document.querySelectorAll('.step');
+var dots = document.querySelectorAll('.progress-step');
+var fill = document.getElementById('progressFill');
+
+function goStep(dir) {
+    var next = current + dir;
+    if (next < 0) return;
+    if (next >= totalSteps) {
+        // Submit the form
+        document.getElementById('setupForm').submit();
+        return;
+    }
+    current = next;
+    renderStep();
+}
+
+function renderStep() {
+    steps.forEach(function(s, i) {
+        s.classList.toggle('active', i === current);
+    });
+    dots.forEach(function(d, i) {
+        d.classList.remove('active', 'done');
+        if (i === current) d.classList.add('active');
+        else if (i < current) d.classList.add('done');
+    });
+    fill.style.width = (current / (totalSteps - 1) * 100) + '%';
+
+    var back = document.getElementById('btnBack');
+    var skip = document.getElementById('btnSkip');
+    var next = document.getElementById('btnNext');
+
+    back.style.display = current > 0 ? '' : 'none';
+    skip.style.display = (current > 0 && current < totalSteps - 1) ? '' : 'none';
+
+    if (current === 0) {
+        next.textContent = 'Get Started';
+    } else if (current === totalSteps - 1) {
+        next.textContent = 'Launch Counselor Assistant';
+        buildSummary();
+    } else {
+        next.textContent = 'Next';
+    }
+}
+
+// Password strength
+var pwInput = document.getElementById('password');
+var pwBar = document.getElementById('pwBar');
+if (pwInput) {
+    pwInput.addEventListener('input', function() {
+        var v = this.value;
+        var s = 0;
+        if (v.length >= 8) s++;
+        if (v.length >= 12) s++;
+        if (/[A-Z]/.test(v) && /[a-z]/.test(v)) s++;
+        if (/\d/.test(v)) s++;
+        if (/[^A-Za-z0-9]/.test(v)) s++;
+        var pct = Math.min(s / 4 * 100, 100);
+        var colors = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#16a34a'];
+        pwBar.style.width = pct + '%';
+        pwBar.style.background = colors[Math.min(s, colors.length - 1)];
+    });
+}
+
+// File drop / upload
+var fileDrop = document.getElementById('fileDrop');
+var csvFile = document.getElementById('csvFile');
+var fileInfo = document.getElementById('fileInfo');
+
+['dragenter','dragover'].forEach(function(ev) {
+    fileDrop.addEventListener(ev, function(e) { e.preventDefault(); fileDrop.classList.add('dragover'); });
+});
+['dragleave','drop'].forEach(function(ev) {
+    fileDrop.addEventListener(ev, function(e) { e.preventDefault(); fileDrop.classList.remove('dragover'); });
+});
+fileDrop.addEventListener('drop', function(e) {
+    if (e.dataTransfer.files.length) {
+        csvFile.files = e.dataTransfer.files;
+        handleFile(e.dataTransfer.files[0]);
+    }
+});
+csvFile.addEventListener('change', function() {
+    if (this.files.length) handleFile(this.files[0]);
+});
+
+function handleFile(file) {
+    fileInfo.textContent = 'Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+    fileInfo.classList.add('show');
+
+    // Preview headers
+    var fd = new FormData();
+    fd.append('file', file);
+    fetch('/setup/import-preview', { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                var head = document.getElementById('previewHead');
+                head.innerHTML = '';
+                d.headers.slice(0, 8).forEach(function(h) {
+                    var th = document.createElement('th');
+                    th.textContent = h;
+                    head.appendChild(th);
+                });
+                if (d.headers.length > 8) {
+                    var th = document.createElement('th');
+                    th.textContent = '+ ' + (d.headers.length - 8) + ' more';
+                    th.style.color = '#9ca3af';
+                    head.appendChild(th);
+                }
+                document.getElementById('previewCount').textContent = d.row_count + ' students found';
+                document.getElementById('importPreview').classList.add('show');
+            }
+        })
+        .catch(function() {});
+}
+
+// "All" grade checkbox toggles others
+document.querySelectorAll('input[name="grade_levels"]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+        if (this.value === 'all' && this.checked) {
+            document.querySelectorAll('input[name="grade_levels"]').forEach(function(c) {
+                if (c.value !== 'all') c.checked = true;
+            });
+        } else if (this.value !== 'all') {
+            document.querySelector('input[name="grade_levels"][value="all"]').checked = false;
+        }
+    });
+});
+
+// Build finish summary
+function buildSummary() {
+    var items = [];
+    var name = document.getElementById('display_name').value;
+    var school = document.getElementById('school_name').value;
+    var user = document.getElementById('username').value;
+    var pw = document.getElementById('password').value;
+    var title = document.getElementById('counselor_title').value;
+
+    items.push(name ? 'Name: <strong>' + esc(name) + '</strong>' : 'Name: <em>Not set (default: School Counselor)</em>');
+    items.push(school ? 'School: <strong>' + esc(school) + '</strong>' : 'School: <em>Not set</em>');
+    items.push('Username: <strong>' + esc(user || 'counselor') + '</strong>');
+    items.push(pw.length >= 8 ? 'Password: <strong>Custom password set</strong>' : 'Password: <em>Using default (changeme)</em>');
+    if (title) items.push('Title: <strong>' + esc(title) + '</strong>');
+
+    var grades = [];
+    document.querySelectorAll('input[name="grade_levels"]:checked').forEach(function(c) {
+        if (c.value !== 'all') grades.push(c.value);
+    });
+    if (grades.length) items.push('Grade levels: <strong>' + grades.join(', ') + '</strong>');
+
+    var file = csvFile.files.length ? csvFile.files[0].name : null;
+    if (file) items.push('Import file: <strong>' + esc(file) + '</strong> (will be available in Data Import after setup)');
+
+    var html = '';
+    items.forEach(function(item) {
+        html += '<li><span class="check">&#10003;</span>' + item + '</li>';
+    });
+    document.getElementById('finishSummary').innerHTML = html;
+}
+
+function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+renderStep();
+</script>
+</body>
+</html>

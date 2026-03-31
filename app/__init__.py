@@ -76,6 +76,7 @@ def create_app(config_class=Config):
     from app.routes.availability import availability_bp
     from app.routes.alerts import alerts_bp
     from app.routes.analytics import analytics_bp
+    from app.routes.setup import setup_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -99,6 +100,19 @@ def create_app(config_class=Config):
     app.register_blueprint(availability_bp, url_prefix='/scheduling')
     app.register_blueprint(alerts_bp, url_prefix='/alerts')
     app.register_blueprint(analytics_bp, url_prefix='/analytics')
+    app.register_blueprint(setup_bp)
+
+    # First-run setup redirect
+    @app.before_request
+    def check_setup():
+        from flask import redirect, url_for
+        # Allow setup routes, static files, and public booking pages
+        allowed = ('/setup', '/static', '/scheduling/book/')
+        if any(request.path.startswith(p) for p in allowed):
+            return
+        from app.routes.setup import needs_setup
+        if needs_setup():
+            return redirect(url_for('setup.index'))
 
     # Security headers
     @app.after_request
@@ -145,6 +159,12 @@ def create_app(config_class=Config):
             )
             default_user.set_password('changeme')
             db.session.add(default_user)
+            db.session.commit()
+        else:
+            # Upgrade path: mark existing users who have real data as setup-complete
+            for u in User.query.filter_by(setup_completed=False).all():
+                if not u.check_password('changeme'):
+                    u.setup_completed = True
             db.session.commit()
 
     return app

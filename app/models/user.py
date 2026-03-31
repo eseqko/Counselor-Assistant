@@ -25,6 +25,7 @@ class User(UserMixin, db.Model):
     external_ical_url = db.Column(db.String(500))
     school_config_json = db.Column(db.Text)  # JSON: school name, colors, mascot for catalog
     google_token_json = db.Column(db.Text)  # OAuth 2.0 token JSON for Google APIs
+    setup_completed = db.Column(db.Boolean, default=False)  # First-run wizard completed
 
     # Relationships
     notes = db.relationship('Note', backref='author', lazy='dynamic')
