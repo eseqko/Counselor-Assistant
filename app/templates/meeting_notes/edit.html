@@ -3,133 +3,227 @@
 
 {% block head %}
 <style>
-/* @mention autocomplete */
-.mention-wrap{position:relative;}
-.mention-dropdown{position:absolute;z-index:1000;background:#fff;border:1px solid #d1d5db;
-    border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:240px;overflow-y:auto;
-    display:none;width:300px;margin-top:2px;}
-.mention-dropdown.show{display:block;}
-.mention-item{padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
-    font-size:.85rem;transition:background .1s;}
-.mention-item:hover,.mention-item.active{background:#eff6ff;}
-.mention-item .name{font-weight:600;color:#1e293b;}
-.mention-item .meta{font-size:.75rem;color:#9ca3af;}
-.mention-item .badges{display:flex;gap:4px;}
-.mention-item .badge-sm{font-size:.65rem;padding:1px 5px;border-radius:8px;font-weight:600;}
-.badge-iep-sm{background:#fef3c7;color:#92400e;}
-.badge-504-sm{background:#dbeafe;color:#1d4ed8;}
+/* ---- Flow notepad ---- */
+.notepad{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;}
 
-/* Chip preview area */
-.linked-students{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:0;}
-.linked-students:empty{display:none;}
+/* Top bar: minimal, just title + type */
+.notepad-top{padding:20px 24px 0;display:flex;gap:12px;align-items:flex-end;}
+.notepad-title{flex:1;}
+.notepad-title input{width:100%;border:none;border-bottom:2px solid #e5e7eb;font-size:1.25rem;
+    font-weight:700;padding:6px 0;color:#1e293b;outline:none;transition:border-color .2s;}
+.notepad-title input:focus{border-color:#2563eb;}
+.notepad-title input::placeholder{color:#cbd5e1;font-weight:400;}
+.notepad-type select{border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 12px;
+    font-size:.85rem;background:#f8fafc;color:#475569;outline:none;cursor:pointer;}
+.notepad-type select:focus{border-color:#2563eb;}
+
+/* Quick-tags bar */
+.tag-bar{padding:12px 24px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.tag-btn{border:none;border-radius:14px;padding:3px 10px;font-size:.72rem;font-weight:600;
+    cursor:pointer;transition:all .15s;opacity:.7;}
+.tag-btn:hover{opacity:1;transform:scale(1.05);}
+.tag-hint{font-size:.72rem;color:#9ca3af;margin-left:auto;}
+
+/* The writing area */
+.notepad-body{padding:16px 24px;position:relative;}
+.notepad-body textarea{width:100%;border:none;outline:none;resize:none;font-family:inherit;
+    font-size:.92rem;line-height:1.8;color:#334155;min-height:340px;
+    background:repeating-linear-gradient(transparent,transparent 28.4px,#f1f5f9 28.4px,#f1f5f9 28.8px);
+    padding:0;background-position:0 -1px;}
+.notepad-body textarea::placeholder{color:#94a3b8;}
+
+/* Linked students chips */
+.linked-bar{display:flex;flex-wrap:wrap;gap:6px;padding:0 24px 12px;min-height:0;}
+.linked-bar:empty::before{content:none;}
 .student-chip{display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1d4ed8;
-    padding:3px 10px;border-radius:14px;font-size:.78rem;font-weight:500;}
-.student-chip .chip-x{cursor:pointer;font-weight:700;margin-left:2px;opacity:.6;}
+    padding:3px 10px;border-radius:14px;font-size:.76rem;font-weight:500;animation:chipIn .2s;}
+.student-chip .chip-x{cursor:pointer;font-weight:700;margin-left:2px;opacity:.5;}
 .student-chip .chip-x:hover{opacity:1;}
+@keyframes chipIn{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}
 
-/* Content textarea */
-#noteContent{font-family:inherit;font-size:.9rem;line-height:1.6;resize:vertical;min-height:200px;}
+/* @mention dropdown */
+.mention-dropdown{position:absolute;z-index:1000;background:#fff;border:1px solid #d1d5db;
+    border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;
+    display:none;width:300px;left:24px;}
+.mention-dropdown.show{display:block;}
+.mention-item{padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;
+    align-items:center;font-size:.85rem;transition:background .1s;}
+.mention-item:hover,.mention-item.active{background:#eff6ff;}
+.mention-item .m-name{font-weight:600;color:#1e293b;}
+.mention-item .m-meta{font-size:.73rem;color:#9ca3af;}
+.mention-item .m-badges{display:flex;gap:3px;}
+.m-badge{font-size:.62rem;padding:1px 5px;border-radius:8px;font-weight:700;}
+.m-iep{background:#fef3c7;color:#92400e;}
+.m-504{background:#dbeafe;color:#1d4ed8;}
+
+/* Details drawer */
+.details-toggle{padding:0 24px;margin-top:4px;}
+.details-toggle summary{font-size:.8rem;color:#6b7280;cursor:pointer;user-select:none;
+    list-style:none;display:flex;align-items:center;gap:4px;}
+.details-toggle summary::-webkit-details-marker{display:none;}
+.details-toggle summary::before{content:'';display:inline-block;width:0;height:0;
+    border-left:5px solid #9ca3af;border-top:4px solid transparent;border-bottom:4px solid transparent;
+    transition:transform .2s;margin-right:4px;}
+.details-toggle[open] summary::before{transform:rotate(90deg);}
+.details-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 0 4px;}
+.details-grid label{font-size:.78rem;font-weight:600;color:#64748b;display:block;margin-bottom:3px;}
+.details-grid input,.details-grid textarea{width:100%;border:1.5px solid #e5e7eb;border-radius:6px;
+    padding:7px 10px;font-size:.85rem;font-family:inherit;outline:none;}
+.details-grid input:focus,.details-grid textarea:focus{border-color:#2563eb;}
+.details-full{grid-column:1/-1;}
+
+/* Bottom bar */
+.notepad-bottom{display:flex;justify-content:space-between;align-items:center;
+    padding:12px 24px 20px;border-top:1px solid #f1f5f9;}
+.save-status{font-size:.75rem;color:#9ca3af;display:flex;align-items:center;gap:6px;}
+.save-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;}
+.save-dot.unsaved{background:#f59e0b;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.notepad-actions{display:flex;gap:8px;align-items:center;}
+.notepad-actions .btn{font-size:.85rem;}
+.focus-btn{background:none;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;
+    font-size:.78rem;cursor:pointer;color:#6b7280;transition:all .15s;}
+.focus-btn:hover{background:#f8fafc;color:#1e293b;}
+.conf-label{font-size:.78rem;color:#6b7280;display:flex;align-items:center;gap:5px;cursor:pointer;}
+
+/* Focus mode */
+body.focus-mode .sidebar,body.focus-mode .topbar,body.focus-mode .notepad-top,
+body.focus-mode .tag-bar,body.focus-mode .details-toggle,
+body.focus-mode .linked-bar{display:none!important;}
+body.focus-mode .notepad{max-width:700px;margin:40px auto;border-radius:16px;
+    box-shadow:0 4px 24px rgba(0,0,0,.1);}
+body.focus-mode .notepad-body textarea{min-height:70vh;font-size:1rem;line-height:2;}
+body.focus-mode .main-content{margin-left:0!important;padding:0!important;}
+
+/* Timer */
+.timer{font-size:.8rem;color:#6b7280;font-variant-numeric:tabular-nums;
+    background:#f8fafc;padding:3px 10px;border-radius:6px;display:flex;align-items:center;gap:5px;}
+.timer-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pulse 1s infinite;}
+
+@media print{.notepad-bottom,.tag-bar,.focus-btn,.details-toggle{display:none!important;}}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h2 style="margin:0;font-size:1.2rem;">{{ 'Edit' if note else 'New' }} Meeting Note</h2>
+<form id="noteForm" method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+<div class="notepad">
+    <!-- Top: Title + Type (minimal) -->
+    <div class="notepad-top">
+        <div class="notepad-title">
+            <input type="text" name="title" id="noteTitle" required autofocus
+                   value="{{ note.title if note else '' }}"
+                   placeholder="What's this meeting about?">
+        </div>
+        <div class="notepad-type">
+            <select name="meeting_type">
+                {% for val, label in meeting_types %}
+                <option value="{{ val }}" {% if note and note.meeting_type == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
 
-    <form method="POST" style="padding:20px;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <!-- Quick-tag buttons -->
+    <div class="tag-bar">
+        <button type="button" class="tag-btn" style="background:#fef2f2;color:#dc2626;" data-tag="action">action</button>
+        <button type="button" class="tag-btn" style="background:#f5f3ff;color:#7c3aed;" data-tag="decision">decision</button>
+        <button type="button" class="tag-btn" style="background:#fffbeb;color:#d97706;" data-tag="followup">followup</button>
+        <button type="button" class="tag-btn" style="background:#eff6ff;color:#2563eb;" data-tag="question">question</button>
+        <button type="button" class="tag-btn" style="background:#ecfdf5;color:#059669;" data-tag="idea">idea</button>
+        <button type="button" class="tag-btn" style="background:#fff1f2;color:#e11d48;" data-tag="concern">concern</button>
+        <button type="button" class="tag-btn" style="background:#f0fdf4;color:#16a34a;" data-tag="win">win</button>
+        <span class="tag-hint">click or type # &middot; @ to mention student</span>
+    </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-            <div class="form-group" style="grid-column:1/-1;">
-                <label>Title *</label>
-                <input type="text" name="title" class="form-control" required
-                       value="{{ note.title if note else '' }}"
-                       placeholder="e.g. SST Meeting - Student Supports, Dept Meeting 3/15">
-            </div>
+    <!-- Linked students -->
+    <div class="linked-bar" id="linkedStudents"></div>
 
-            <div class="form-group">
-                <label>Meeting Type</label>
-                <select name="meeting_type" class="form-control">
-                    {% for val, label in meeting_types %}
-                    <option value="{{ val }}" {% if note and note.meeting_type == val %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+    <!-- Writing area -->
+    <div class="notepad-body" id="notepadBody">
+        <textarea id="noteContent" name="content" required
+                  placeholder="Start typing... just let it flow.
 
-            <div class="form-group">
+@ to mention a student    # for tags
+#action #decision #followup #question #idea #concern #win
+
+Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if note else '' }}</textarea>
+        <div class="mention-dropdown" id="mentionDropdown"></div>
+    </div>
+
+    <!-- Collapsible details -->
+    <details class="details-toggle" {% if note and (note.location or note.attendees or note.action_items) %}open{% endif %}>
+        <summary>Details &amp; action items</summary>
+        <div class="details-grid">
+            <div>
                 <label>Date</label>
-                <input type="date" name="meeting_date" class="form-control"
+                <input type="date" name="meeting_date"
                        value="{{ note.meeting_date.strftime('%Y-%m-%d') if note else today.strftime('%Y-%m-%d') }}">
             </div>
-
-            <div class="form-group">
-                <label>Duration (minutes)</label>
-                <input type="number" name="duration_minutes" class="form-control" min="1" max="480"
+            <div>
+                <label>Duration (min)</label>
+                <input type="number" name="duration_minutes" id="durationInput" min="1" max="480"
                        value="{{ note.duration_minutes if note and note.duration_minutes else '' }}"
-                       placeholder="e.g. 30">
+                       placeholder="Auto-tracked below">
             </div>
-
-            <div class="form-group">
+            <div>
                 <label>Location</label>
-                <input type="text" name="location" class="form-control"
+                <input type="text" name="location"
                        value="{{ note.location if note and note.location else '' }}"
-                       placeholder="e.g. Counseling Office, Room 204, Zoom">
+                       placeholder="Office, Room 204, Zoom...">
+            </div>
+            <div>
+                <label>Attendees (not students)</label>
+                <input type="text" name="attendees"
+                       value="{{ note.attendees if note and note.attendees else '' }}"
+                       placeholder="Mr. Smith (AP), Mrs. Garcia">
+            </div>
+            <div class="details-full">
+                <label>Action Items</label>
+                <textarea name="action_items" rows="3"
+                          placeholder="Or use #action tags inline above">{{ note.action_items if note and note.action_items else '' }}</textarea>
             </div>
         </div>
+    </details>
 
-        <div class="form-group" style="margin-top:16px;">
-            <label>Attendees</label>
-            <input type="text" name="attendees" class="form-control"
-                   value="{{ note.attendees if note and note.attendees else '' }}"
-                   placeholder="e.g. Mr. Smith (AP), Mrs. Garcia (Parent), Ms. Lee (SPED)">
-            <div style="font-size:.75rem;color:#9ca3af;margin-top:3px;">List other people present (not students -- use @ in content below for students)</div>
-        </div>
-
-        <!-- Content with @mention -->
-        <div class="form-group mention-wrap" style="margin-top:16px;">
-            <label>Meeting Notes *</label>
-            <div style="font-size:.75rem;color:#2563eb;margin-bottom:6px;">
-                Type <strong>@</strong> followed by a student name to link them. They'll appear as clickable chips.
+    <!-- Bottom bar -->
+    <div class="notepad-bottom">
+        <div style="display:flex;align-items:center;gap:16px;">
+            <div class="save-status">
+                <span class="save-dot" id="saveDot"></span>
+                <span id="saveLabel">Saved locally</span>
             </div>
-            <textarea id="noteContent" name="content" class="form-control" required
-                      placeholder="Start typing your meeting notes here...&#10;&#10;Type @ to mention a student, e.g. @Maria Rodriguez">{{ note.content if note else '' }}</textarea>
-            <div class="mention-dropdown" id="mentionDropdown"></div>
-            <div class="linked-students" id="linkedStudents"></div>
+            <div class="timer" id="timer" style="display:none;">
+                <span class="timer-dot"></span>
+                <span id="timerDisplay">00:00</span>
+            </div>
         </div>
-
-        <!-- Action Items -->
-        <div class="form-group" style="margin-top:16px;">
-            <label>Action Items / Follow-Up</label>
-            <textarea name="action_items" class="form-control" rows="3"
-                      placeholder="- Schedule follow-up with parent&#10;- Refer to SPED for evaluation&#10;- Update 504 accommodations">{{ note.action_items if note and note.action_items else '' }}</textarea>
-        </div>
-
-        <div class="form-group" style="margin-top:12px;">
-            <label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;">
+        <div class="notepad-actions">
+            <label class="conf-label">
                 <input type="checkbox" name="is_confidential" {% if note and note.is_confidential %}checked{% endif %}>
-                Mark as confidential
+                Confidential
             </label>
-        </div>
-
-        <div style="display:flex;gap:12px;margin-top:20px;">
-            <button type="submit" class="btn btn-primary">{{ 'Update' if note else 'Save' }} Meeting Note</button>
+            <button type="button" class="focus-btn" onclick="toggleFocus()" title="Focus mode (hide everything else)">Focus</button>
+            <button type="button" class="focus-btn" onclick="toggleTimer()" title="Start/stop meeting timer">Timer</button>
             {% if note %}
             <a href="{{ url_for('meeting_notes.view', note_id=note.id) }}" class="btn btn-secondary">Cancel</a>
             {% else %}
             <a href="{{ url_for('meeting_notes.index') }}" class="btn btn-secondary">Cancel</a>
             {% endif %}
+            <button type="submit" class="btn btn-primary">{{ 'Update' if note else 'Save' }}</button>
         </div>
-    </form>
+    </div>
 </div>
+</form>
 
 {% if note %}
-<div style="margin-top:16px;text-align:right;">
+<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">
+    <a href="{{ url_for('meeting_notes.index') }}" style="font-size:.82rem;color:#6b7280;">&larr; All Notes</a>
     <form method="POST" action="{{ url_for('meeting_notes.delete', note_id=note.id) }}"
-          onsubmit="return confirm('Delete this meeting note? This cannot be undone.')">
+          onsubmit="return confirm('Delete this meeting note?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn" style="background:#fef2f2;color:#dc2626;font-size:.8rem;">Delete Note</button>
+        <button type="submit" class="btn" style="background:#fef2f2;color:#dc2626;font-size:.78rem;">Delete</button>
     </form>
 </div>
 {% endif %}
@@ -142,9 +236,10 @@
     var mentionStart = -1;
     var activeIdx = 0;
     var items = [];
-    var mentionedStudents = {};  // id -> name
+    var mentionedStudents = {};
+    var STORAGE_KEY = 'meeting_note_draft_{{ note.id if note else "new" }}';
 
-    // Build student data for client-side
+    /* ---- Student data ---- */
     var allStudents = [
         {% for s in students %}
         {id:{{ s.id }}, name:"{{ s.first_name }} {{ s.last_name }}", grade:{{ s.grade_level or 0 }},
@@ -153,7 +248,73 @@
         {% endfor %}
     ];
 
-    // Parse existing mentions from content
+    /* ---- Auto-resize textarea ---- */
+    function autoGrow() {
+        ta.style.height = 'auto';
+        ta.style.height = Math.max(340, ta.scrollHeight) + 'px';
+    }
+    ta.addEventListener('input', autoGrow);
+    autoGrow();
+
+    /* ---- Auto-save to localStorage ---- */
+    var saveTimeout;
+    function markUnsaved() {
+        document.getElementById('saveDot').classList.add('unsaved');
+        document.getElementById('saveLabel').textContent = 'Unsaved changes';
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(autoSave, 1500);
+    }
+    function autoSave() {
+        var data = {
+            title: document.getElementById('noteTitle').value,
+            content: ta.value,
+            ts: Date.now()
+        };
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){}
+        document.getElementById('saveDot').classList.remove('unsaved');
+        document.getElementById('saveLabel').textContent = 'Saved locally';
+    }
+    // Restore draft (only for new notes)
+    {% if not note %}
+    try {
+        var draft = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (draft && draft.content && !ta.value) {
+            ta.value = draft.content;
+            if (draft.title) document.getElementById('noteTitle').value = draft.title;
+            autoGrow();
+            renderChips();
+        }
+    } catch(e){}
+    {% endif %}
+
+    ta.addEventListener('input', markUnsaved);
+    document.getElementById('noteTitle').addEventListener('input', markUnsaved);
+
+    // Clear draft on successful save
+    document.getElementById('noteForm').addEventListener('submit', function() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+    });
+
+    /* ---- Tag buttons ---- */
+    document.querySelectorAll('.tag-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var tag = '#' + this.dataset.tag + ' ';
+            var pos = ta.selectionStart;
+            var val = ta.value;
+            // Add on new line if cursor isn't at line start
+            var before = val.substring(0, pos);
+            var prefix = (pos > 0 && before[pos-1] !== '\n') ? '\n' : '';
+            ta.value = before + prefix + tag + val.substring(pos);
+            var newPos = pos + prefix.length + tag.length;
+            ta.setSelectionRange(newPos, newPos);
+            ta.focus();
+            autoGrow();
+            markUnsaved();
+        });
+    });
+
+    /* ---- @mention system ---- */
+    // Parse existing mentions
     var existing = ta.value.match(/@\[([^\]]+)\]\((\d+)\)/g);
     if (existing) {
         existing.forEach(function(m) {
@@ -166,14 +327,11 @@
     ta.addEventListener('input', function() {
         var val = this.value;
         var pos = this.selectionStart;
-
-        // Find @ that starts a mention
         var before = val.substring(0, pos);
         var atIdx = before.lastIndexOf('@');
 
         if (atIdx >= 0 && (atIdx === 0 || /\s/.test(before[atIdx-1]))) {
             var query = before.substring(atIdx + 1);
-            // Don't trigger for completed mentions like @[Name](id)
             if (query.indexOf('[') === -1 && query.length < 30) {
                 mentionStart = atIdx;
                 showDropdown(query);
@@ -185,53 +343,34 @@
 
     ta.addEventListener('keydown', function(e) {
         if (!dd.classList.contains('show')) return;
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            activeIdx = Math.min(activeIdx + 1, items.length - 1);
-            highlightItem();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            activeIdx = Math.max(activeIdx - 1, 0);
-            highlightItem();
-        } else if (e.key === 'Enter' || e.key === 'Tab') {
-            if (items.length > 0) {
-                e.preventDefault();
-                selectStudent(items[activeIdx]);
-            }
-        } else if (e.key === 'Escape') {
-            hideDropdown();
-        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx+1, items.length-1); highlightItem(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx-1, 0); highlightItem(); }
+        else if (e.key === 'Enter' || e.key === 'Tab') { if(items.length){e.preventDefault();selectStudent(items[activeIdx]);} }
+        else if (e.key === 'Escape') { hideDropdown(); }
     });
 
     function showDropdown(query) {
         var q = query.toLowerCase();
         var filtered = allStudents.filter(function(s) {
-            return s.name.toLowerCase().indexOf(q) >= 0 || s.sid.indexOf(q) >= 0;
-        }).slice(0, 10);
-
-        if (filtered.length === 0) { hideDropdown(); return; }
-
-        items = filtered;
-        activeIdx = 0;
+            return s.name.toLowerCase().indexOf(q)>=0 || s.sid.indexOf(q)>=0;
+        }).slice(0,10);
+        if (!filtered.length) { hideDropdown(); return; }
+        items = filtered; activeIdx = 0;
 
         var html = '';
         filtered.forEach(function(s, i) {
             var badges = '';
-            if (s.iep) badges += '<span class="badge-sm badge-iep-sm">IEP</span>';
-            if (s.five04) badges += '<span class="badge-sm badge-504-sm">504</span>';
-            html += '<div class="mention-item' + (i===0?' active':'') + '" data-idx="'+i+'">' +
-                '<div><span class="name">' + esc(s.name) + '</span> ' +
-                '<span class="meta">Gr ' + s.grade + ' &middot; ' + s.sid + '</span></div>' +
-                '<div class="badges">' + badges + '</div></div>';
+            if (s.iep) badges += '<span class="m-badge m-iep">IEP</span>';
+            if (s.five04) badges += '<span class="m-badge m-504">504</span>';
+            html += '<div class="mention-item'+(i===0?' active':'')+'" data-idx="'+i+'">' +
+                '<div><span class="m-name">'+esc(s.name)+'</span> ' +
+                '<span class="m-meta">Gr '+s.grade+' &middot; '+s.sid+'</span></div>' +
+                '<div class="m-badges">'+badges+'</div></div>';
         });
         dd.innerHTML = html;
         dd.classList.add('show');
+        dd.style.bottom = (document.getElementById('notepadBody').offsetHeight - ta.offsetHeight + 10) + 'px';
 
-        // Position below cursor
-        positionDropdown();
-
-        // Click handlers
         dd.querySelectorAll('.mention-item').forEach(function(el) {
             el.addEventListener('mousedown', function(e) {
                 e.preventDefault();
@@ -239,46 +378,22 @@
             });
         });
     }
-
-    function positionDropdown() {
-        // Position relative to textarea
-        var rect = ta.getBoundingClientRect();
-        dd.style.left = '0';
-        dd.style.top = (ta.offsetTop + ta.offsetHeight + 2) + 'px';
-    }
-
-    function hideDropdown() {
-        dd.classList.remove('show');
-        mentionStart = -1;
-        items = [];
-    }
-
+    function hideDropdown() { dd.classList.remove('show'); mentionStart=-1; items=[]; }
     function highlightItem() {
-        dd.querySelectorAll('.mention-item').forEach(function(el, i) {
-            el.classList.toggle('active', i === activeIdx);
-        });
+        dd.querySelectorAll('.mention-item').forEach(function(el,i){ el.classList.toggle('active',i===activeIdx); });
     }
-
     function selectStudent(student) {
-        var val = ta.value;
-        var pos = ta.selectionStart;
-        var mention = '@[' + student.name + '](' + student.id + ')';
-
-        // Replace from @ to current cursor position
-        var newVal = val.substring(0, mentionStart) + mention + ' ' + val.substring(pos);
-        ta.value = newVal;
-
-        var newPos = mentionStart + mention.length + 1;
-        ta.setSelectionRange(newPos, newPos);
+        var val=ta.value, pos=ta.selectionStart;
+        var mention='@['+student.name+']('+student.id+')';
+        ta.value = val.substring(0,mentionStart)+mention+' '+val.substring(pos);
+        var newPos = mentionStart+mention.length+1;
+        ta.setSelectionRange(newPos,newPos);
         ta.focus();
-
-        mentionedStudents[student.id] = student.name;
-        renderChips();
-        hideDropdown();
+        mentionedStudents[student.id]=student.name;
+        renderChips(); hideDropdown(); autoGrow(); markUnsaved();
     }
 
     function renderChips() {
-        // Rebuild from current content
         mentionedStudents = {};
         var matches = ta.value.match(/@\[([^\]]+)\]\((\d+)\)/g);
         if (matches) {
@@ -287,47 +402,62 @@
                 if (parts) mentionedStudents[parts[2]] = parts[1];
             });
         }
-
         var html = '';
         for (var id in mentionedStudents) {
-            html += '<span class="student-chip">' + esc(mentionedStudents[id]) +
-                    '<span class="chip-x" data-id="' + id + '" title="Remove mention">&times;</span></span>';
+            html += '<span class="student-chip">'+esc(mentionedStudents[id])+
+                    '<span class="chip-x" data-id="'+id+'">&times;</span></span>';
         }
         linked.innerHTML = html;
-
-        // Chip remove handlers
         linked.querySelectorAll('.chip-x').forEach(function(el) {
             el.addEventListener('click', function() {
-                var sid = this.dataset.id;
-                var name = mentionedStudents[sid];
-                // Remove all mentions of this student from content
-                var pattern = new RegExp('@\\[' + escRegex(name) + '\\]\\(' + sid + '\\)\\s?', 'g');
-                ta.value = ta.value.replace(pattern, '');
+                var sid=this.dataset.id, name=mentionedStudents[sid];
+                ta.value = ta.value.replace(new RegExp('@\\['+escRe(name)+'\\]\\('+sid+'\\)\\s?','g'),'');
                 delete mentionedStudents[sid];
-                renderChips();
+                renderChips(); autoGrow(); markUnsaved();
             });
         });
     }
+    ta.addEventListener('input', function(){ setTimeout(renderChips,0); });
 
-    // Re-scan chips when content changes
-    ta.addEventListener('input', function() {
-        setTimeout(renderChips, 0);
+    function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+    function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+    document.addEventListener('click',function(e){if(!ta.contains(e.target)&&!dd.contains(e.target))hideDropdown();});
+
+    /* ---- Focus mode ---- */
+    window.toggleFocus = function() {
+        document.body.classList.toggle('focus-mode');
+        ta.focus();
+    };
+    // Escape exits focus mode
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) {
+            document.body.classList.remove('focus-mode');
+        }
     });
 
-    function esc(s) {
-        var d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
-
-    function escRegex(s) {
-        return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    // Close dropdown on outside click
-    document.addEventListener('click', function(e) {
-        if (!ta.contains(e.target) && !dd.contains(e.target)) hideDropdown();
-    });
+    /* ---- Meeting timer ---- */
+    var timerEl = document.getElementById('timer');
+    var timerDisplay = document.getElementById('timerDisplay');
+    var timerRunning = false, timerStart = 0, timerInterval;
+    window.toggleTimer = function() {
+        if (timerRunning) {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            timerEl.style.display = 'none';
+            // Set duration field
+            var elapsed = Math.round((Date.now()-timerStart)/60000);
+            if (elapsed > 0) document.getElementById('durationInput').value = elapsed;
+        } else {
+            timerStart = Date.now();
+            timerRunning = true;
+            timerEl.style.display = 'flex';
+            timerInterval = setInterval(function() {
+                var s = Math.floor((Date.now()-timerStart)/1000);
+                var m = Math.floor(s/60); s = s%60;
+                timerDisplay.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+            }, 1000);
+        }
+    };
 })();
 </script>
 {% endblock %}

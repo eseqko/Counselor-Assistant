@@ -3,113 +3,202 @@
 
 {% block head %}
 <style>
+/* View card */
+.note-view{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;}
+.note-header{padding:24px 28px 16px;border-bottom:1px solid #f1f5f9;}
+.note-header h1{font-size:1.3rem;font-weight:700;color:#1e293b;margin:0 0 8px;}
+.note-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.82rem;color:#64748b;}
+.note-badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.72rem;font-weight:600;}
+.badge-type{background:#e0e7ff;color:#3730a3;}
+.badge-conf{background:#fef2f2;color:#dc2626;}
+
+/* Meta strip */
+.meta-strip{display:flex;flex-wrap:wrap;gap:16px;padding:14px 28px;background:#f8fafc;
+    border-bottom:1px solid #f1f5f9;font-size:.82rem;color:#475569;}
+.meta-strip .m-item{display:flex;align-items:center;gap:5px;}
+.meta-strip .m-icon{font-size:1rem;opacity:.6;}
+
+/* Linked students */
+.student-bar{display:flex;flex-wrap:wrap;gap:6px;padding:14px 28px;border-bottom:1px solid #f1f5f9;}
+.student-link{display:inline-flex;align-items:center;gap:5px;background:#dbeafe;color:#1d4ed8;
+    padding:5px 14px;border-radius:16px;font-size:.82rem;font-weight:500;text-decoration:none;
+    transition:all .15s;}
+.student-link:hover{background:#bfdbfe;transform:translateY(-1px);box-shadow:0 2px 6px rgba(37,99,235,.15);}
+.student-link .s-grade{font-size:.72rem;color:#60a5fa;}
+
+/* Content body */
+.note-content{padding:24px 28px;line-height:1.8;font-size:.92rem;color:#334155;}
+.note-content br{display:block;content:'';margin-bottom:2px;}
+
+/* Rendered chips & tags */
 .mention-chip{display:inline-flex;align-items:center;gap:3px;background:#dbeafe;color:#1d4ed8;
     padding:1px 8px;border-radius:12px;font-size:.82rem;font-weight:500;text-decoration:none;
     transition:background .15s;}
-.mention-chip:hover{background:#bfdbfe;text-decoration:none;color:#1e40af;}
-.note-body{line-height:1.7;font-size:.92rem;color:#334155;white-space:pre-wrap;}
-.note-body br{display:block;content:'';margin:0;}
-.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:16px 0;}
-.meta-item{font-size:.82rem;}
-.meta-item .label{color:#9ca3af;font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
-.meta-item .value{color:#1e293b;margin-top:2px;}
-.action-items-box{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin-top:16px;}
-.action-items-box h4{font-size:.85rem;color:#92400e;margin:0 0 8px;}
-.action-items-box pre{margin:0;white-space:pre-wrap;font-family:inherit;font-size:.85rem;color:#78350f;}
-.student-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
-.student-tag{display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1d4ed8;
-    padding:4px 12px;border-radius:14px;font-size:.82rem;font-weight:500;text-decoration:none;}
-.student-tag:hover{background:#bfdbfe;}
+.mention-chip:hover{background:#bfdbfe;text-decoration:none;}
+.note-tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:.76rem;
+    font-weight:600;margin:0 1px;}
+
+/* Action items */
+.action-box{margin:0 28px 20px;background:linear-gradient(135deg,#fffbeb,#fef3c7);
+    border:1px solid #fde68a;border-radius:10px;padding:16px 20px;}
+.action-box h3{font-size:.88rem;color:#92400e;margin:0 0 8px;display:flex;align-items:center;gap:6px;}
+.action-box pre{margin:0;white-space:pre-wrap;font-family:inherit;font-size:.85rem;
+    color:#78350f;line-height:1.6;}
+/* Lines starting with - get bullet styling */
+.action-line{padding:3px 0;border-bottom:1px solid rgba(253,230,138,.5);}
+.action-line:last-child{border-bottom:none;}
+
+/* Footer */
+.note-footer{padding:14px 28px;border-top:1px solid #f1f5f9;font-size:.75rem;color:#9ca3af;
+    display:flex;justify-content:space-between;align-items:center;}
+
+/* Summary sidebar */
+.note-sidebar{display:grid;grid-template-columns:1fr 300px;gap:0;}
+.note-main{min-width:0;}
+.note-aside{border-left:1px solid #f1f5f9;padding:20px;background:#fafbfc;}
+.aside-section{margin-bottom:20px;}
+.aside-section h4{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;
+    color:#9ca3af;font-weight:700;margin:0 0 8px;}
+.tag-summary{display:flex;flex-wrap:wrap;gap:4px;}
+.tag-count{display:flex;align-items:center;gap:4px;font-size:.78rem;font-weight:600;
+    padding:3px 10px;border-radius:10px;}
+
+@media(max-width:800px){
+    .note-sidebar{grid-template-columns:1fr;}
+    .note-aside{border-left:none;border-top:1px solid #f1f5f9;}
+}
 @media print{
     .no-print{display:none!important;}
-    .card{box-shadow:none;border:none;}
+    .note-view{box-shadow:none;border:1px solid #e5e7eb;}
+    .note-aside{display:none;}
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div>
-            <h2 style="margin:0;font-size:1.2rem;">{{ note.title }}</h2>
-            <div style="font-size:.8rem;color:#64748b;margin-top:4px;">
-                {{ note.meeting_date.strftime('%A, %B %d, %Y') }}
-                <span style="display:inline-block;background:#e0e7ff;color:#3730a3;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:6px;">
-                    {{ type_label }}
-                </span>
-                {% if note.is_confidential %}
-                <span style="display:inline-block;background:#fef2f2;color:#dc2626;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:4px;">Confidential</span>
-                {% endif %}
+<div class="note-view">
+    <!-- Header -->
+    <div class="note-header">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <h1>{{ note.title }}</h1>
+                <div class="note-meta">
+                    <span>{{ note.meeting_date.strftime('%A, %B %d, %Y') }}</span>
+                    <span class="note-badge badge-type">{{ type_label }}</span>
+                    {% if note.is_confidential %}
+                    <span class="note-badge badge-conf">Confidential</span>
+                    {% endif %}
+                </div>
             </div>
-        </div>
-        <div class="no-print" style="display:flex;gap:8px;">
-            <button onclick="window.print()" class="btn btn-secondary" style="font-size:.8rem;">Print</button>
-            <a href="{{ url_for('meeting_notes.edit', note_id=note.id) }}" class="btn btn-primary" style="font-size:.8rem;">Edit</a>
+            <div class="no-print" style="display:flex;gap:8px;">
+                <button onclick="window.print()" class="btn btn-secondary" style="font-size:.8rem;">Print</button>
+                <a href="{{ url_for('meeting_notes.edit', note_id=note.id) }}" class="btn btn-primary" style="font-size:.8rem;">Edit</a>
+            </div>
         </div>
     </div>
 
-    <div style="padding:20px;">
-        <!-- Metadata -->
-        <div class="meta-grid">
-            {% if note.duration_minutes %}
-            <div class="meta-item">
-                <div class="label">Duration</div>
-                <div class="value">{{ note.duration_minutes }} minutes</div>
-            </div>
-            {% endif %}
-            {% if note.location %}
-            <div class="meta-item">
-                <div class="label">Location</div>
-                <div class="value">{{ note.location }}</div>
-            </div>
-            {% endif %}
-            {% if note.attendees %}
-            <div class="meta-item" style="grid-column:1/-1;">
-                <div class="label">Attendees</div>
-                <div class="value">{{ note.attendees }}</div>
+    <!-- Meta strip -->
+    {% if note.duration_minutes or note.location or note.attendees %}
+    <div class="meta-strip">
+        {% if note.duration_minutes %}
+        <div class="m-item"><span class="m-icon">&#9202;</span> {{ note.duration_minutes }} min</div>
+        {% endif %}
+        {% if note.location %}
+        <div class="m-item"><span class="m-icon">&#128205;</span> {{ note.location }}</div>
+        {% endif %}
+        {% if note.attendees %}
+        <div class="m-item"><span class="m-icon">&#128101;</span> {{ note.attendees }}</div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Linked students -->
+    {% if note.students %}
+    <div class="student-bar">
+        {% for s in note.students %}
+        <a href="{{ url_for('caseload.student_profile', student_id=s.id) }}" class="student-link">
+            {{ s.first_name }} {{ s.last_name }}
+            <span class="s-grade">Gr {{ s.grade_level }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="note-sidebar">
+        <!-- Main content -->
+        <div class="note-main">
+            <div class="note-content">{{ note.content_html | safe }}</div>
+
+            {% if note.action_items %}
+            <div class="action-box">
+                <h3>&#9888; Action Items</h3>
+                <pre>{{ note.action_items }}</pre>
             </div>
             {% endif %}
         </div>
 
-        <!-- Linked Students -->
-        {% if note.students %}
-        <div style="margin-bottom:16px;">
-            <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;font-weight:600;color:#9ca3af;margin-bottom:6px;">Linked Students</div>
-            <div class="student-list">
+        <!-- Sidebar: tag summary + student quick-links -->
+        <div class="note-aside no-print">
+            {% set tag_counts = {} %}
+            {% for tag in ['action','decision','followup','question','idea','concern','win','update'] %}
+                {% set count = note.content.lower().count('#' + tag) %}
+                {% if count > 0 %}
+                    {% if tag_counts.update({tag: count}) %}{% endif %}
+                {% endif %}
+            {% endfor %}
+
+            {% if tag_counts %}
+            <div class="aside-section">
+                <h4>Tags Used</h4>
+                <div class="tag-summary">
+                    {% set tag_styles = {
+                        'action': '#dc2626;#fef2f2',
+                        'decision': '#7c3aed;#f5f3ff',
+                        'followup': '#d97706;#fffbeb',
+                        'question': '#2563eb;#eff6ff',
+                        'idea': '#059669;#ecfdf5',
+                        'concern': '#e11d48;#fff1f2',
+                        'win': '#16a34a;#f0fdf4',
+                        'update': '#0891b2;#ecfeff'
+                    } %}
+                    {% for tag, count in tag_counts.items() %}
+                    {% set colors = tag_styles.get(tag, '#6b7280;#f3f4f6').split(';') %}
+                    <span class="tag-count" style="color:{{ colors[0] }};background:{{ colors[1] }}">
+                        #{{ tag }} <span style="opacity:.6">&times;{{ count }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if note.students %}
+            <div class="aside-section">
+                <h4>Students ({{ note.students|length }})</h4>
                 {% for s in note.students %}
-                <a href="{{ url_for('caseload.student_profile', student_id=s.id) }}" class="student-tag">
-                    {{ s.first_name }} {{ s.last_name }}
-                    <span style="font-size:.7rem;color:#60a5fa;">Gr {{ s.grade_level }}</span>
+                <a href="{{ url_for('caseload.student_profile', student_id=s.id) }}"
+                   style="display:block;padding:6px 0;font-size:.82rem;color:#1d4ed8;text-decoration:none;border-bottom:1px solid #f1f5f9;">
+                    {{ s.last_name }}, {{ s.first_name }}
+                    <span style="font-size:.72rem;color:#9ca3af;float:right;">Gr {{ s.grade_level }}</span>
                 </a>
                 {% endfor %}
             </div>
-        </div>
-        {% endif %}
-
-        <!-- Content -->
-        <div style="border-top:1px solid #f1f5f9;padding-top:16px;">
-            <div class="note-body">{{ note.content_html | safe }}</div>
-        </div>
-
-        <!-- Action Items -->
-        {% if note.action_items %}
-        <div class="action-items-box">
-            <h4>Action Items / Follow-Up</h4>
-            <pre>{{ note.action_items }}</pre>
-        </div>
-        {% endif %}
-
-        <!-- Timestamps -->
-        <div style="margin-top:20px;font-size:.75rem;color:#9ca3af;border-top:1px solid #f1f5f9;padding-top:12px;">
-            Created: {{ note.created_at.strftime('%b %d, %Y at %I:%M %p') }}
-            {% if note.updated_at and note.updated_at != note.created_at %}
-            &middot; Updated: {{ note.updated_at.strftime('%b %d, %Y at %I:%M %p') }}
             {% endif %}
+
+            <div class="aside-section">
+                <h4>Info</h4>
+                <div style="font-size:.78rem;color:#6b7280;line-height:1.8;">
+                    Created: {{ note.created_at.strftime('%b %d, %Y %I:%M %p') }}<br>
+                    {% if note.updated_at and note.updated_at != note.created_at %}
+                    Updated: {{ note.updated_at.strftime('%b %d, %Y %I:%M %p') }}
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
-</div>
 
-<div class="no-print" style="margin-top:12px;">
-    <a href="{{ url_for('meeting_notes.index') }}" style="font-size:.85rem;color:#6b7280;">&larr; Back to Meeting Notes</a>
+    <div class="note-footer">
+        <a href="{{ url_for('meeting_notes.index') }}" class="no-print" style="color:#6b7280;text-decoration:none;">&larr; All Meeting Notes</a>
+        <span>Meeting Note #{{ note.id }}</span>
+    </div>
 </div>
 {% endblock %}
