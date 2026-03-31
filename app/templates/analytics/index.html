@@ -371,7 +371,7 @@
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
                 '<h3 id="expand-title" style="margin:0;font-size:1.1rem;"></h3>' +
                 '<button onclick="closeExpand()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;padding:4px 8px;">&times;</button></div>' +
-                '<canvas id="expand-canvas"></canvas></div>';
+                '<div id="expand-canvas-wrap" style="position:relative;"><canvas id="expand-canvas"></canvas></div></div>';
             div.addEventListener('click', function(e){ if(e.target===div) closeExpand(); });
             document.body.appendChild(div);
             overlay = div;
@@ -384,8 +384,15 @@
             overlay.style.display = 'block';
 
             if (_expandChart) _expandChart.destroy();
+
+            /* Set fixed height on the wrapper, not the canvas */
+            var wrap = document.getElementById('expand-canvas-wrap');
+            var chartH = Math.max(400, fd.labels.length * 28);
+            wrap.style.height = chartH + 'px';
+
+            /* Reset the canvas so Chart.js gets a clean element */
+            wrap.innerHTML = '<canvas id="expand-canvas"></canvas>';
             var canvas = document.getElementById('expand-canvas');
-            canvas.style.height = Math.max(400, fd.labels.length * 32) + 'px';
 
             _expandChart = new Chart(canvas, {
                 type:'bar',
@@ -399,7 +406,9 @@
                 options:{
                     indexAxis:'y', responsive:true, maintainAspectRatio:false,
                     plugins:{legend:{position:'top'}},
-                    scales:{x:{stacked:true, beginAtZero:true, ticks:{precision:0}}, y:{stacked:true}}
+                    scales:{x:{stacked:true, beginAtZero:true, ticks:{precision:0}}, y:{stacked:true,
+                        barPercentage:0.7
+                    }}
                 }
             });
         }
