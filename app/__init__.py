@@ -77,6 +77,7 @@ def create_app(config_class=Config):
     from app.routes.alerts import alerts_bp
     from app.routes.analytics import analytics_bp
     from app.routes.setup import setup_bp
+    from app.routes.meeting_notes import meeting_notes_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -101,6 +102,7 @@ def create_app(config_class=Config):
     app.register_blueprint(alerts_bp, url_prefix='/alerts')
     app.register_blueprint(analytics_bp, url_prefix='/analytics')
     app.register_blueprint(setup_bp)
+    app.register_blueprint(meeting_notes_bp, url_prefix='/meeting-notes')
 
     # First-run setup redirect
     @app.before_request
@@ -142,7 +144,7 @@ def create_app(config_class=Config):
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
-        from app.models import attendance, grade, iep504, availability
+        from app.models import attendance, grade, iep504, availability, meeting_note
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

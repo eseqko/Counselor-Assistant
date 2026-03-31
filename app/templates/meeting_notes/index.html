@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Meeting Notes - Counselor Assistant{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;font-size:1.2rem;">Meeting Notes</h2>
+        <a href="{{ url_for('meeting_notes.add') }}" class="btn btn-primary" style="font-size:.85rem;">+ New Meeting Note</a>
+    </div>
+
+    <!-- Filters -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;padding:16px 20px 0;">
+        <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;width:100%;">
+            <input type="text" name="q" value="{{ q }}" placeholder="Search notes..." class="form-control" style="flex:1;min-width:180px;">
+            <select name="type" class="form-control" style="width:180px;">
+                <option value="">All Types</option>
+                {% for val, label in meeting_types %}
+                <option value="{{ val }}" {% if mtype == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="student_id" class="form-control" style="width:200px;">
+                <option value="">All Students</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {% if student_id == s.id|string %}selected{% endif %}>{{ s.last_name }}, {{ s.first_name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary" style="font-size:.85rem;">Filter</button>
+            {% if q or mtype or student_id %}
+            <a href="{{ url_for('meeting_notes.index') }}" class="btn btn-secondary" style="font-size:.85rem;">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if notes %}
+    <div style="padding:16px 20px;">
+        {% for note in notes %}
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px 20px;margin-bottom:12px;cursor:pointer;transition:box-shadow .2s;"
+             onclick="window.location='{{ url_for('meeting_notes.view', note_id=note.id) }}'"
+             onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'"
+             onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <div style="font-weight:600;font-size:1rem;color:#1e293b;">{{ note.title }}</div>
+                    <div style="font-size:.8rem;color:#64748b;margin-top:3px;">
+                        {{ note.meeting_date.strftime('%b %d, %Y') }}
+                        {% set type_map = dict(meeting_types) %}
+                        <span style="display:inline-block;background:#e0e7ff;color:#3730a3;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:6px;">
+                            {{ type_map.get(note.meeting_type, note.meeting_type) }}
+                        </span>
+                        {% if note.is_confidential %}
+                        <span style="display:inline-block;background:#fef2f2;color:#dc2626;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:4px;">Confidential</span>
+                        {% endif %}
+                        {% if note.duration_minutes %}
+                        &middot; {{ note.duration_minutes }} min
+                        {% endif %}
+                    </div>
+                </div>
+                {% if note.students %}
+                <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:260px;">
+                    {% for s in note.students[:4] %}
+                    <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:500;">
+                        {{ s.first_name }} {{ s.last_name }}
+                    </span>
+                    {% endfor %}
+                    {% if note.students|length > 4 %}
+                    <span style="font-size:.7rem;color:#9ca3af;">+{{ note.students|length - 4 }} more</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% if note.content %}
+            <div style="margin-top:8px;font-size:.85rem;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:600px;">
+                {{ note.content[:120] | replace('@[', '') | replace('](', ' ') }}{% if note.content|length > 120 %}...{% endif %}
+            </div>
+            {% endif %}
+            {% if note.action_items %}
+            <div style="margin-top:6px;font-size:.78rem;color:#d97706;">
+                &#9888; Action items attached
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:#9ca3af;">
+        <div style="font-size:2rem;margin-bottom:8px;">&#128221;</div>
+        {% if q or mtype or student_id %}
+        <p>No meeting notes match your filters.</p>
+        {% else %}
+        <p>No meeting notes yet. Click <strong>+ New Meeting Note</strong> to get started.</p>
+        <p style="font-size:.8rem;margin-top:4px;">Use meeting notes for SSTs, parent conferences, department meetings, and more. Type <strong>@</strong> in the content to link students.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
