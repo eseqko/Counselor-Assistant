@@ -20,6 +20,11 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    # Redirect to setup wizard if first run
+    from app.routes.setup import needs_setup
+    if needs_setup():
+        return redirect(url_for('setup.index'))
+
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.index'))
 
