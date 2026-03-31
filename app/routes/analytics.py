@@ -64,7 +64,9 @@ def _caseload_data(students):
     grade_dist = {}
     iep_count = 0
     s504_count = 0
-    el_count = 0
+    newcomer_count = 0
+    ltel_count = 0
+    el_other_count = 0
     total = len(students)
 
     for s in students:
@@ -74,10 +76,32 @@ def _caseload_data(students):
             iep_count += 1
         if s.section_504:
             s504_count += 1
-        if s.el_status and s.el_status in ('Newcomer', 'LTEL', 'EL 1', 'EL 2', 'EL 3'):
-            el_count += 1
+        el = (s.el_status or '').strip()
+        if el == 'Newcomer':
+            newcomer_count += 1
+        elif el == 'LTEL':
+            ltel_count += 1
+        elif el in ('EL 1', 'EL 2', 'EL 3'):
+            el_other_count += 1
 
-    gen_ed = total - iep_count - s504_count - el_count
+    # Build demographics as non-exclusive counts (students can be in multiple)
+    demo_labels = []
+    demo_values = []
+    if iep_count:
+        demo_labels.append('IEP')
+        demo_values.append(iep_count)
+    if s504_count:
+        demo_labels.append('504 Plan')
+        demo_values.append(s504_count)
+    if newcomer_count:
+        demo_labels.append('Newcomer')
+        demo_values.append(newcomer_count)
+    if ltel_count:
+        demo_labels.append('LTEL')
+        demo_values.append(ltel_count)
+    if el_other_count:
+        demo_labels.append('EL (Other)')
+        demo_values.append(el_other_count)
 
     return {
         'total': total,
@@ -86,8 +110,8 @@ def _caseload_data(students):
             'values': [grade_dist[g] for g in sorted(grade_dist.keys())],
         },
         'demographics': {
-            'labels': ['IEP', '504 Plan', 'English Learner', 'Gen Ed'],
-            'values': [iep_count, s504_count, el_count, max(0, gen_ed)],
+            'labels': demo_labels,
+            'values': demo_values,
         },
     }
 

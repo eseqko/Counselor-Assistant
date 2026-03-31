@@ -132,7 +132,7 @@
         html += '<div class="section-header">Caseload Overview</div>';
         html += '<div class="chart-grid">';
         html += chartCard('chart-grade-dist', 'Grade Level Distribution', 'Students per grade level');
-        html += chartCard('chart-demographics', 'Student Demographics', 'IEP, 504, EL breakdown');
+        html += chartCard('chart-demographics', 'Student Demographics', 'Designations (students may appear in multiple)');
         html += '</div>';
 
         /* ── Academic ─────────────────────────── */
@@ -179,8 +179,8 @@
         if (c.grade_distribution) {
             charts.push(bar('chart-grade-dist', c.grade_distribution.labels, c.grade_distribution.values, 'Students'));
         }
-        if (c.demographics) {
-            charts.push(doughnut('chart-demographics', c.demographics.labels, c.demographics.values));
+        if (c.demographics && c.demographics.labels.length) {
+            charts.push(bar('chart-demographics', c.demographics.labels, c.demographics.values, 'Students'));
         }
 
         // Academic
