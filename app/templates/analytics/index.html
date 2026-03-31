@@ -188,7 +188,10 @@
             charts.push(bar('chart-gpa', ac.gpa_distribution.labels, ac.gpa_distribution.values, 'Students'));
         }
         if (ac.failing_by_subject && ac.failing_by_subject.labels.length) {
-            charts.push(horizontalBar('chart-failing', ac.failing_by_subject.labels, ac.failing_by_subject.values, 'Students'));
+            charts.push(stackedHorizontalBar('chart-failing', ac.failing_by_subject.labels, [
+                {label:'F Grades', data:ac.failing_by_subject.f_values, color:'#E74C3C'},
+                {label:'D Grades', data:ac.failing_by_subject.d_values, color:'#F39C12'},
+            ]));
         }
 
         // Attendance
@@ -261,6 +264,20 @@
                 borderColor:COLORS.slice(0,values.length), borderWidth:1}]},
             options:{indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
                 scales:{x:{beginAtZero:true, ticks:{precision:0}}}}
+        });
+    }
+
+    function stackedHorizontalBar(id, labels, datasets) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        return new Chart(el, {
+            type:'bar',
+            data:{labels:labels, datasets:datasets.map(function(ds){
+                return {label:ds.label, data:ds.data,
+                    backgroundColor:ds.color+'80', borderColor:ds.color, borderWidth:1};
+            })},
+            options:{indexAxis:'y', responsive:true, plugins:{legend:{position:'bottom'}},
+                scales:{x:{stacked:true, beginAtZero:true, ticks:{precision:0}}, y:{stacked:true}}}
         });
     }
 
