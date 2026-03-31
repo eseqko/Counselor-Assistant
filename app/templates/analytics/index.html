@@ -139,7 +139,9 @@
         html += '<div class="section-header">Academic Performance</div>';
         html += '<div class="chart-grid">';
         html += chartCard('chart-gpa', 'GPA Distribution', 'Across your caseload');
-        html += chartCard('chart-failing', 'Failing/Near-Failing by Subject', ac.total_failing ? ac.total_failing + ' total' : 'No failing grades');
+        html += chartCardExpandable('chart-failing', 'Failing/Near-Failing by Subject',
+            ac.total_failing ? ac.total_failing + ' total' : 'No failing grades',
+            ac.failing_by_subject && ac.failing_by_subject.labels.length > 8);
         html += '</div>';
 
         /* ── Attendance ───────────────────────── */
@@ -188,9 +190,14 @@
             charts.push(bar('chart-gpa', ac.gpa_distribution.labels, ac.gpa_distribution.values, 'Students'));
         }
         if (ac.failing_by_subject && ac.failing_by_subject.labels.length) {
-            charts.push(stackedHorizontalBar('chart-failing', ac.failing_by_subject.labels, [
-                {label:'F Grades', data:ac.failing_by_subject.f_values, color:'#E74C3C'},
-                {label:'D Grades', data:ac.failing_by_subject.d_values, color:'#F39C12'},
+            /* Store full data for expand modal */
+            window._failingData = ac.failing_by_subject;
+            /* Show top 8 in the card */
+            var top = 8;
+            charts.push(stackedHorizontalBar('chart-failing',
+                ac.failing_by_subject.labels.slice(0, top), [
+                {label:'F Grades', data:ac.failing_by_subject.f_values.slice(0, top), color:'#E74C3C'},
+                {label:'D Grades', data:ac.failing_by_subject.d_values.slice(0, top), color:'#F39C12'},
             ]));
         }
 
@@ -341,6 +348,68 @@
             '<div class="chart-subtitle">'+subtitle+'</div>' +
             '<canvas id="'+id+'"></canvas></div>';
     }
+    function chartCardExpandable(id, title, subtitle, showExpand) {
+        var expandBtn = showExpand
+            ? '<button class="btn btn-sm btn-outline" style="margin-left:auto;font-size:0.76rem;" onclick="expandChart(\''+id+'\')">View All</button>'
+            : '';
+        return '<div class="chart-card"><div style="display:flex;align-items:center;gap:8px;">' +
+            '<h3 style="margin:0;">'+title+'</h3>' + expandBtn + '</div>' +
+            '<div class="chart-subtitle">'+subtitle+'</div>' +
+            '<canvas id="'+id+'"></canvas></div>';
+    }
+
+    /* ── Expand modal ─────────────────────── */
+    var _expandChart = null;
+    window.expandChart = function(chartId) {
+        var overlay = document.getElementById('expand-overlay');
+        if (!overlay) {
+            // Create overlay once
+            var div = document.createElement('div');
+            div.id = 'expand-overlay';
+            div.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;padding:30px;overflow-y:auto;';
+            div.innerHTML = '<div id="expand-modal" style="background:#fff;border-radius:12px;max-width:900px;margin:0 auto;padding:24px;position:relative;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+                '<h3 id="expand-title" style="margin:0;font-size:1.1rem;"></h3>' +
+                '<button onclick="closeExpand()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;padding:4px 8px;">&times;</button></div>' +
+                '<canvas id="expand-canvas"></canvas></div>';
+            div.addEventListener('click', function(e){ if(e.target===div) closeExpand(); });
+            document.body.appendChild(div);
+            overlay = div;
+        }
+
+        if (chartId === 'chart-failing' && window._failingData) {
+            var fd = window._failingData;
+            document.getElementById('expand-title').textContent =
+                'Failing/Near-Failing by Subject (' + fd.labels.length + ' subjects)';
+            overlay.style.display = 'block';
+
+            if (_expandChart) _expandChart.destroy();
+            var canvas = document.getElementById('expand-canvas');
+            canvas.style.height = Math.max(400, fd.labels.length * 32) + 'px';
+
+            _expandChart = new Chart(canvas, {
+                type:'bar',
+                data:{
+                    labels: fd.labels,
+                    datasets:[
+                        {label:'F Grades', data:fd.f_values, backgroundColor:'#E74C3C80', borderColor:'#E74C3C', borderWidth:1},
+                        {label:'D Grades', data:fd.d_values, backgroundColor:'#F39C1280', borderColor:'#F39C12', borderWidth:1},
+                    ]
+                },
+                options:{
+                    indexAxis:'y', responsive:true, maintainAspectRatio:false,
+                    plugins:{legend:{position:'top'}},
+                    scales:{x:{stacked:true, beginAtZero:true, ticks:{precision:0}}, y:{stacked:true}}
+                }
+            });
+        }
+    };
+
+    window.closeExpand = function() {
+        var overlay = document.getElementById('expand-overlay');
+        if (overlay) overlay.style.display = 'none';
+        if (_expandChart) { _expandChart.destroy(); _expandChart = null; }
+    };
 
     /* Initial load */
     loadData('year');
