@@ -28,17 +28,37 @@ MEETING_TYPES = [
 
 
 def _render_content_html(raw_content):
-    """Convert @[Student Name](id) markers into clickable chip HTML."""
+    """Convert @[Student Name](id) and #hashtags into styled HTML."""
     def replace_mention(m):
         name = escape(m.group(1))
         sid = m.group(2)
         return (f'<a href="/caseload/{sid}" class="mention-chip" '
                 f'data-student-id="{sid}">{name}</a>')
 
+    TAG_COLORS = {
+        'action': ('#dc2626', '#fef2f2'),
+        'decision': ('#7c3aed', '#f5f3ff'),
+        'followup': ('#d97706', '#fffbeb'),
+        'question': ('#2563eb', '#eff6ff'),
+        'idea': ('#059669', '#ecfdf5'),
+        'concern': ('#e11d48', '#fff1f2'),
+        'update': ('#0891b2', '#ecfeff'),
+        'win': ('#16a34a', '#f0fdf4'),
+    }
+
+    def replace_tag(m):
+        tag = m.group(1).lower()
+        colors = TAG_COLORS.get(tag, ('#6b7280', '#f3f4f6'))
+        return (f'<span class="note-tag" style="color:{colors[0]};background:{colors[1]}">'
+                f'#{tag}</span>')
+
     html = str(escape(raw_content))
-    # Pattern: @[Display Name](student_db_id)
+    # @mentions
     html = re.sub(r'@\[([^\]]+)\]\((\d+)\)', replace_mention, html)
-    # Convert newlines to <br> for display
+    # #hashtags (only known ones get colored, rest get neutral)
+    html = re.sub(r'#(action|decision|followup|question|idea|concern|update|win)\b',
+                  replace_tag, html, flags=re.IGNORECASE)
+    # Newlines
     html = html.replace('\n', '<br>')
     return html
 

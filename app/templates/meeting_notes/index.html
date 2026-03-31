@@ -1,96 +1,175 @@
 {% extends "base.html" %}
 {% block title %}Meeting Notes - Counselor Assistant{% endblock %}
 
+{% block head %}
+<style>
+.notes-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.notes-header h2{font-size:1.3rem;font-weight:700;color:#1e293b;margin:0;}
+.new-btn{display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#fff;
+    padding:10px 20px;border-radius:10px;text-decoration:none;font-size:.88rem;font-weight:600;
+    transition:all .15s;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,.25);}
+.new-btn:hover{background:#1d4ed8;transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,.3);}
+
+/* Filter bar */
+.filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+.filter-bar input,.filter-bar select{border:1.5px solid #e5e7eb;border-radius:8px;padding:8px 12px;
+    font-size:.85rem;outline:none;transition:border-color .15s;}
+.filter-bar input:focus,.filter-bar select:focus{border-color:#2563eb;}
+.filter-bar input{flex:1;min-width:180px;}
+
+/* Note cards */
+.note-card{border:1px solid #e5e7eb;border-radius:12px;padding:18px 22px;margin-bottom:12px;
+    cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.note-card:hover{border-color:#bfdbfe;box-shadow:0 4px 12px rgba(37,99,235,.08);transform:translateY(-1px);}
+.note-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px;}
+.note-card[data-type="sst"]::before{background:#dc2626;}
+.note-card[data-type="parent_conference"]::before{background:#d97706;}
+.note-card[data-type="iep_review"]::before{background:#7c3aed;}
+.note-card[data-type="504_review"]::before{background:#2563eb;}
+.note-card[data-type="department"]::before{background:#059669;}
+.note-card[data-type="staff"]::before{background:#0891b2;}
+.note-card[data-type="counselor_team"]::before{background:#6366f1;}
+.note-card[data-type="admin"]::before{background:#475569;}
+.note-card[data-type="grade_level"]::before{background:#ea580c;}
+.note-card[data-type="general"]::before{background:#9ca3af;}
+.note-card[data-type="other"]::before{background:#6b7280;}
+
+.nc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+.nc-title{font-weight:600;font-size:1rem;color:#1e293b;}
+.nc-date{font-size:.78rem;color:#64748b;white-space:nowrap;}
+.nc-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;}
+.nc-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600;}
+.nc-type{background:#e0e7ff;color:#3730a3;}
+.nc-conf{background:#fef2f2;color:#dc2626;}
+.nc-dur{background:#f1f5f9;color:#64748b;}
+
+.nc-students{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;}
+.nc-student{display:inline-block;background:#dbeafe;color:#1d4ed8;padding:2px 8px;
+    border-radius:12px;font-size:.7rem;font-weight:500;}
+
+.nc-preview{margin-top:8px;font-size:.84rem;color:#6b7280;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;max-width:600px;}
+.nc-action{margin-top:6px;font-size:.76rem;color:#d97706;display:flex;align-items:center;gap:4px;}
+
+/* Tags in preview */
+.nc-tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;}
+.nc-tag{font-size:.65rem;padding:1px 6px;border-radius:8px;font-weight:600;}
+
+/* Empty state */
+.empty-state{text-align:center;padding:60px 20px;color:#9ca3af;}
+.empty-state .empty-icon{font-size:3rem;margin-bottom:12px;opacity:.5;}
+.empty-state p{font-size:.9rem;margin:4px 0;}
+.empty-state .hint{font-size:.8rem;margin-top:12px;color:#cbd5e1;}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;font-size:1.2rem;">Meeting Notes</h2>
-        <a href="{{ url_for('meeting_notes.add') }}" class="btn btn-primary" style="font-size:.85rem;">+ New Meeting Note</a>
-    </div>
+<div class="notes-header">
+    <h2>Meeting Notes</h2>
+    <a href="{{ url_for('meeting_notes.add') }}" class="new-btn">+ New Note</a>
+</div>
 
-    <!-- Filters -->
-    <div style="display:flex;gap:10px;flex-wrap:wrap;padding:16px 20px 0;">
-        <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;width:100%;">
-            <input type="text" name="q" value="{{ q }}" placeholder="Search notes..." class="form-control" style="flex:1;min-width:180px;">
-            <select name="type" class="form-control" style="width:180px;">
-                <option value="">All Types</option>
-                {% for val, label in meeting_types %}
-                <option value="{{ val }}" {% if mtype == val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <select name="student_id" class="form-control" style="width:200px;">
-                <option value="">All Students</option>
-                {% for s in students %}
-                <option value="{{ s.id }}" {% if student_id == s.id|string %}selected{% endif %}>{{ s.last_name }}, {{ s.first_name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-secondary" style="font-size:.85rem;">Filter</button>
-            {% if q or mtype or student_id %}
-            <a href="{{ url_for('meeting_notes.index') }}" class="btn btn-secondary" style="font-size:.85rem;">Clear</a>
-            {% endif %}
-        </form>
-    </div>
+<!-- Filters -->
+<form method="GET" class="filter-bar">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search notes...">
+    <select name="type" style="width:170px;">
+        <option value="">All Types</option>
+        {% for val, label in meeting_types %}
+        <option value="{{ val }}" {% if mtype == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="student_id" style="width:190px;">
+        <option value="">All Students</option>
+        {% for s in students %}
+        <option value="{{ s.id }}" {% if student_id == s.id|string %}selected{% endif %}>{{ s.last_name }}, {{ s.first_name }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary" style="font-size:.85rem;">Filter</button>
+    {% if q or mtype or student_id %}
+    <a href="{{ url_for('meeting_notes.index') }}" class="btn btn-secondary" style="font-size:.85rem;">Clear</a>
+    {% endif %}
+</form>
 
-    {% if notes %}
-    <div style="padding:16px 20px;">
-        {% for note in notes %}
-        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:16px 20px;margin-bottom:12px;cursor:pointer;transition:box-shadow .2s;"
-             onclick="window.location='{{ url_for('meeting_notes.view', note_id=note.id) }}'"
-             onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'"
-             onmouseout="this.style.boxShadow='none'">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div>
-                    <div style="font-weight:600;font-size:1rem;color:#1e293b;">{{ note.title }}</div>
-                    <div style="font-size:.8rem;color:#64748b;margin-top:3px;">
-                        {{ note.meeting_date.strftime('%b %d, %Y') }}
-                        {% set type_map = dict(meeting_types) %}
-                        <span style="display:inline-block;background:#e0e7ff;color:#3730a3;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:6px;">
-                            {{ type_map.get(note.meeting_type, note.meeting_type) }}
-                        </span>
-                        {% if note.is_confidential %}
-                        <span style="display:inline-block;background:#fef2f2;color:#dc2626;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:4px;">Confidential</span>
-                        {% endif %}
-                        {% if note.duration_minutes %}
-                        &middot; {{ note.duration_minutes }} min
-                        {% endif %}
-                    </div>
-                </div>
-                {% if note.students %}
-                <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:260px;">
-                    {% for s in note.students[:4] %}
-                    <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:500;">
-                        {{ s.first_name }} {{ s.last_name }}
-                    </span>
-                    {% endfor %}
-                    {% if note.students|length > 4 %}
-                    <span style="font-size:.7rem;color:#9ca3af;">+{{ note.students|length - 4 }} more</span>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
-            {% if note.content %}
-            <div style="margin-top:8px;font-size:.85rem;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:600px;">
-                {{ note.content[:120] | replace('@[', '') | replace('](', ' ') }}{% if note.content|length > 120 %}...{% endif %}
-            </div>
+{% if notes %}
+    {% set type_map = dict(meeting_types) %}
+    {% set tag_colors = {
+        'action': '#dc2626;#fef2f2',
+        'decision': '#7c3aed;#f5f3ff',
+        'followup': '#d97706;#fffbeb',
+        'question': '#2563eb;#eff6ff',
+        'idea': '#059669;#ecfdf5',
+        'concern': '#e11d48;#fff1f2',
+        'win': '#16a34a;#f0fdf4'
+    } %}
+
+    {% for note in notes %}
+    <div class="note-card" data-type="{{ note.meeting_type }}"
+         onclick="window.location='{{ url_for('meeting_notes.view', note_id=note.id) }}'">
+        <div class="nc-top">
+            <div class="nc-title">{{ note.title }}</div>
+            <div class="nc-date">{{ note.meeting_date.strftime('%b %d, %Y') }}</div>
+        </div>
+        <div class="nc-meta">
+            <span class="nc-badge nc-type">{{ type_map.get(note.meeting_type, note.meeting_type) }}</span>
+            {% if note.is_confidential %}
+            <span class="nc-badge nc-conf">Confidential</span>
             {% endif %}
-            {% if note.action_items %}
-            <div style="margin-top:6px;font-size:.78rem;color:#d97706;">
-                &#9888; Action items attached
-            </div>
+            {% if note.duration_minutes %}
+            <span class="nc-badge nc-dur">{{ note.duration_minutes }} min</span>
             {% endif %}
         </div>
+
+        {% if note.students %}
+        <div class="nc-students">
+            {% for s in note.students[:5] %}
+            <span class="nc-student">{{ s.first_name }} {{ s.last_name }}</span>
+            {% endfor %}
+            {% if note.students|length > 5 %}
+            <span style="font-size:.7rem;color:#9ca3af;">+{{ note.students|length - 5 }} more</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if note.content %}
+        <div class="nc-preview">
+            {{ note.content[:140] | replace('@[', '') | replace('](', ' ') | truncate(140) }}
+        </div>
+        {% endif %}
+
+        {# Show tag pills if any #}
+        {% set tags_found = [] %}
+        {% for tag in ['action','decision','followup','question','idea','concern','win'] %}
+            {% if '#' + tag in note.content.lower() %}
+                {% if tags_found.append(tag) %}{% endif %}
+            {% endif %}
         {% endfor %}
-    </div>
-    {% else %}
-    <div style="padding:40px;text-align:center;color:#9ca3af;">
-        <div style="font-size:2rem;margin-bottom:8px;">&#128221;</div>
-        {% if q or mtype or student_id %}
-        <p>No meeting notes match your filters.</p>
-        {% else %}
-        <p>No meeting notes yet. Click <strong>+ New Meeting Note</strong> to get started.</p>
-        <p style="font-size:.8rem;margin-top:4px;">Use meeting notes for SSTs, parent conferences, department meetings, and more. Type <strong>@</strong> in the content to link students.</p>
+        {% if tags_found %}
+        <div class="nc-tags">
+            {% for tag in tags_found %}
+            {% set c = tag_colors.get(tag, '#6b7280;#f3f4f6').split(';') %}
+            <span class="nc-tag" style="color:{{ c[0] }};background:{{ c[1] }}">#{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if note.action_items %}
+        <div class="nc-action">&#9888; Action items</div>
         {% endif %}
     </div>
-    {% endif %}
-</div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state">
+        <div class="empty-icon">&#128221;</div>
+        {% if q or mtype or student_id %}
+        <p>No notes match your filters.</p>
+        {% else %}
+        <p><strong>No meeting notes yet.</strong></p>
+        <p>Capture meetings, SSTs, parent conferences, and department meetings.</p>
+        <div class="hint">
+            Type <strong>@</strong> to link students &middot; <strong>#action</strong> <strong>#decision</strong> <strong>#followup</strong> for quick tags<br>
+            Auto-saves to your browser &middot; Focus mode for distraction-free writing &middot; Built-in meeting timer
+        </div>
+        {% endif %}
+    </div>
+{% endif %}
 {% endblock %}
