@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ note.title }} - Meeting Notes{% endblock %}
+
+{% block head %}
+<style>
+.mention-chip{display:inline-flex;align-items:center;gap:3px;background:#dbeafe;color:#1d4ed8;
+    padding:1px 8px;border-radius:12px;font-size:.82rem;font-weight:500;text-decoration:none;
+    transition:background .15s;}
+.mention-chip:hover{background:#bfdbfe;text-decoration:none;color:#1e40af;}
+.note-body{line-height:1.7;font-size:.92rem;color:#334155;white-space:pre-wrap;}
+.note-body br{display:block;content:'';margin:0;}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:16px 0;}
+.meta-item{font-size:.82rem;}
+.meta-item .label{color:#9ca3af;font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
+.meta-item .value{color:#1e293b;margin-top:2px;}
+.action-items-box{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px;margin-top:16px;}
+.action-items-box h4{font-size:.85rem;color:#92400e;margin:0 0 8px;}
+.action-items-box pre{margin:0;white-space:pre-wrap;font-family:inherit;font-size:.85rem;color:#78350f;}
+.student-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.student-tag{display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1d4ed8;
+    padding:4px 12px;border-radius:14px;font-size:.82rem;font-weight:500;text-decoration:none;}
+.student-tag:hover{background:#bfdbfe;}
+@media print{
+    .no-print{display:none!important;}
+    .card{box-shadow:none;border:none;}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+            <h2 style="margin:0;font-size:1.2rem;">{{ note.title }}</h2>
+            <div style="font-size:.8rem;color:#64748b;margin-top:4px;">
+                {{ note.meeting_date.strftime('%A, %B %d, %Y') }}
+                <span style="display:inline-block;background:#e0e7ff;color:#3730a3;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:6px;">
+                    {{ type_label }}
+                </span>
+                {% if note.is_confidential %}
+                <span style="display:inline-block;background:#fef2f2;color:#dc2626;padding:1px 8px;border-radius:10px;font-size:.7rem;margin-left:4px;">Confidential</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="no-print" style="display:flex;gap:8px;">
+            <button onclick="window.print()" class="btn btn-secondary" style="font-size:.8rem;">Print</button>
+            <a href="{{ url_for('meeting_notes.edit', note_id=note.id) }}" class="btn btn-primary" style="font-size:.8rem;">Edit</a>
+        </div>
+    </div>
+
+    <div style="padding:20px;">
+        <!-- Metadata -->
+        <div class="meta-grid">
+            {% if note.duration_minutes %}
+            <div class="meta-item">
+                <div class="label">Duration</div>
+                <div class="value">{{ note.duration_minutes }} minutes</div>
+            </div>
+            {% endif %}
+            {% if note.location %}
+            <div class="meta-item">
+                <div class="label">Location</div>
+                <div class="value">{{ note.location }}</div>
+            </div>
+            {% endif %}
+            {% if note.attendees %}
+            <div class="meta-item" style="grid-column:1/-1;">
+                <div class="label">Attendees</div>
+                <div class="value">{{ note.attendees }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Linked Students -->
+        {% if note.students %}
+        <div style="margin-bottom:16px;">
+            <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;font-weight:600;color:#9ca3af;margin-bottom:6px;">Linked Students</div>
+            <div class="student-list">
+                {% for s in note.students %}
+                <a href="{{ url_for('caseload.student_profile', student_id=s.id) }}" class="student-tag">
+                    {{ s.first_name }} {{ s.last_name }}
+                    <span style="font-size:.7rem;color:#60a5fa;">Gr {{ s.grade_level }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Content -->
+        <div style="border-top:1px solid #f1f5f9;padding-top:16px;">
+            <div class="note-body">{{ note.content_html | safe }}</div>
+        </div>
+
+        <!-- Action Items -->
+        {% if note.action_items %}
+        <div class="action-items-box">
+            <h4>Action Items / Follow-Up</h4>
+            <pre>{{ note.action_items }}</pre>
+        </div>
+        {% endif %}
+
+        <!-- Timestamps -->
+        <div style="margin-top:20px;font-size:.75rem;color:#9ca3af;border-top:1px solid #f1f5f9;padding-top:12px;">
+            Created: {{ note.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+            {% if note.updated_at and note.updated_at != note.created_at %}
+            &middot; Updated: {{ note.updated_at.strftime('%b %d, %Y at %I:%M %p') }}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="no-print" style="margin-top:12px;">
+    <a href="{{ url_for('meeting_notes.index') }}" style="font-size:.85rem;color:#6b7280;">&larr; Back to Meeting Notes</a>
+</div>
+{% endblock %}

@@ -50,6 +50,9 @@
             </a>
 
             <div class="nav-section">Operations</div>
+            <a href="{{ url_for('meeting_notes.index') }}" class="nav-item {% if request.blueprint == 'meeting_notes' %}active{% endif %}">
+                <span class="nav-icon">&#128221;</span> Meeting Notes
+            </a>
             <a href="{{ url_for('meeting_prep.index') }}" class="nav-item {% if request.blueprint == 'meeting_prep' %}active{% endif %}">
                 <span class="nav-icon">&#128203;</span> Meeting Prep
             </a>

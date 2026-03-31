@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if note else 'New' }} Meeting Note - Counselor Assistant{% endblock %}
+
+{% block head %}
+<style>
+/* @mention autocomplete */
+.mention-wrap{position:relative;}
+.mention-dropdown{position:absolute;z-index:1000;background:#fff;border:1px solid #d1d5db;
+    border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:240px;overflow-y:auto;
+    display:none;width:300px;margin-top:2px;}
+.mention-dropdown.show{display:block;}
+.mention-item{padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+    font-size:.85rem;transition:background .1s;}
+.mention-item:hover,.mention-item.active{background:#eff6ff;}
+.mention-item .name{font-weight:600;color:#1e293b;}
+.mention-item .meta{font-size:.75rem;color:#9ca3af;}
+.mention-item .badges{display:flex;gap:4px;}
+.mention-item .badge-sm{font-size:.65rem;padding:1px 5px;border-radius:8px;font-weight:600;}
+.badge-iep-sm{background:#fef3c7;color:#92400e;}
+.badge-504-sm{background:#dbeafe;color:#1d4ed8;}
+
+/* Chip preview area */
+.linked-students{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:0;}
+.linked-students:empty{display:none;}
+.student-chip{display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1d4ed8;
+    padding:3px 10px;border-radius:14px;font-size:.78rem;font-weight:500;}
+.student-chip .chip-x{cursor:pointer;font-weight:700;margin-left:2px;opacity:.6;}
+.student-chip .chip-x:hover{opacity:1;}
+
+/* Content textarea */
+#noteContent{font-family:inherit;font-size:.9rem;line-height:1.6;resize:vertical;min-height:200px;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 style="margin:0;font-size:1.2rem;">{{ 'Edit' if note else 'New' }} Meeting Note</h2>
+    </div>
+
+    <form method="POST" style="padding:20px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group" style="grid-column:1/-1;">
+                <label>Title *</label>
+                <input type="text" name="title" class="form-control" required
+                       value="{{ note.title if note else '' }}"
+                       placeholder="e.g. SST Meeting - Student Supports, Dept Meeting 3/15">
+            </div>
+
+            <div class="form-group">
+                <label>Meeting Type</label>
+                <select name="meeting_type" class="form-control">
+                    {% for val, label in meeting_types %}
+                    <option value="{{ val }}" {% if note and note.meeting_type == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="meeting_date" class="form-control"
+                       value="{{ note.meeting_date.strftime('%Y-%m-%d') if note else today.strftime('%Y-%m-%d') }}">
+            </div>
+
+            <div class="form-group">
+                <label>Duration (minutes)</label>
+                <input type="number" name="duration_minutes" class="form-control" min="1" max="480"
+                       value="{{ note.duration_minutes if note and note.duration_minutes else '' }}"
+                       placeholder="e.g. 30">
+            </div>
+
+            <div class="form-group">
+                <label>Location</label>
+                <input type="text" name="location" class="form-control"
+                       value="{{ note.location if note and note.location else '' }}"
+                       placeholder="e.g. Counseling Office, Room 204, Zoom">
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-top:16px;">
+            <label>Attendees</label>
+            <input type="text" name="attendees" class="form-control"
+                   value="{{ note.attendees if note and note.attendees else '' }}"
+                   placeholder="e.g. Mr. Smith (AP), Mrs. Garcia (Parent), Ms. Lee (SPED)">
+            <div style="font-size:.75rem;color:#9ca3af;margin-top:3px;">List other people present (not students -- use @ in content below for students)</div>
+        </div>
+
+        <!-- Content with @mention -->
+        <div class="form-group mention-wrap" style="margin-top:16px;">
+            <label>Meeting Notes *</label>
+            <div style="font-size:.75rem;color:#2563eb;margin-bottom:6px;">
+                Type <strong>@</strong> followed by a student name to link them. They'll appear as clickable chips.
+            </div>
+            <textarea id="noteContent" name="content" class="form-control" required
+                      placeholder="Start typing your meeting notes here...&#10;&#10;Type @ to mention a student, e.g. @Maria Rodriguez">{{ note.content if note else '' }}</textarea>
+            <div class="mention-dropdown" id="mentionDropdown"></div>
+            <div class="linked-students" id="linkedStudents"></div>
+        </div>
+
+        <!-- Action Items -->
+        <div class="form-group" style="margin-top:16px;">
+            <label>Action Items / Follow-Up</label>
+            <textarea name="action_items" class="form-control" rows="3"
+                      placeholder="- Schedule follow-up with parent&#10;- Refer to SPED for evaluation&#10;- Update 504 accommodations">{{ note.action_items if note and note.action_items else '' }}</textarea>
+        </div>
+
+        <div class="form-group" style="margin-top:12px;">
+            <label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;">
+                <input type="checkbox" name="is_confidential" {% if note and note.is_confidential %}checked{% endif %}>
+                Mark as confidential
+            </label>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:20px;">
+            <button type="submit" class="btn btn-primary">{{ 'Update' if note else 'Save' }} Meeting Note</button>
+            {% if note %}
+            <a href="{{ url_for('meeting_notes.view', note_id=note.id) }}" class="btn btn-secondary">Cancel</a>
+            {% else %}
+            <a href="{{ url_for('meeting_notes.index') }}" class="btn btn-secondary">Cancel</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+{% if note %}
+<div style="margin-top:16px;text-align:right;">
+    <form method="POST" action="{{ url_for('meeting_notes.delete', note_id=note.id) }}"
+          onsubmit="return confirm('Delete this meeting note? This cannot be undone.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn" style="background:#fef2f2;color:#dc2626;font-size:.8rem;">Delete Note</button>
+    </form>
+</div>
+{% endif %}
+
+<script>
+(function(){
+    var ta = document.getElementById('noteContent');
+    var dd = document.getElementById('mentionDropdown');
+    var linked = document.getElementById('linkedStudents');
+    var mentionStart = -1;
+    var activeIdx = 0;
+    var items = [];
+    var mentionedStudents = {};  // id -> name
+
+    // Build student data for client-side
+    var allStudents = [
+        {% for s in students %}
+        {id:{{ s.id }}, name:"{{ s.first_name }} {{ s.last_name }}", grade:{{ s.grade_level or 0 }},
+         sid:"{{ s.student_id_number }}", iep:{{ 'true' if s.iep_status else 'false' }},
+         five04:{{ 'true' if s.plan_504_status else 'false' }}},
+        {% endfor %}
+    ];
+
+    // Parse existing mentions from content
+    var existing = ta.value.match(/@\[([^\]]+)\]\((\d+)\)/g);
+    if (existing) {
+        existing.forEach(function(m) {
+            var parts = m.match(/@\[([^\]]+)\]\((\d+)\)/);
+            if (parts) mentionedStudents[parts[2]] = parts[1];
+        });
+        renderChips();
+    }
+
+    ta.addEventListener('input', function() {
+        var val = this.value;
+        var pos = this.selectionStart;
+
+        // Find @ that starts a mention
+        var before = val.substring(0, pos);
+        var atIdx = before.lastIndexOf('@');
+
+        if (atIdx >= 0 && (atIdx === 0 || /\s/.test(before[atIdx-1]))) {
+            var query = before.substring(atIdx + 1);
+            // Don't trigger for completed mentions like @[Name](id)
+            if (query.indexOf('[') === -1 && query.length < 30) {
+                mentionStart = atIdx;
+                showDropdown(query);
+                return;
+            }
+        }
+        hideDropdown();
+    });
+
+    ta.addEventListener('keydown', function(e) {
+        if (!dd.classList.contains('show')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIdx = Math.min(activeIdx + 1, items.length - 1);
+            highlightItem();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIdx = Math.max(activeIdx - 1, 0);
+            highlightItem();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (items.length > 0) {
+                e.preventDefault();
+                selectStudent(items[activeIdx]);
+            }
+        } else if (e.key === 'Escape') {
+            hideDropdown();
+        }
+    });
+
+    function showDropdown(query) {
+        var q = query.toLowerCase();
+        var filtered = allStudents.filter(function(s) {
+            return s.name.toLowerCase().indexOf(q) >= 0 || s.sid.indexOf(q) >= 0;
+        }).slice(0, 10);
+
+        if (filtered.length === 0) { hideDropdown(); return; }
+
+        items = filtered;
+        activeIdx = 0;
+
+        var html = '';
+        filtered.forEach(function(s, i) {
+            var badges = '';
+            if (s.iep) badges += '<span class="badge-sm badge-iep-sm">IEP</span>';
+            if (s.five04) badges += '<span class="badge-sm badge-504-sm">504</span>';
+            html += '<div class="mention-item' + (i===0?' active':'') + '" data-idx="'+i+'">' +
+                '<div><span class="name">' + esc(s.name) + '</span> ' +
+                '<span class="meta">Gr ' + s.grade + ' &middot; ' + s.sid + '</span></div>' +
+                '<div class="badges">' + badges + '</div></div>';
+        });
+        dd.innerHTML = html;
+        dd.classList.add('show');
+
+        // Position below cursor
+        positionDropdown();
+
+        // Click handlers
+        dd.querySelectorAll('.mention-item').forEach(function(el) {
+            el.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                selectStudent(items[parseInt(this.dataset.idx)]);
+            });
+        });
+    }
+
+    function positionDropdown() {
+        // Position relative to textarea
+        var rect = ta.getBoundingClientRect();
+        dd.style.left = '0';
+        dd.style.top = (ta.offsetTop + ta.offsetHeight + 2) + 'px';
+    }
+
+    function hideDropdown() {
+        dd.classList.remove('show');
+        mentionStart = -1;
+        items = [];
+    }
+
+    function highlightItem() {
+        dd.querySelectorAll('.mention-item').forEach(function(el, i) {
+            el.classList.toggle('active', i === activeIdx);
+        });
+    }
+
+    function selectStudent(student) {
+        var val = ta.value;
+        var pos = ta.selectionStart;
+        var mention = '@[' + student.name + '](' + student.id + ')';
+
+        // Replace from @ to current cursor position
+        var newVal = val.substring(0, mentionStart) + mention + ' ' + val.substring(pos);
+        ta.value = newVal;
+
+        var newPos = mentionStart + mention.length + 1;
+        ta.setSelectionRange(newPos, newPos);
+        ta.focus();
+
+        mentionedStudents[student.id] = student.name;
+        renderChips();
+        hideDropdown();
+    }
+
+    function renderChips() {
+        // Rebuild from current content
+        mentionedStudents = {};
+        var matches = ta.value.match(/@\[([^\]]+)\]\((\d+)\)/g);
+        if (matches) {
+            matches.forEach(function(m) {
+                var parts = m.match(/@\[([^\]]+)\]\((\d+)\)/);
+                if (parts) mentionedStudents[parts[2]] = parts[1];
+            });
+        }
+
+        var html = '';
+        for (var id in mentionedStudents) {
+            html += '<span class="student-chip">' + esc(mentionedStudents[id]) +
+                    '<span class="chip-x" data-id="' + id + '" title="Remove mention">&times;</span></span>';
+        }
+        linked.innerHTML = html;
+
+        // Chip remove handlers
+        linked.querySelectorAll('.chip-x').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var sid = this.dataset.id;
+                var name = mentionedStudents[sid];
+                // Remove all mentions of this student from content
+                var pattern = new RegExp('@\\[' + escRegex(name) + '\\]\\(' + sid + '\\)\\s?', 'g');
+                ta.value = ta.value.replace(pattern, '');
+                delete mentionedStudents[sid];
+                renderChips();
+            });
+        });
+    }
+
+    // Re-scan chips when content changes
+    ta.addEventListener('input', function() {
+        setTimeout(renderChips, 0);
+    });
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function escRegex(s) {
+        return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Close dropdown on outside click
+    document.addEventListener('click', function(e) {
+        if (!ta.contains(e.target) && !dd.contains(e.target)) hideDropdown();
+    });
+})();
+</script>
+{% endblock %}
