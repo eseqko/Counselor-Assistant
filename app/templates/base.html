@@ -110,22 +110,23 @@
                 <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
                 <span class="page-title">{% block page_title %}Dashboard{% endblock %}</span>
             </div>
-            <!-- Global instant search -->
-            <div id="global-search" style="position:relative;flex:1;max-width:360px;margin:0 16px;">
-                <input type="text" id="global-search-input" class="form-control"
-                       placeholder="Search students, notes, meetings..."
-                       autocomplete="off"
-                       style="padding:6px 12px 6px 32px;font-size:0.85rem;border-radius:8px;
-                              background:var(--bg);border:1px solid var(--border);width:100%;">
-                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
-                             font-size:0.85rem;color:var(--text-muted);pointer-events:none;">&#128269;</span>
-                <div id="search-results" style="display:none;position:absolute;top:100%;left:0;right:0;
-                     margin-top:4px;background:var(--surface);border:1px solid var(--border);
-                     border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.15);z-index:9999;
-                     max-height:420px;overflow-y:auto;"></div>
-            </div>
 
             <div class="user-info" style="display:flex;align-items:center;gap:12px;">
+                <!-- Global search icon -->
+                <div id="global-search" style="position:relative;">
+                    <div id="search-toggle" onclick="toggleGlobalSearch()" style="cursor:pointer;font-size:1.2rem;line-height:1;" title="Search (Ctrl+K)">&#128269;</div>
+                    <div id="search-overlay" style="display:none;position:absolute;right:0;top:32px;
+                         width:400px;background:var(--surface);border:1px solid var(--border);
+                         border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.18);z-index:9999;padding:10px;">
+                        <input type="text" id="global-search-input" class="form-control"
+                               placeholder="Search students, notes, meetings..."
+                               autocomplete="off"
+                               style="padding:8px 12px;font-size:0.88rem;border-radius:8px;width:100%;
+                                      background:var(--bg);border:1px solid var(--border);">
+                        <div id="search-results" style="max-height:360px;overflow-y:auto;margin-top:6px;"></div>
+                    </div>
+                </div>
+
                 <div class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown()" style="position:relative;cursor:pointer;font-size:1.2rem;line-height:1;" title="Action Items">
                     &#128276;
                     <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-6px;
@@ -283,46 +284,49 @@
         });
     })();
 
-    /* ── Global instant search ── */
+    /* ── Global instant search (icon toggle) ── */
     (function(){
+        var overlay = document.getElementById('search-overlay');
         var input = document.getElementById('global-search-input');
         var results = document.getElementById('search-results');
-        if (!input || !results) return;
+        if (!overlay || !input || !results) return;
 
         var debounce = null;
         var selectedIdx = -1;
 
+        window.toggleGlobalSearch = function() {
+            var open = overlay.style.display === 'block';
+            overlay.style.display = open ? 'none' : 'block';
+            if (!open) { input.value = ''; results.innerHTML = ''; input.focus(); }
+        };
+
         input.addEventListener('input', function(){
             clearTimeout(debounce);
             var q = input.value.trim();
-            if (q.length < 2) { results.style.display = 'none'; return; }
+            if (q.length < 2) { results.innerHTML = ''; return; }
             debounce = setTimeout(function(){ doSearch(q); }, 200);
         });
 
         input.addEventListener('keydown', function(e){
             var items = results.querySelectorAll('.search-item');
+            if (e.key === 'Escape') { overlay.style.display = 'none'; return; }
             if (!items.length) return;
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 selectedIdx = Math.min(selectedIdx + 1, items.length - 1);
-                updateHighlight(items);
+                updateHL(items);
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 selectedIdx = Math.max(selectedIdx - 1, 0);
-                updateHighlight(items);
+                updateHL(items);
             } else if (e.key === 'Enter' && selectedIdx >= 0 && items[selectedIdx]) {
                 e.preventDefault();
                 items[selectedIdx].click();
-            } else if (e.key === 'Escape') {
-                results.style.display = 'none';
-                selectedIdx = -1;
             }
         });
 
-        function updateHighlight(items) {
-            for (var i = 0; i < items.length; i++) {
-                items[i].style.background = i === selectedIdx ? 'var(--hover-bg)' : '';
-            }
+        function updateHL(items) {
+            for (var i = 0; i < items.length; i++) items[i].style.background = i === selectedIdx ? 'var(--hover-bg)' : '';
         }
 
         function doSearch(q) {
@@ -331,8 +335,7 @@
                 .then(function(data){
                     selectedIdx = -1;
                     if (!data.results || !data.results.length) {
-                        results.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:0.84rem;text-align:center;">No results found</div>';
-                        results.style.display = 'block';
+                        results.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-size:0.84rem;text-align:center;">No results found</div>';
                         return;
                     }
                     var html = '';
@@ -352,25 +355,20 @@
                         html += '</div></a>';
                     });
                     results.innerHTML = html;
-                    results.style.display = 'block';
-                }).catch(function(){ results.style.display = 'none'; });
+                }).catch(function(){});
         }
 
         /* Close on outside click */
         document.addEventListener('click', function(e){
             var box = document.getElementById('global-search');
-            if (box && !box.contains(e.target)) {
-                results.style.display = 'none';
-                selectedIdx = -1;
-            }
+            if (box && !box.contains(e.target)) { overlay.style.display = 'none'; selectedIdx = -1; }
         });
 
-        /* Ctrl+K / Cmd+K to focus search */
+        /* Ctrl+K / Cmd+K to open search */
         document.addEventListener('keydown', function(e){
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                input.focus();
-                input.select();
+                toggleGlobalSearch();
             }
         });
     })();
