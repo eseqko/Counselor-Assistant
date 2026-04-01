@@ -319,9 +319,13 @@ def transcribe_audio():
 
         try:
             from faster_whisper import WhisperModel
-            model = WhisperModel('base', device='cpu', compute_type='int8')
+            # Use 'tiny' for speed/memory; 'base' for accuracy. int8 keeps RAM low.
+            file_size_mb = os.path.getsize(tmp_path) / (1024 * 1024)
+            model_size = 'base' if file_size_mb < 20 else 'tiny'
+            model = WhisperModel(model_size, device='cpu', compute_type='int8')
             segments, info = model.transcribe(tmp_path, beam_size=5)
             transcript = ' '.join(seg.text.strip() for seg in segments)
+            del model  # free model memory immediately
         except Exception as e:
             current_app.logger.error(f'Whisper transcription error: {e}')
             return jsonify({'error': f'Transcription failed: {str(e)}. Make sure ffmpeg is installed (apt install ffmpeg).'}), 500
