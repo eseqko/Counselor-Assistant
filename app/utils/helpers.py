@@ -1,18 +1,4 @@
-from datetime import datetime, date
-
-
-def format_date(d):
-    if isinstance(d, datetime):
-        return d.strftime('%m/%d/%Y %I:%M %p')
-    if isinstance(d, date):
-        return d.strftime('%m/%d/%Y')
-    return str(d) if d else ''
-
-
-def format_time(t):
-    if t:
-        return t.strftime('%I:%M %p')
-    return ''
+from datetime import datetime
 
 
 def parse_date(date_str):
