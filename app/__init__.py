@@ -116,6 +116,17 @@ def create_app(config_class=Config):
         if needs_setup():
             return redirect(url_for('setup.index'))
 
+    # Theme context processor — injects user_theme into all templates
+    @app.context_processor
+    def inject_theme():
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return {
+                'user_theme': current_user.theme_preference or 'light',
+                'user_reduced_motion': current_user.reduced_motion or False
+            }
+        return {'user_theme': 'light', 'user_reduced_motion': False}
+
     # Security headers
     @app.after_request
     def set_security_headers(response):

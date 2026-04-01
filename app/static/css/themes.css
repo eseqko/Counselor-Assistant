@@ -1,0 +1,167 @@
+/* Theme overrides — loaded after style.css.
+   Each theme redefines CSS variables; existing components adapt automatically. */
+
+/* ── Semantic aliases (light theme defaults) ── */
+:root {
+    --text:         var(--dark);
+    --text-muted:   var(--gray);
+    --surface:      var(--white);
+    --border:       #E8ECF0;
+    --input-bg:     var(--white);
+    --input-border: #CED4DA;
+    --topbar-bg:    var(--white);
+    --hover-bg:     #F0F4F8;
+}
+
+
+/* ══════════════════════════════════════════════
+   DARK THEME
+   ══════════════════════════════════════════════ */
+[data-theme="dark"] {
+    --bg:            #131620;
+    --white:         #1C1F2E;
+    --dark:          #E0E2EC;
+    --light-gray:    #2A2D3E;
+    --gray:          #8B8FA4;
+    --surface:       #1C1F2E;
+    --border:        #2E3148;
+    --input-bg:      #232638;
+    --input-border:  #3A3D54;
+    --topbar-bg:     #1C1F2E;
+    --hover-bg:      #252840;
+    --text:          #E0E2EC;
+    --text-muted:    #8B8FA4;
+
+    --primary:       #5A9FD4;
+    --primary-light: #72B4E8;
+    --primary-dark:  #3A7FBB;
+    --secondary:     #6BC4A6;
+    --accent:        #F0B84A;
+    --danger:        #E87070;
+    --warning:       #F0B84A;
+    --success:       #6BC88C;
+    --info:          #6BC8E0;
+}
+
+[data-theme="dark"] .sidebar {
+    background: linear-gradient(180deg, #10121C, #1A1E30) !important;
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .stat-card {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+[data-theme="dark"] table th {
+    background: var(--light-gray);
+}
+
+[data-theme="dark"] table td {
+    border-color: var(--border);
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="email"],
+[data-theme="dark"] input[type="password"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="search"],
+[data-theme="dark"] input[type="file"] {
+    background: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--text);
+}
+
+[data-theme="dark"] .btn-outline {
+    border-color: var(--border);
+    color: var(--text);
+}
+
+[data-theme="dark"] .btn-outline:hover {
+    background: var(--hover-bg);
+}
+
+[data-theme="dark"] .ferpa-notice {
+    background: #1A2030;
+    border-color: var(--border);
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .alert-success { background: #0F2818; border-color: #1A4028; color: #6BC88C; }
+[data-theme="dark"] .alert-danger  { background: #2A0F0F; border-color: #3A1A1A; color: #E87070; }
+[data-theme="dark"] .alert-warning { background: #2A2008; border-color: #3A3010; color: #F0B84A; }
+[data-theme="dark"] .alert-info    { background: #0F1A2A; border-color: #1A2A3A; color: #6BC8E0; }
+
+[data-theme="dark"] details summary { color: var(--text); }
+[data-theme="dark"] a { color: var(--primary-light); }
+[data-theme="dark"] .card-header { border-color: var(--border); }
+[data-theme="dark"] hr { border-color: var(--border); }
+
+
+/* ══════════════════════════════════════════════
+   FOCUS THEME (ADHD-friendly)
+   Desaturated colors, warm neutral bg, no motion
+   ══════════════════════════════════════════════ */
+[data-theme="focus"] {
+    --primary:       #5577AA;
+    --primary-light: #7799CC;
+    --primary-dark:  #3A5577;
+    --secondary:     #7AAA8E;
+    --accent:        #B8A870;
+    --danger:        #C07070;
+    --warning:       #C0A060;
+    --success:       #70A880;
+    --info:          #70A0B8;
+    --bg:            #F5F5F2;
+    --light-gray:    #E8E8E4;
+    --gray:          #909088;
+    --dark:          #3A3A38;
+    --border:        #DDDDD8;
+}
+
+[data-theme="focus"] .sidebar {
+    background: linear-gradient(180deg, #3A4A60, #5577AA) !important;
+}
+
+/* Kill all animation in focus mode */
+[data-theme="focus"] *,
+[data-theme="focus"] *::before,
+[data-theme="focus"] *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+}
+
+
+/* ══════════════════════════════════════════════
+   SCHOOL THEME
+   Variables are set dynamically via JS from
+   school_config_json — no static overrides needed.
+   This selector just adjusts structural elements.
+   ══════════════════════════════════════════════ */
+[data-theme="school"] .card,
+[data-theme="school"] .stat-card {
+    border-top: 2px solid var(--primary);
+}
+
+
+/* ══════════════════════════════════════════════
+   REDUCED MOTION (independent of theme)
+   ══════════════════════════════════════════════ */
+[data-reduced-motion="true"] *,
+[data-reduced-motion="true"] *::before,
+[data-reduced-motion="true"] *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0s !important;
+        animation-duration: 0s !important;
+    }
+}

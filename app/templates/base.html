@@ -1,10 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ user_theme|default('light') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+    (function(){
+        var t = localStorage.getItem('theme_preference');
+        if (t === 'auto') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        if (t) document.documentElement.dataset.theme = t;
+        if (localStorage.getItem('reduced_motion') === 'true') document.documentElement.dataset.reducedMotion = 'true';
+    })();
+    </script>
     <title>{% block title %}Counselor Assistant{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -109,22 +118,22 @@
                         min-width:16px;height:16px;border-radius:8px;
                         display:flex;align-items:center;justify-content:center;padding:0 3px;">0</span>
                     <div id="notif-dropdown" style="display:none;position:absolute;right:0;top:32px;
-                        width:380px;max-height:420px;overflow-y:auto;background:#fff;
+                        width:380px;max-height:420px;overflow-y:auto;background:var(--surface);
                         border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.18);z-index:9999;
-                        border:1px solid #e8ecf0;">
-                        <div style="padding:12px 16px;border-bottom:1px solid #e8ecf0;font-weight:700;font-size:0.9rem;
-                            display:flex;justify-content:space-between;align-items:center;">
+                        border:1px solid var(--border);">
+                        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:0.9rem;
+                            display:flex;justify-content:space-between;align-items:center;color:var(--text);">
                             <span>Action Items</span>
                             <a href="{{ url_for('dashboard.index') }}" style="font-size:0.78rem;font-weight:600;">View All</a>
                         </div>
                         <div id="notif-list" style="padding:4px 0;">
-                            <div style="padding:16px;color:#999;font-size:0.84rem;text-align:center;">Loading...</div>
+                            <div style="padding:16px;color:var(--text-muted);font-size:0.84rem;text-align:center;">Loading...</div>
                         </div>
                     </div>
                 </div>
                 <span>{{ current_user.display_name }}</span>
                 {% if current_user.school_name %}
-                <span style="color:#aaa">|</span>
+                <span style="color:var(--text-muted)">|</span>
                 <span>{{ current_user.school_name }}</span>
                 {% endif %}
                 <a href="{{ url_for('settings.profile') }}">Profile</a>
@@ -219,30 +228,30 @@
                 return;
             }
             dropdown.style.display = 'block';
-            list.innerHTML = '<div style="padding:16px;color:#999;font-size:0.84rem;text-align:center;">Loading...</div>';
+            list.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:0.84rem;text-align:center;">Loading...</div>';
 
             fetch('/alerts/api/alerts')
                 .then(function(r){ return r.json(); })
                 .then(function(data){
                     if (!data.alerts || data.alerts.length === 0) {
-                        list.innerHTML = '<div style="padding:16px;color:#999;font-size:0.84rem;text-align:center;">No action items today!</div>';
+                        list.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:0.84rem;text-align:center;">No action items today!</div>';
                         return;
                     }
                     var html = '';
                     var shown = data.alerts.slice(0, 15);
                     shown.forEach(function(a){
                         var color = priorityColors[a.priority_label] || '#90a4ae';
-                        html += '<div style="padding:8px 16px;border-bottom:1px solid #f0f2f5;display:flex;align-items:center;gap:8px;">';
+                        html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">';
                         html += '<div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0;"></div>';
                         html += '<div style="flex:1;min-width:0;">';
-                        html += '<div style="font-size:0.84rem;font-weight:600;">' + esc(a.title) + '</div>';
-                        if (a.detail) html += '<div style="font-size:0.78rem;color:#999;">' + esc(a.detail) + '</div>';
+                        html += '<div style="font-size:0.84rem;font-weight:600;color:var(--text);">' + esc(a.title) + '</div>';
+                        if (a.detail) html += '<div style="font-size:0.78rem;color:var(--text-muted);">' + esc(a.detail) + '</div>';
                         html += '</div>';
-                        if (a.action_url) html += '<a href="'+a.action_url+'" style="font-size:0.74rem;font-weight:600;color:#4A90D9;white-space:nowrap;">'+(a.action_label||'View')+'</a>';
+                        if (a.action_url) html += '<a href="'+a.action_url+'" style="font-size:0.74rem;font-weight:600;color:var(--primary-light);white-space:nowrap;">'+(a.action_label||'View')+'</a>';
                         html += '</div>';
                     });
                     if (data.alerts.length > 15) {
-                        html += '<div style="padding:8px 16px;font-size:0.8rem;color:#999;text-align:center;">+'+(data.alerts.length-15)+' more on dashboard</div>';
+                        html += '<div style="padding:8px 16px;font-size:0.8rem;color:var(--text-muted);text-align:center;">+'+(data.alerts.length-15)+' more on dashboard</div>';
                     }
                     list.innerHTML = html;
                 });
@@ -259,6 +268,7 @@
         });
     })();
     </script>
+    <script src="{{ url_for('static', filename='js/theme-manager.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

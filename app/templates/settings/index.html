@@ -23,6 +23,102 @@
     </a>
 </div>
 
+<!-- Appearance / Theme Picker -->
+<div class="card">
+    <div class="card-header">Appearance</div>
+    <div class="card-body">
+        <div style="margin-bottom:14px;">
+            <label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:8px;">Theme</label>
+            <div id="theme-pills" style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button type="button" class="theme-pill" data-theme="light" title="Light theme">
+                    <span style="font-size:1.1rem;">&#9728;&#65039;</span> Light
+                </button>
+                <button type="button" class="theme-pill" data-theme="dark" title="Dark theme">
+                    <span style="font-size:1.1rem;">&#127769;</span> Dark
+                </button>
+                <button type="button" class="theme-pill" data-theme="school" id="school-pill" title="School colors theme">
+                    <span style="font-size:1.1rem;">&#127891;</span> School
+                </button>
+                <button type="button" class="theme-pill" data-theme="focus" title="Focus mode — desaturated, no animations">
+                    <span style="font-size:1.1rem;">&#128065;&#65039;</span> Focus
+                </button>
+                <button type="button" class="theme-pill" data-theme="auto" title="Follow system preference">
+                    <span style="font-size:1.1rem;">&#9881;&#65039;</span> Auto
+                </button>
+            </div>
+        </div>
+
+        <!-- Color preview strip -->
+        <div id="theme-preview" style="display:flex;gap:4px;margin-bottom:14px;">
+            <div style="flex:2;height:28px;border-radius:4px;background:var(--primary);" title="Primary"></div>
+            <div style="flex:1;height:28px;border-radius:4px;background:var(--secondary);" title="Secondary"></div>
+            <div style="flex:1;height:28px;border-radius:4px;background:var(--accent);" title="Accent"></div>
+            <div style="flex:1;height:28px;border-radius:4px;background:var(--bg);border:1px solid var(--border);" title="Background"></div>
+        </div>
+
+        <!-- Reduce motion -->
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88rem;">
+            <input type="checkbox" id="reduced-motion-toggle" style="width:16px;height:16px;">
+            Reduce motion <span style="font-size:0.78rem;color:var(--gray);">(disables all animations)</span>
+        </label>
+    </div>
+</div>
+
+<style>
+.theme-pill {
+    display:inline-flex;align-items:center;gap:5px;
+    padding:8px 14px;border-radius:8px;border:2px solid var(--border);
+    background:var(--surface);color:var(--text);cursor:pointer;
+    font-size:0.84rem;font-weight:600;transition:all 0.15s;
+}
+.theme-pill:hover { border-color:var(--primary-light);background:var(--hover-bg); }
+.theme-pill.active { border-color:var(--primary);background:var(--primary);color:#fff; }
+.theme-pill:disabled { opacity:0.4;cursor:not-allowed; }
+</style>
+
+<script>
+(function() {
+    var pills = document.querySelectorAll('.theme-pill');
+    var motionToggle = document.getElementById('reduced-motion-toggle');
+    var schoolPill = document.getElementById('school-pill');
+
+    // Disable school pill if no school config
+    var hasSchool = false;
+    try {
+        var sc = JSON.parse(localStorage.getItem('school_config') || '{}');
+        hasSchool = !!(sc.colors && sc.colors.primary);
+    } catch(e) {}
+    if (!hasSchool) {
+        schoolPill.disabled = true;
+        schoolPill.title = 'Set up school colors in Course Catalog first';
+    }
+
+    // Set active pill
+    function updateActive() {
+        var current = ThemeManager.getTheme();
+        pills.forEach(function(p) {
+            p.classList.toggle('active', p.dataset.theme === current);
+        });
+    }
+
+    pills.forEach(function(pill) {
+        pill.addEventListener('click', function() {
+            if (this.disabled) return;
+            ThemeManager.setTheme(this.dataset.theme);
+            updateActive();
+        });
+    });
+
+    // Reduced motion
+    motionToggle.checked = ThemeManager.getReducedMotion();
+    motionToggle.addEventListener('change', function() {
+        ThemeManager.setReducedMotion(this.checked);
+    });
+
+    updateActive();
+})();
+</script>
+
 <div class="card">
     <div class="card-header">Export / Import Data</div>
     <div class="card-body">
