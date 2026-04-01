@@ -101,6 +101,76 @@ body.focus-mode .main-content{margin-left:0!important;padding:0!important;}
 .timer-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pulse 1s infinite;}
 
 @media print{.notepad-bottom,.tag-bar,.focus-btn,.details-toggle{display:none!important;}}
+
+/* ---- Format selector tabs ---- */
+.format-tabs{display:flex;gap:4px;padding:12px 24px 0;border-bottom:1px solid #f1f5f9;}
+.format-tab{background:none;border:none;padding:6px 14px;font-size:.78rem;font-weight:600;
+    color:#94a3b8;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.format-tab:hover{color:#475569;}
+.format-tab.active{color:#2563eb;border-bottom-color:#2563eb;}
+
+/* ---- Structured format ---- */
+.structured-fields{display:none;padding:16px 24px;display:none;}
+.structured-fields.active{display:block;}
+.sf-section{margin-bottom:16px;}
+.sf-section label{display:block;font-size:.78rem;font-weight:700;color:#475569;margin-bottom:4px;
+    text-transform:uppercase;letter-spacing:.03em;}
+.sf-section textarea{width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:10px 12px;
+    font-family:inherit;font-size:.88rem;line-height:1.6;resize:vertical;outline:none;min-height:80px;}
+.sf-section textarea:focus{border-color:#2563eb;}
+
+/* ---- Cornell format ---- */
+.cornell-layout{display:none;padding:16px 24px;}
+.cornell-layout.active{display:grid;grid-template-columns:200px 1fr;grid-template-rows:1fr auto;gap:0;
+    border:1.5px solid #e5e7eb;border-radius:8px;overflow:hidden;min-height:400px;}
+.cornell-cue{background:#f8fafc;border-right:1.5px solid #e5e7eb;padding:12px;}
+.cornell-cue textarea{width:100%;height:100%;border:none;background:transparent;font-size:.82rem;
+    line-height:1.7;resize:none;outline:none;color:#475569;}
+.cornell-cue-label,.cornell-notes-label,.cornell-summary-label{font-size:.68rem;font-weight:700;
+    color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;}
+.cornell-notes{padding:12px;}
+.cornell-notes textarea{width:100%;height:100%;border:none;background:transparent;font-size:.88rem;
+    line-height:1.8;resize:none;outline:none;color:#334155;min-height:280px;}
+.cornell-summary{grid-column:1/-1;border-top:1.5px solid #e5e7eb;padding:12px;background:#fefce8;}
+.cornell-summary textarea{width:100%;border:none;background:transparent;font-size:.85rem;
+    line-height:1.6;resize:none;outline:none;min-height:60px;color:#713f12;}
+
+/* ---- Outline format ---- */
+.outline-area{display:none;padding:16px 24px;}
+.outline-area.active{display:block;}
+.outline-area textarea{width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:12px 16px;
+    font-family:'Courier New',monospace;font-size:.88rem;line-height:1.8;resize:vertical;
+    outline:none;min-height:360px;tab-size:2;}
+.outline-area textarea:focus{border-color:#2563eb;}
+.outline-hint{font-size:.72rem;color:#94a3b8;margin-top:4px;}
+
+/* ---- Audio recording ---- */
+.record-btn{display:inline-flex;align-items:center;gap:6px;background:#fef2f2;border:1.5px solid #fecaca;
+    color:#dc2626;padding:6px 12px;border-radius:8px;font-size:.78rem;font-weight:600;
+    cursor:pointer;transition:all .15s;}
+.record-btn:hover{background:#fee2e2;border-color:#fca5a5;}
+.record-btn.recording{background:#dc2626;color:#fff;border-color:#dc2626;animation:pulse 1.5s infinite;}
+.record-btn .rec-dot{width:8px;height:8px;border-radius:50%;background:currentColor;}
+.record-btn.recording .rec-dot{background:#fff;}
+
+/* Audio approval modal */
+.audio-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;
+    align-items:center;justify-content:center;}
+.audio-modal-overlay.show{display:flex;}
+.audio-modal{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.2);
+    max-width:640px;width:90%;max-height:80vh;overflow-y:auto;padding:24px;}
+.audio-modal h3{margin:0 0 4px;font-size:1.1rem;color:#1e293b;}
+.audio-modal .subtitle{font-size:.82rem;color:#64748b;margin-bottom:16px;}
+.audio-modal .transcript-box{background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;
+    padding:12px;font-size:.84rem;line-height:1.6;max-height:120px;overflow-y:auto;margin-bottom:12px;color:#475569;}
+.audio-modal .summary-box{border:1.5px solid #e5e7eb;border-radius:8px;padding:12px;
+    font-size:.88rem;line-height:1.6;min-height:120px;width:100%;font-family:inherit;outline:none;resize:vertical;}
+.audio-modal .summary-box:focus{border-color:#2563eb;}
+.audio-modal .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.audio-processing{text-align:center;padding:30px;color:#64748b;font-size:.88rem;}
+.audio-processing .spinner{display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;
+    border-top-color:#2563eb;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px;}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 {% endblock %}
 
@@ -124,6 +194,21 @@ body.focus-mode .main-content{margin-left:0!important;padding:0!important;}
             </select>
         </div>
     </div>
+
+    <!-- Format selector + Audio record -->
+    <div class="format-tabs">
+        <button type="button" class="format-tab active" data-format="flow">Flow</button>
+        <button type="button" class="format-tab" data-format="structured">Structured</button>
+        <button type="button" class="format-tab" data-format="cornell">Cornell</button>
+        <button type="button" class="format-tab" data-format="outline">Outline</button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+            <button type="button" class="record-btn" id="recordBtn" title="Record meeting audio">
+                <span class="rec-dot"></span> <span id="recordLabel">Record</span>
+            </button>
+            <span id="recordTimer" style="font-size:.75rem;color:#94a3b8;font-variant-numeric:tabular-nums;display:none;">00:00</span>
+        </div>
+    </div>
+    <input type="hidden" name="note_format" id="noteFormatInput" value="{{ note.note_format if note else 'flow' }}">
 
     <!-- Quick-tag buttons -->
     <div class="tag-bar">
@@ -150,6 +235,74 @@ body.focus-mode .main-content{margin-left:0!important;padding:0!important;}
 
 Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if note else '' }}</textarea>
         <div class="mention-dropdown" id="mentionDropdown"></div>
+    </div>
+
+    <!-- Structured format -->
+    <div class="structured-fields" id="structuredArea">
+        <div class="sf-section">
+            <label>Discussion Points</label>
+            <textarea id="sf-discussion" placeholder="What was discussed..."></textarea>
+        </div>
+        <div class="sf-section">
+            <label>Decisions Made</label>
+            <textarea id="sf-decisions" placeholder="Key decisions from this meeting..." style="min-height:60px;"></textarea>
+        </div>
+        <div class="sf-section">
+            <label>Action Items</label>
+            <textarea id="sf-actions" placeholder="Who needs to do what and by when..." style="min-height:60px;"></textarea>
+        </div>
+        <div class="sf-section">
+            <label>Follow-ups</label>
+            <textarea id="sf-followups" placeholder="Next steps, follow-up dates..." style="min-height:60px;"></textarea>
+        </div>
+    </div>
+
+    <!-- Cornell format -->
+    <div class="cornell-layout" id="cornellArea">
+        <div class="cornell-cue">
+            <span class="cornell-cue-label">Cues / Questions</span>
+            <textarea id="cornell-cue" placeholder="Key questions&#10;Main ideas&#10;Vocabulary..."></textarea>
+        </div>
+        <div class="cornell-notes">
+            <span class="cornell-notes-label">Notes</span>
+            <textarea id="cornell-notes" placeholder="Detailed notes from the meeting..."></textarea>
+        </div>
+        <div class="cornell-summary">
+            <span class="cornell-summary-label">Summary</span>
+            <textarea id="cornell-summary" placeholder="Brief summary of the meeting in your own words..."></textarea>
+        </div>
+    </div>
+
+    <!-- Outline format -->
+    <div class="outline-area" id="outlineArea">
+        <textarea id="outline-content" placeholder="I. Main Topic&#10;   A. Sub-point&#10;      1. Detail&#10;   B. Sub-point&#10;II. Next Topic&#10;   A. Sub-point"></textarea>
+        <div class="outline-hint">Use Tab to indent, Shift+Tab to outdent. Roman numerals, letters, and numbers for hierarchy.</div>
+    </div>
+
+    <!-- Audio approval modal -->
+    <div class="audio-modal-overlay" id="audioModal">
+        <div class="audio-modal">
+            <div id="audioProcessing" class="audio-processing">
+                <div class="spinner"></div>
+                <div>Transcribing and summarizing your recording...</div>
+                <div style="font-size:.75rem;color:#94a3b8;margin-top:4px;">This may take a moment depending on length</div>
+            </div>
+            <div id="audioResult" style="display:none;">
+                <h3>AI Meeting Summary</h3>
+                <p class="subtitle">Review and edit the summary before inserting into your notes.</p>
+                <details style="margin-bottom:12px;">
+                    <summary style="font-size:.78rem;color:#64748b;cursor:pointer;">View raw transcript</summary>
+                    <div class="transcript-box" id="rawTranscript"></div>
+                </details>
+                <label style="font-size:.78rem;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Summary (editable)</label>
+                <textarea class="summary-box" id="editableSummary"></textarea>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAudioModal()">Discard</button>
+                    <button type="button" class="btn btn-outline" onclick="insertTranscript()">Insert Raw Transcript</button>
+                    <button type="button" class="btn btn-primary" onclick="insertSummary()">Insert Summary</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Collapsible details -->
@@ -433,6 +586,253 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
         if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) {
             document.body.classList.remove('focus-mode');
         }
+    });
+
+    /* ---- Format switching ---- */
+    var currentFormat = document.getElementById('noteFormatInput').value || 'flow';
+    var flowArea = document.getElementById('notepadBody');
+    var structuredArea = document.getElementById('structuredArea');
+    var cornellArea = document.getElementById('cornellArea');
+    var outlineArea = document.getElementById('outlineArea');
+    var formatAreas = {flow: flowArea, structured: structuredArea, cornell: cornellArea, outline: outlineArea};
+
+    function switchFormat(fmt) {
+        // Serialize current format content into the hidden textarea before switching
+        serializeToContent();
+        currentFormat = fmt;
+        document.getElementById('noteFormatInput').value = fmt;
+        // Toggle visibility
+        for (var key in formatAreas) {
+            if (formatAreas[key]) formatAreas[key].style.display = (key === fmt) ? '' : 'none';
+        }
+        // For non-flow formats, show the area properly
+        if (fmt === 'cornell') cornellArea.classList.add('active');
+        else cornellArea.classList.remove('active');
+        if (fmt === 'structured') structuredArea.classList.add('active');
+        else structuredArea.classList.remove('active');
+        if (fmt === 'outline') outlineArea.classList.add('active');
+        else outlineArea.classList.remove('active');
+        // Hide flow-specific elements for non-flow
+        var tagBar = document.querySelector('.tag-bar');
+        var linkedBar = document.getElementById('linkedStudents');
+        if (fmt === 'flow') {
+            if (tagBar) tagBar.style.display = '';
+            if (linkedBar) linkedBar.style.display = '';
+        } else {
+            if (tagBar) tagBar.style.display = 'none';
+            if (linkedBar) linkedBar.style.display = 'none';
+        }
+        // Populate alt format fields from main content
+        populateFromContent(fmt);
+        // Update tab styling
+        document.querySelectorAll('.format-tab').forEach(function(t) {
+            t.classList.toggle('active', t.dataset.format === fmt);
+        });
+    }
+
+    function populateFromContent(fmt) {
+        var content = ta.value;
+        if (fmt === 'structured' && content && !document.getElementById('sf-discussion').value) {
+            document.getElementById('sf-discussion').value = content;
+        } else if (fmt === 'cornell' && content && !document.getElementById('cornell-notes').value) {
+            document.getElementById('cornell-notes').value = content;
+        } else if (fmt === 'outline' && content && !document.getElementById('outline-content').value) {
+            document.getElementById('outline-content').value = content;
+        }
+    }
+
+    function serializeToContent() {
+        if (currentFormat === 'structured') {
+            var parts = [];
+            var disc = document.getElementById('sf-discussion').value.trim();
+            var dec = document.getElementById('sf-decisions').value.trim();
+            var act = document.getElementById('sf-actions').value.trim();
+            var fol = document.getElementById('sf-followups').value.trim();
+            if (disc) parts.push('## Discussion\n' + disc);
+            if (dec) parts.push('## Decisions\n' + dec);
+            if (act) parts.push('## Action Items\n' + act);
+            if (fol) parts.push('## Follow-ups\n' + fol);
+            if (parts.length) ta.value = parts.join('\n\n');
+        } else if (currentFormat === 'cornell') {
+            var cue = document.getElementById('cornell-cue').value.trim();
+            var notes = document.getElementById('cornell-notes').value.trim();
+            var summary = document.getElementById('cornell-summary').value.trim();
+            var parts = [];
+            if (notes) parts.push(notes);
+            if (cue) parts.push('\n---\nKey Questions/Cues:\n' + cue);
+            if (summary) parts.push('\n---\nSummary:\n' + summary);
+            if (parts.length) ta.value = parts.join('\n');
+        } else if (currentFormat === 'outline') {
+            var outline = document.getElementById('outline-content').value.trim();
+            if (outline) ta.value = outline;
+        }
+    }
+
+    document.querySelectorAll('.format-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() { switchFormat(this.dataset.format); });
+    });
+
+    // Serialize before form submit
+    document.getElementById('noteForm').addEventListener('submit', function() {
+        serializeToContent();
+    });
+
+    // Initialize format on load
+    if (currentFormat !== 'flow') switchFormat(currentFormat);
+
+    /* ---- Outline tab support ---- */
+    var outlineTA = document.getElementById('outline-content');
+    if (outlineTA) {
+        outlineTA.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                var start = this.selectionStart, end = this.selectionEnd;
+                if (e.shiftKey) {
+                    // Outdent: remove leading spaces on current line
+                    var before = this.value.substring(0, start);
+                    var lineStart = before.lastIndexOf('\n') + 1;
+                    var line = this.value.substring(lineStart);
+                    if (line.startsWith('   ')) {
+                        this.value = this.value.substring(0, lineStart) + line.substring(3);
+                        this.selectionStart = this.selectionEnd = Math.max(lineStart, start - 3);
+                    }
+                } else {
+                    this.value = this.value.substring(0, start) + '   ' + this.value.substring(end);
+                    this.selectionStart = this.selectionEnd = start + 3;
+                }
+            }
+        });
+    }
+
+    /* ---- Audio Recording ---- */
+    var recordBtn = document.getElementById('recordBtn');
+    var recordLabel = document.getElementById('recordLabel');
+    var recordTimerEl = document.getElementById('recordTimer');
+    var mediaRecorder = null;
+    var audioChunks = [];
+    var recStartTime = 0;
+    var recInterval = null;
+    var isRecording = false;
+
+    recordBtn.addEventListener('click', function() {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    });
+
+    function startRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Your browser does not support audio recording.');
+            return;
+        }
+        navigator.mediaDevices.getUserMedia({audio: true}).then(function(stream) {
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(stream, {mimeType: 'audio/webm'});
+            mediaRecorder.ondataavailable = function(e) { if (e.data.size > 0) audioChunks.push(e.data); };
+            mediaRecorder.onstop = function() {
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                uploadAudio();
+            };
+            mediaRecorder.start(1000);
+            isRecording = true;
+            recordBtn.classList.add('recording');
+            recordLabel.textContent = 'Stop';
+            recStartTime = Date.now();
+            recordTimerEl.style.display = '';
+            recInterval = setInterval(function() {
+                var s = Math.floor((Date.now() - recStartTime) / 1000);
+                var m = Math.floor(s / 60); s = s % 60;
+                recordTimerEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+            }, 1000);
+        }).catch(function(err) {
+            alert('Microphone access denied. Please allow microphone access to record.');
+        });
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+        isRecording = false;
+        recordBtn.classList.remove('recording');
+        recordLabel.textContent = 'Record';
+        clearInterval(recInterval);
+        recordTimerEl.style.display = 'none';
+    }
+
+    function uploadAudio() {
+        var blob = new Blob(audioChunks, {type: 'audio/webm'});
+        if (blob.size < 1000) { alert('Recording too short.'); return; }
+
+        // Show processing modal
+        var modal = document.getElementById('audioModal');
+        var processing = document.getElementById('audioProcessing');
+        var result = document.getElementById('audioResult');
+        modal.classList.add('show');
+        processing.style.display = '';
+        result.style.display = 'none';
+
+        var fd = new FormData();
+        fd.append('audio', blob, 'recording.webm');
+        fd.append('meeting_type', document.querySelector('[name="meeting_type"]').value);
+
+        fetch('{{ url_for("meeting_notes.transcribe_audio") }}', {method: 'POST', body: fd})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            processing.style.display = 'none';
+            if (data.error) {
+                alert(data.error);
+                modal.classList.remove('show');
+                return;
+            }
+            document.getElementById('rawTranscript').textContent = data.transcript;
+            document.getElementById('editableSummary').value = data.summary;
+            result.style.display = '';
+        })
+        .catch(function(err) {
+            processing.style.display = 'none';
+            modal.classList.remove('show');
+            alert('Transcription failed: ' + err.message);
+        });
+    }
+
+    window.closeAudioModal = function() {
+        document.getElementById('audioModal').classList.remove('show');
+    };
+    window.insertSummary = function() {
+        var summary = document.getElementById('editableSummary').value;
+        insertTextAtCursor(summary);
+        closeAudioModal();
+    };
+    window.insertTranscript = function() {
+        var transcript = document.getElementById('rawTranscript').textContent;
+        insertTextAtCursor(transcript);
+        closeAudioModal();
+    };
+    function insertTextAtCursor(text) {
+        if (currentFormat === 'flow') {
+            var pos = ta.selectionStart;
+            var before = ta.value.substring(0, pos);
+            var sep = (pos > 0 && before[pos - 1] !== '\n') ? '\n\n' : '';
+            ta.value = before + sep + text + ta.value.substring(pos);
+            ta.setSelectionRange(pos + sep.length + text.length, pos + sep.length + text.length);
+            ta.focus();
+            autoGrow();
+        } else if (currentFormat === 'structured') {
+            document.getElementById('sf-discussion').value += (document.getElementById('sf-discussion').value ? '\n\n' : '') + text;
+        } else if (currentFormat === 'cornell') {
+            document.getElementById('cornell-notes').value += (document.getElementById('cornell-notes').value ? '\n\n' : '') + text;
+        } else if (currentFormat === 'outline') {
+            document.getElementById('outline-content').value += (document.getElementById('outline-content').value ? '\n\n' : '') + text;
+        }
+        markUnsaved();
+    }
+
+    // Close modal on overlay click
+    document.getElementById('audioModal').addEventListener('click', function(e) {
+        if (e.target === this) closeAudioModal();
     });
 
     /* ---- Meeting timer ---- */
