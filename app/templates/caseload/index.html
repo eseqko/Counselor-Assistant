@@ -5,9 +5,9 @@
 
 <div class="filter-bar">
     <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
-        <div class="form-group">
+        <div class="form-group" style="position:relative;">
             <label>Search</label>
-            <input type="text" name="search" class="form-control" placeholder="Name or ID..." value="{{ search }}">
+            <input type="text" name="search" id="caseload-search" class="form-control" placeholder="Name or ID..." value="{{ search }}" autocomplete="off">
         </div>
         <div class="form-group">
             <label>Grade</label>
@@ -56,7 +56,7 @@
 
 <div class="card">
     <div class="card-header">
-        Students ({{ students|length }})
+        Students (<span id="student-count">{{ students|length }}</span>)
         <div class="btn-group">
             <a href="{{ url_for('caseload.add_student') }}" class="btn btn-sm btn-primary">+ Add Student</a>
             <a href="{{ url_for('caseload.upload_caseload') }}" class="btn btn-sm btn-success">Upload Caseload</a>
@@ -121,4 +121,34 @@
         </table>
     </div>
 </div>
+
+<script>
+(function(){
+    var input = document.getElementById('caseload-search');
+    var tbody = document.querySelector('.table-responsive tbody');
+    var countEl = document.getElementById('student-count');
+    if (!input || !tbody) return;
+
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    // Filter out the empty-state row
+    var dataRows = rows.filter(function(r){ return !r.querySelector('.empty-state'); });
+    var total = dataRows.length;
+
+    input.addEventListener('input', function(){
+        var q = input.value.trim().toLowerCase();
+        var visible = 0;
+        dataRows.forEach(function(row){
+            var name = (row.cells[0] || {}).textContent || '';
+            var id = (row.cells[1] || {}).textContent || '';
+            var grade = (row.cells[2] || {}).textContent || '';
+            var tags = (row.cells[5] || {}).textContent || '';
+            var haystack = (name + ' ' + id + ' ' + grade + ' ' + tags).toLowerCase();
+            var match = !q || haystack.indexOf(q) !== -1;
+            row.style.display = match ? '' : 'none';
+            if (match) visible++;
+        });
+        if (countEl) countEl.textContent = q ? visible : total;
+    });
+})();
+</script>
 {% endblock %}
