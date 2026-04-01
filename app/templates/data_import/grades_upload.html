@@ -18,6 +18,7 @@
             <form id="grade-form" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="school_year" id="school-year-input" value="{{ default_school_year }}">
+                <input type="hidden" name="grade_type" id="grade-type-input" value="final">
 
                 <!-- Drop zone -->
                 <div id="drop-zone" style="border:2px dashed var(--primary);border-radius:10px;padding:40px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg);">
@@ -131,15 +132,31 @@
                     </table>
                 </div>
 
-                <!-- School year selector -->
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-                    <label style="font-weight:600;font-size:0.88rem;white-space:nowrap;">School Year:</label>
-                    <select id="school-year-select" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.88rem;">
-                        {% for yr in school_year_options %}
-                        <option value="{{ yr }}" {% if yr == default_school_year %}selected{% endif %}>{{ yr }}</option>
-                        {% endfor %}
-                    </select>
-                    <span style="font-size:0.78rem;color:var(--gray);">Synergy doesn't include this &mdash; select the correct year</span>
+                <!-- Grade type + School year row -->
+                <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <label style="font-weight:600;font-size:0.88rem;white-space:nowrap;">Grade Type:</label>
+                        <select id="grade-type-select" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.88rem;">
+                            <option value="final" selected>Final Quarter Grades</option>
+                            <option value="progress">Progress Report</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <label style="font-weight:600;font-size:0.88rem;white-space:nowrap;">School Year:</label>
+                        <select id="school-year-select" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.88rem;">
+                            {% for yr in school_year_options %}
+                            <option value="{{ yr }}" {% if yr == default_school_year %}selected{% endif %}>{{ yr }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <!-- Auto-purge notice -->
+                <div id="purge-notice" style="display:none;padding:8px 12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;font-size:0.82rem;color:#92400e;margin-bottom:14px;">
+                    &#9888; Importing <strong>final grades</strong> will automatically replace any existing progress report grades for this quarter.
+                </div>
+                <!-- Progress report notice -->
+                <div id="progress-notice" style="display:none;padding:8px 12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;font-size:0.82rem;color:#1e40af;margin-bottom:14px;">
+                    Progress report grades are temporary &mdash; they'll be replaced when you upload final quarter grades.
                 </div>
 
                 <!-- Import button -->
@@ -212,6 +229,19 @@
     const gradeForm = document.getElementById('grade-form');
     const schoolYearSelect = document.getElementById('school-year-select');
     const schoolYearInput = document.getElementById('school-year-input');
+    const gradeTypeSelect = document.getElementById('grade-type-select');
+    const gradeTypeInput = document.getElementById('grade-type-input');
+    const purgeNotice = document.getElementById('purge-notice');
+    const progressNotice = document.getElementById('progress-notice');
+
+    // Grade type toggle notices
+    function updateGradeTypeNotices() {
+        const isFinal = gradeTypeSelect.value === 'final';
+        purgeNotice.style.display = isFinal ? '' : 'none';
+        progressNotice.style.display = isFinal ? 'none' : '';
+        gradeTypeInput.value = gradeTypeSelect.value;
+    }
+    gradeTypeSelect.addEventListener('change', updateGradeTypeNotices);
 
     // Drag & drop
     dropZone.addEventListener('click', () => fileInput.click());
@@ -333,6 +363,11 @@
         if (data.default_school_year) {
             schoolYearSelect.value = data.default_school_year;
         }
+
+        // Show grade type notices if quarter detected
+        if (data.quarter) {
+            updateGradeTypeNotices();
+        }
     }
 
     function esc(s) {
@@ -349,7 +384,7 @@
     // Import button
     document.getElementById('import-btn').addEventListener('click', () => {
         schoolYearInput.value = schoolYearSelect.value;
-        // Re-attach the file since we need to re-upload
+        gradeTypeInput.value = gradeTypeSelect.value;
         gradeForm.submit();
     });
 

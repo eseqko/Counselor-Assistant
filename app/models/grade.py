@@ -16,6 +16,9 @@ class GradeRecord(db.Model):
     course_number = db.Column(db.String(20))  # links to course catalog if available
     period = db.Column(db.Integer)            # 1-4
 
+    # Grade type: 'final' (quarter grades) or 'progress' (mid-quarter progress report)
+    grade_type = db.Column(db.String(10), default='final')  # 'final' | 'progress'
+
     # Grade data
     letter_grade = db.Column(db.String(5), index=True)   # A, B, C, D, F, P, NP, I
     percent_grade = db.Column(db.Float)      # 0-100

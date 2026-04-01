@@ -144,7 +144,7 @@ def create_app(config_class=Config):
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
-        from app.models import attendance, grade, iep504, availability, meeting_note
+        from app.models import attendance, grade, iep504, availability, meeting_note, import_log
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

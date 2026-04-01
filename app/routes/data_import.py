@@ -10,9 +10,10 @@ from app.models.grade import GradeRecord
 from app.models.note import Note
 from app.models.activity import Activity
 from app.models.service_record import ServiceRecord
+from app.models.import_log import ImportLog
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
-from datetime import date
+from datetime import date, datetime, timezone
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -62,9 +63,20 @@ def index():
         AttendanceRecord.student_id.in_(student_ids)).count() if student_ids else 0
     grade_count = GradeRecord.query.filter(
         GradeRecord.student_id.in_(student_ids)).count() if student_ids else 0
+
+    # Last import per type
+    last_imports = {}
+    for itype in ('attendance', 'grades', 'student_update'):
+        log = ImportLog.query.filter_by(
+            user_id=current_user.id, import_type=itype
+        ).order_by(ImportLog.imported_at.desc()).first()
+        if log:
+            last_imports[itype] = log
+
     return render_template('data_import/index.html',
                            attendance_count=attendance_count,
-                           grade_count=grade_count)
+                           grade_count=grade_count,
+                           last_imports=last_imports)
 
 
 # =====================================================================
@@ -273,6 +285,12 @@ def attendance_upload():
         log_action('import', 'attendance',
                    details=f'Imported attendance: {added} added, {skipped} skipped'
                            + (f', {not_on_caseload} not on caseload' if not_on_caseload else ''))
+
+        # Log the import
+        db.session.add(ImportLog(
+            user_id=current_user.id, import_type='attendance',
+            records_added=added, records_skipped=skipped, errors_count=len(errors)))
+        db.session.commit()
 
         if is_synergy:
             fmt_msg = f'Synergy import: {added} records added, {skipped} duplicates skipped.'
@@ -522,6 +540,10 @@ def grades_upload():
 
         # School year from form (since Synergy doesn't include it)
         form_school_year = request.form.get('school_year', '').strip() or default_school_year
+        # Grade type: 'final' (quarter grades) or 'progress' (mid-quarter progress report)
+        form_grade_type = request.form.get('grade_type', 'final').strip()
+        if form_grade_type not in ('final', 'progress'):
+            form_grade_type = 'final'
 
         _header, rows = _parse_upload_file(file)
         if rows is None:
@@ -552,6 +574,18 @@ def grades_upload():
 
         # Quarter may come from the header name (e.g., "Quarter 3" column)
         header_quarter = col_map.pop('_quarter_from_header', None)
+
+        # Auto-purge: when importing FINAL grades, delete progress report grades
+        # for the same quarter/year/students
+        purged = 0
+        if form_grade_type == 'final' and header_quarter and form_school_year:
+            purged = GradeRecord.query.filter_by(
+                school_year=form_school_year,
+                quarter=header_quarter,
+                grade_type='progress',
+            ).delete(synchronize_session=False)
+            if purged:
+                db.session.commit()
 
         for row_idx, row in enumerate(rows, start=2):
             # Pad short rows
@@ -655,6 +689,7 @@ def grades_upload():
                 school_year=school_year_clean,
                 quarter=quarter_val,
                 course_name=course_title_clean,
+                grade_type=form_grade_type,
             ).first()
 
             if existing:
@@ -672,6 +707,7 @@ def grades_upload():
                     course_number=str(course_number or '').strip(),
                     period=period_val,
                     letter_grade=letter_clean,
+                    grade_type=form_grade_type,
                     credits_earned=credits_val,
                     credits_attempted=credits_val,
                     is_semester=semester_val,
@@ -687,13 +723,26 @@ def grades_upload():
 
         db.session.commit()
         log_action('import', 'grades',
-                   details=f'Imported grades: {added} added, {updated} updated'
-                           + (f', {not_on_caseload} not on caseload' if not_on_caseload else ''))
+                   details=f'Imported {form_grade_type} grades: {added} added, {updated} updated'
+                           + (f', {not_on_caseload} not on caseload' if not_on_caseload else '')
+                           + (f', {purged} progress grades replaced' if purged else ''))
 
+        # Log the import
+        db.session.add(ImportLog(
+            user_id=current_user.id, import_type='grades',
+            grade_type=form_grade_type, school_year=form_school_year,
+            quarter=header_quarter,
+            records_added=added, records_updated=updated,
+            records_skipped=not_on_caseload, errors_count=len(errors)))
+        db.session.commit()
+
+        grade_label = 'Progress report' if form_grade_type == 'progress' else 'Quarter'
+        if purged:
+            flash(f'{purged} progress report grades replaced with final grades.', 'info')
         if not_on_caseload:
-            msg = f'{added} added, {updated} updated. {not_on_caseload} students not on your caseload (skipped).'
+            msg = f'{grade_label} grades: {added} added, {updated} updated. {not_on_caseload} not on caseload (skipped).'
         else:
-            msg = f'{added} added, {updated} updated.'
+            msg = f'{grade_label} grades: {added} added, {updated} updated.'
 
         if errors:
             flash(f'Imported with issues: {msg} {len(errors)} errors.', 'warning')
@@ -989,6 +1038,13 @@ def student_update_upload():
         log_action('import', 'student_update',
                    details=f'Bulk student update: {updated} students updated, '
                            f'{field_changes} fields changed, {skipped} unchanged')
+
+        # Log the import
+        db.session.add(ImportLog(
+            user_id=current_user.id, import_type='student_update',
+            records_added=0, records_updated=updated,
+            records_skipped=skipped, errors_count=len(errors)))
+        db.session.commit()
 
         if errors:
             flash(f'Updated {updated} students ({field_changes} fields changed), '
