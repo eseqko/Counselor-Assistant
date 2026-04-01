@@ -25,6 +25,7 @@ class MeetingNote(db.Model):
     location = db.Column(db.String(200))
     attendees = db.Column(db.Text)                          # Free-text: other people present
     action_items = db.Column(db.Text)                       # Follow-up actions from the meeting
+    note_format = db.Column(db.String(20), default='flow')  # flow | structured | cornell | outline
     is_confidential = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
