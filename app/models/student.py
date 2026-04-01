@@ -29,10 +29,10 @@ class Student(db.Model):
     homeroom = db.Column(db.String(50))
 
     # Counselor assignment
-    assigned_counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    assigned_counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
 
     # Status
-    status = db.Column(db.String(20), default='active')  # active, inactive, transferred, graduated
+    status = db.Column(db.String(20), default='active', index=True)
     enrollment_date = db.Column(db.Date)
     exit_reason = db.Column(db.String(50))   # reason for removal from caseload
     exit_date = db.Column(db.Date)           # date student was removed

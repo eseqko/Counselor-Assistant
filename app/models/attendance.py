@@ -7,12 +7,12 @@ class AttendanceRecord(db.Model):
     __tablename__ = 'attendance_records'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
 
     # Period-level attendance
-    date = db.Column(db.Date, nullable=False)
-    period = db.Column(db.Integer)  # 0-10 (Synergy periods; 1-4 core, 5 extracurricular, 6 advisory)
-    status = db.Column(db.String(20), nullable=False)  # present, absent, tardy, excused
+    date = db.Column(db.Date, nullable=False, index=True)
+    period = db.Column(db.Integer)
+    status = db.Column(db.String(20), nullable=False, index=True)
 
     # Optional detail
     course_name = db.Column(db.String(200))

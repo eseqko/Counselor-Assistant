@@ -7,12 +7,12 @@ class Activity(db.Model):
     __tablename__ = 'activities'
 
     id = db.Column(db.Integer, primary_key=True)
-    counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
     # Activity details
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
-    date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date(), index=True)
     start_time = db.Column(db.Time)
     end_time = db.Column(db.Time)
     duration_minutes = db.Column(db.Integer)

@@ -7,8 +7,8 @@ class Note(db.Model):
     __tablename__ = 'notes'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
     # Note content
     note_type = db.Column(db.String(50), nullable=False)
@@ -17,7 +17,7 @@ class Note(db.Model):
     content = db.Column(db.Text, nullable=False)
 
     # Session details
-    session_date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())
+    session_date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date(), index=True)
     duration_minutes = db.Column(db.Integer)
 
     # ASCA alignment
