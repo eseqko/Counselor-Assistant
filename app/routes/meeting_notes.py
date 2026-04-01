@@ -1,13 +1,17 @@
 """Meeting Notes routes -- live note-taking with @student mentions."""
 import re
+import os
+import uuid
+import tempfile
 from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from markupsafe import escape
-from app import db
+from app import db, csrf
 from app.models.meeting_note import MeetingNote, meeting_note_students
 from app.models.student import Student
 from app.utils.audit import log_action
+from app.utils import ollama_client
 
 meeting_notes_bp = Blueprint('meeting_notes', __name__,
                              template_folder='../templates/meeting_notes')
@@ -119,6 +123,7 @@ def add():
             location=request.form.get('location', '').strip() or None,
             attendees=request.form.get('attendees', '').strip() or None,
             action_items=request.form.get('action_items', '').strip() or None,
+            note_format=request.form.get('note_format', 'flow'),
             is_confidential='is_confidential' in request.form,
         )
 
@@ -180,6 +185,7 @@ def edit(note_id):
         note.location = request.form.get('location', '').strip() or None
         note.attendees = request.form.get('attendees', '').strip() or None
         note.action_items = request.form.get('action_items', '').strip() or None
+        note.note_format = request.form.get('note_format', note.note_format or 'flow')
         note.is_confidential = 'is_confidential' in request.form
 
         # Re-link students from content
@@ -259,3 +265,100 @@ def _int_or_none(val):
         return int(val) if val else None
     except (ValueError, TypeError):
         return None
+
+
+# ---------- Audio Recording + AI Summarization ----------
+
+def _whisper_available():
+    """Check if faster-whisper is installed."""
+    try:
+        import faster_whisper  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@meeting_notes_bp.route('/api/audio-status')
+@login_required
+def audio_status():
+    """Check whether audio transcription is available."""
+    return jsonify({
+        'whisper_available': _whisper_available(),
+        'ollama_available': ollama_client.is_available(),
+    })
+
+
+@meeting_notes_bp.route('/api/transcribe', methods=['POST'])
+@login_required
+@csrf.exempt
+def transcribe_audio():
+    """Receive audio blob, transcribe with Whisper, summarize with Ollama.
+
+    Flow: browser MediaRecorder -> upload -> Whisper STT -> Ollama summary
+    -> return both transcript + summary for user approval -> audio deleted.
+    """
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file uploaded'}), 400
+
+    audio_file = request.files['audio']
+    meeting_type = request.form.get('meeting_type', 'general')
+
+    # Save to temp file
+    upload_dir = current_app.config.get('UPLOAD_FOLDER', 'data/uploads')
+    os.makedirs(upload_dir, exist_ok=True)
+    tmp_name = f'audio_{uuid.uuid4().hex}.webm'
+    tmp_path = os.path.join(upload_dir, tmp_name)
+
+    try:
+        audio_file.save(tmp_path)
+
+        # --- Transcribe ---
+        if not _whisper_available():
+            return jsonify({'error': 'Speech-to-text not available. Install faster-whisper: pip install faster-whisper'}), 503
+
+        from faster_whisper import WhisperModel
+        model = WhisperModel('base', device='cpu', compute_type='int8')
+        segments, info = model.transcribe(tmp_path, beam_size=5)
+        transcript = ' '.join(seg.text.strip() for seg in segments)
+
+        if not transcript.strip():
+            return jsonify({'error': 'Could not detect any speech in the recording.'}), 422
+
+        # --- Summarize with Ollama ---
+        summary = transcript  # fallback if Ollama unavailable
+        if ollama_client.is_available():
+            meeting_label = meeting_type.replace('_', ' ').title()
+            prompt = f"""Summarize the following transcript from a {meeting_label} meeting into clean, organized meeting notes.
+
+TRANSCRIPT:
+{transcript}
+
+Format the summary as:
+- A brief overview paragraph
+- Key discussion points (bullet points)
+- Decisions made (if any)
+- Action items (if any, prefix with #action)
+- Follow-ups needed (if any, prefix with #followup)
+
+Keep it concise and professional. Use #action and #followup tags inline."""
+
+            system = ("You are a school counselor's assistant. Summarize meeting transcripts into "
+                      "clean, organized notes. Be concise and professional. Preserve important details "
+                      "and names mentioned. Use the tag format requested.")
+            try:
+                summary = ollama_client.generate(prompt, system=system, temperature=0.3)
+            except Exception:
+                summary = transcript  # Fall back to raw transcript
+
+        return jsonify({
+            'transcript': transcript,
+            'summary': summary,
+            'duration_seconds': round(info.duration, 1) if hasattr(info, 'duration') else None,
+        })
+
+    finally:
+        # Always delete the audio file
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
