@@ -3,6 +3,25 @@
 {% block page_title %}Data Import{% endblock %}
 {% block content %}
 
+{% macro import_badge(log) %}
+{% if log %}
+<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:0.76rem;color:#065f46;margin-bottom:10px;">
+    <span style="color:#16a34a;">&#9679;</span>
+    Last import: {{ log.imported_at.strftime('%b %d, %Y at %I:%M %p') }}
+    &mdash; {{ log.records_added }} added{% if log.records_updated %}, {{ log.records_updated }} updated{% endif %}
+    {% if log.grade_type %}
+    <span style="background:{% if log.grade_type == 'progress' %}#fef3c7;color:#92400e{% else %}#dbeafe;color:#1e40af{% endif %};padding:1px 6px;border-radius:4px;font-weight:600;">{{ log.grade_type|title }}</span>
+    {% endif %}
+    {% if log.quarter %}
+    <span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:4px;">Q{{ log.quarter }}</span>
+    {% endif %}
+    {% if log.school_year %}
+    <span style="color:var(--gray);">{{ log.school_year }}</span>
+    {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
 <div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
 
 <div class="stats-grid">
@@ -21,6 +40,7 @@
     <div class="card">
         <div class="card-header">Attendance Data</div>
         <div class="card-body">
+            {{ import_badge(last_imports.get('attendance')) }}
             <p style="font-size:0.9rem;margin-bottom:12px;">
                 Import attendance records from your SIS (Synergy, Aeries, PowerSchool, etc.) to enable early warning detection and trend analysis.
             </p>
@@ -46,17 +66,18 @@
     <div class="card">
         <div class="card-header">Grades Data</div>
         <div class="card-body">
+            {{ import_badge(last_imports.get('grades')) }}
             <p style="font-size:0.9rem;margin-bottom:12px;">
-                Import quarterly grades to track academic progress, identify failing students, and get AI-powered course recommendations.
+                Import quarterly or progress report grades to track academic progress, identify failing students, and compare quarter-to-quarter trends.
             </p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
                 <a href="{{ url_for('data_import.grades_template') }}" class="btn btn-outline">Download Template</a>
                 <a href="{{ url_for('data_import.grades_upload') }}" class="btn btn-primary">Upload Grades</a>
             </div>
             <div style="font-size:0.82rem;color:var(--gray);">
-                <strong>Accepted formats:</strong> .xlsx, .csv<br>
-                <strong>Columns:</strong> School Year, Perm ID, Grade Level, Grade, Mark Order, Mark Name, Course Title, Course ID, Period, C1, C2, C3, Staff Name, Audit Class, Student Name, SPED, SigDis, SLE<br>
-                <strong>Source:</strong> Paste your Synergy grade export directly &mdash; no reformatting needed
+                <strong>Accepted:</strong> Synergy grade report (.xlsx, .csv) &mdash; no reformatting needed<br>
+                <strong>Types:</strong> Final quarter grades or mid-quarter progress reports<br>
+                <strong>Auto-purge:</strong> Uploading final grades replaces progress report grades for that quarter
             </div>
             {% if grade_count > 0 %}
             <form method="POST" action="{{ url_for('data_import.clear_grades') }}" style="margin-top:12px;"
@@ -88,6 +109,7 @@
 <div class="card" style="margin-top:20px;">
     <div class="card-header">Student Info &mdash; Bulk Update</div>
     <div class="card-body">
+        {{ import_badge(last_imports.get('student_update')) }}
         <p style="font-size:0.9rem;margin-bottom:12px;">
             Download a spreadsheet pre-filled with your caseload's current data (gender, ethnicity, advisory, parent info, etc.).
             Edit any fields in Excel, then upload to update all student profiles at once.
@@ -116,9 +138,9 @@
                 </p>
             </div>
             <div>
-                <strong style="color:var(--primary);">Cohort Trend Analysis</strong>
+                <strong style="color:var(--primary);">Quarter-to-Quarter Trends</strong>
                 <p style="font-size:0.85rem;color:var(--gray);margin-top:4px;">
-                    Spot patterns across your caseload — attendance trends by grade, grade distributions by quarter, seasonal patterns.
+                    Compare student performance across Q1 &rarr; Q2 &rarr; Q3 &rarr; Q4 to spot declining or improving trends early.
                     See <a href="{{ url_for('reports.cohort_trends') }}">Cohort Trends Report</a>.
                 </p>
             </div>

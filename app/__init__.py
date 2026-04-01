@@ -78,6 +78,7 @@ def create_app(config_class=Config):
     from app.routes.analytics import analytics_bp
     from app.routes.setup import setup_bp
     from app.routes.meeting_notes import meeting_notes_bp
+    from app.routes.search import search_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -103,6 +104,7 @@ def create_app(config_class=Config):
     app.register_blueprint(analytics_bp, url_prefix='/analytics')
     app.register_blueprint(setup_bp)
     app.register_blueprint(meeting_notes_bp, url_prefix='/meeting-notes')
+    app.register_blueprint(search_bp)
 
     # First-run setup redirect
     @app.before_request
@@ -115,6 +117,17 @@ def create_app(config_class=Config):
         from app.routes.setup import needs_setup
         if needs_setup():
             return redirect(url_for('setup.index'))
+
+    # Theme context processor — injects user_theme into all templates
+    @app.context_processor
+    def inject_theme():
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            return {
+                'user_theme': current_user.theme_preference or 'light',
+                'user_reduced_motion': current_user.reduced_motion or False
+            }
+        return {'user_theme': 'light', 'user_reduced_motion': False}
 
     # Security headers
     @app.after_request
@@ -144,7 +157,7 @@ def create_app(config_class=Config):
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
-        from app.models import attendance, grade, iep504, availability, meeting_note
+        from app.models import attendance, grade, iep504, availability, meeting_note, import_log
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

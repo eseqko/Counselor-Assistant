@@ -4,7 +4,8 @@ import shutil
 from datetime import datetime, date, timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, Response
 from flask_login import login_required, current_user
-from app import db
+from flask import jsonify
+from app import db, csrf
 from app.models.user import User, AuditLog
 from app.models.student import Student, Tag
 from app.models.note import Note
@@ -53,6 +54,31 @@ def _cleanup_duplicate_notes():
 @login_required
 def index():
     return render_template('settings/index.html')
+
+
+@settings_bp.route('/api/theme', methods=['POST'])
+@csrf.exempt
+@login_required
+def update_theme():
+    """Save theme preference (called from JS)."""
+    data = request.get_json(silent=True) or {}
+    theme = data.get('theme', 'light')
+    if theme not in ('light', 'dark', 'school', 'focus', 'auto'):
+        theme = 'light'
+    current_user.theme_preference = theme
+    current_user.reduced_motion = bool(data.get('reduced_motion', False))
+    db.session.commit()
+    return jsonify({'ok': True, 'theme': theme})
+
+
+@settings_bp.route('/api/theme')
+@login_required
+def get_theme():
+    """Return current theme preference."""
+    return jsonify({
+        'theme': current_user.theme_preference or 'light',
+        'reduced_motion': current_user.reduced_motion or False
+    })
 
 
 @settings_bp.route('/profile', methods=['GET', 'POST'])
