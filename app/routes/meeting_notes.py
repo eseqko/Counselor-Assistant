@@ -289,8 +289,8 @@ def audio_status():
 
 
 @meeting_notes_bp.route('/api/transcribe', methods=['POST'])
-@login_required
 @csrf.exempt
+@login_required
 def transcribe_audio():
     """Receive audio blob, transcribe with Whisper, summarize with Ollama.
 
@@ -306,7 +306,8 @@ def transcribe_audio():
     # Save to temp file
     upload_dir = current_app.config.get('UPLOAD_FOLDER', 'data/uploads')
     os.makedirs(upload_dir, exist_ok=True)
-    tmp_name = f'audio_{uuid.uuid4().hex}.webm'
+    ext = 'wav' if audio_file.filename.endswith('.wav') else 'webm'
+    tmp_name = f'audio_{uuid.uuid4().hex}.{ext}'
     tmp_path = os.path.join(upload_dir, tmp_name)
 
     try:
@@ -316,10 +317,14 @@ def transcribe_audio():
         if not _whisper_available():
             return jsonify({'error': 'Speech-to-text not available. Install faster-whisper: pip install faster-whisper'}), 503
 
-        from faster_whisper import WhisperModel
-        model = WhisperModel('base', device='cpu', compute_type='int8')
-        segments, info = model.transcribe(tmp_path, beam_size=5)
-        transcript = ' '.join(seg.text.strip() for seg in segments)
+        try:
+            from faster_whisper import WhisperModel
+            model = WhisperModel('base', device='cpu', compute_type='int8')
+            segments, info = model.transcribe(tmp_path, beam_size=5)
+            transcript = ' '.join(seg.text.strip() for seg in segments)
+        except Exception as e:
+            current_app.logger.error(f'Whisper transcription error: {e}')
+            return jsonify({'error': f'Transcription failed: {str(e)}. Make sure ffmpeg is installed (apt install ffmpeg).'}), 500
 
         if not transcript.strip():
             return jsonify({'error': 'Could not detect any speech in the recording.'}), 422
@@ -356,6 +361,9 @@ Keep it concise and professional. Use #action and #followup tags inline."""
             'duration_seconds': round(info.duration, 1) if hasattr(info, 'duration') else None,
         })
 
+    except Exception as e:
+        current_app.logger.error(f'Audio processing error: {e}')
+        return jsonify({'error': f'Audio processing failed: {str(e)}'}), 500
     finally:
         # Always delete the audio file
         try:
