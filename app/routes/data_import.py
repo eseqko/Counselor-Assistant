@@ -443,10 +443,13 @@ def grades_upload():
         # Build column index from header row
         col_map = _build_grade_col_map(_header)
 
+        # Quarter may come from the header name (e.g., "Quarter 3" column)
+        header_quarter = col_map.pop('_quarter_from_header', None)
+
         for row_idx, row in enumerate(rows, start=2):
             # Pad short rows
-            if len(row) < len(col_map.get('_min_cols', [0])):
-                row.extend([''] * (18 - len(row)))
+            while len(row) < 16:
+                row.append('')
 
             # Extract values by mapped column positions
             student_id_str = _col(row, col_map, 'perm_id')
@@ -457,6 +460,7 @@ def grades_upload():
             course_number = _col(row, col_map, 'course_id')
             period_str = _col(row, col_map, 'period')
             audit_class = _col(row, col_map, 'audit_class')
+            credits_att = _col(row, col_map, 'credits_att')
 
             if not student_id_str and not course_name:
                 continue
@@ -472,17 +476,33 @@ def grades_upload():
             if not course_name:
                 row_errors.append('Course Title required')
 
-            # Parse quarter from Mark Name (e.g., "Quarter 3" → 3)
-            quarter_val = _parse_quarter(mark_name)
+            # ── Determine quarter ──
+            # Priority: header name ("Quarter 3" column) > mark_name field > None
+            quarter_val = header_quarter or _parse_quarter(mark_name)
 
             # Derive semester from quarter (Q1-Q2 = Sem 1, Q3-Q4 = Sem 2)
             semester_val = 2 if quarter_val and quarter_val >= 3 else 1
 
-            # Parse period
+            # ── Parse period ──
+            # Synergy grade reports may have Period column or Section ID like "1-010"
             period_val = None
             if period_str:
                 try:
                     period_val = int(float(period_str))
+                except (ValueError, TypeError):
+                    pass
+            # If no Period column but Section ID has "1-010" format, extract period
+            if period_val is None and course_number and '-' in str(course_number):
+                try:
+                    period_val = int(str(course_number).split('-')[0])
+                except (ValueError, TypeError):
+                    pass
+
+            # ── Parse per-course credits ──
+            credits_val = 5.0
+            if credits_att:
+                try:
+                    credits_val = float(credits_att)
                 except (ValueError, TypeError):
                     pass
 
@@ -493,6 +513,11 @@ def grades_upload():
 
             if row_errors:
                 errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
+                continue
+
+            # Skip rows with no letter grade (empty grade cell)
+            if not letter_clean:
+                skipped += 1
                 continue
 
             sid_clean = str(student_id_str).strip()
@@ -519,7 +544,7 @@ def grades_upload():
                 existing.letter_grade = letter_clean or existing.letter_grade
                 existing.course_number = str(course_number or '').strip() or existing.course_number
                 existing.is_honors_ap = is_honors_ap
-                existing.credits_earned = 5.0
+                existing.credits_earned = credits_val
                 updated += 1
             else:
                 record = GradeRecord(
@@ -530,8 +555,8 @@ def grades_upload():
                     course_number=str(course_number or '').strip(),
                     period=period_val,
                     letter_grade=letter_clean,
-                    credits_earned=5.0,
-                    credits_attempted=5.0,
+                    credits_earned=credits_val,
+                    credits_attempted=credits_val,
                     is_semester=semester_val,
                     is_honors_ap=is_honors_ap,
                     imported_by_id=current_user.id,
@@ -1089,21 +1114,29 @@ import re as _re
 _GRADE_COL_ALIASES = {
     'school_year':  ('school year', 'schoolyear', 'year'),
     'perm_id':      ('perm id', 'permid', 'student id', 'student id #', 'student_id'),
-    'grade_level':  ('grade level', 'gradelevel', 'grd'),
-    'grade':        ('grade', 'letter grade', 'lettergrade', 'mark'),
+    'grade_level':  ('grade level', 'gradelevel', 'grd', 'grade'),
+    'grade':        ('letter grade', 'lettergrade', 'mark'),
     'mark_order':   ('mark order', 'markorder'),
-    'mark_name':    ('mark name', 'markname', 'quarter', 'term'),
+    'mark_name':    ('mark name', 'markname', 'term'),
     'course_title': ('course title', 'coursetitle', 'course name', 'coursename'),
-    'course_id':    ('course id', 'courseid', 'course number', 'coursenumber', 'course #'),
+    'course_id':    ('course id', 'courseid', 'course number', 'coursenumber', 'course #', 'section id', 'sectionid'),
     'period':       ('period', 'per'),
     'audit_class':  ('audit class', 'auditclass', 'audit'),
-    'staff_name':   ('staff name', 'staffname', 'teacher'),
+    'staff_name':   ('staff name', 'staffname', 'teacher', 'teacher name'),
     'student_name': ('student name', 'studentname', 'name'),
+    'credits_att':  ('credits att', 'credits attempted', 'cred att', 'credits'),
+    'credits_comp': ('credits completed', 'cred comp', 'credits comp'),
+    'gpa':          ('gpa',),
+    'gender':       ('gender',),
 }
 
 
 def _build_grade_col_map(header):
-    """Map canonical column names to 0-based indices from the actual header row."""
+    """Map canonical column names to 0-based indices from the actual header row.
+
+    Handles Synergy grade report format where the letter grade column is named
+    "Quarter 3" (or "Quarter 1", etc.) — the header itself encodes the quarter.
+    """
     if not header:
         return {}
     col_map = {}
@@ -1115,15 +1148,33 @@ def _build_grade_col_map(header):
                 col_map[canon] = header_lower.index(alias)
                 break
 
-    # Special case: if header has 'Grade' in col D (index 3) AND 'Grade Level' in col C (index 2),
-    # make sure 'grade' points to the letter grade, not the grade level
-    if 'grade' in col_map and 'grade_level' in col_map and col_map['grade'] == col_map['grade_level']:
-        # Both matched the same column — 'grade' in header is ambiguous.
-        # Look for a column explicitly named 'Grade' that isn't the grade_level column.
+    # ── Detect "Quarter X" column as the letter grade source ──
+    # In Synergy grade reports, there's no separate "letter grade" or "mark name"
+    # column. Instead, the header itself is "Quarter 3" and values are B, C-, etc.
+    if 'grade' not in col_map:
         for i, h in enumerate(header_lower):
-            if h == 'grade' and i != col_map['grade_level']:
+            m = _re.match(r'(quarter|qtr|q)\s*(\d)', h)
+            if m:
                 col_map['grade'] = i
+                col_map['_quarter_from_header'] = int(m.group(2))
                 break
+
+    # ── Disambiguate "Grade" column ──
+    # If "grade" and "grade_level" both mapped to the same column (because the
+    # header just says "Grade"), check if values look like grade levels (9-12)
+    # or letter grades (A, B, C). Prefer treating standalone "Grade" next to
+    # "Perm ID" as grade level when a Quarter column exists for letter grades.
+    if 'grade' in col_map and 'grade_level' in col_map and col_map['grade'] == col_map['grade_level']:
+        # Both matched the same column — resolve ambiguity
+        if '_quarter_from_header' in col_map:
+            # We found a Quarter column for letter grades, so "Grade" = grade level
+            del col_map['grade']  # remove; letter grade comes from Quarter col
+        else:
+            # No Quarter column found; look for another "Grade" column
+            for i, h in enumerate(header_lower):
+                if h == 'grade' and i != col_map['grade_level']:
+                    col_map['grade'] = i
+                    break
 
     return col_map
 

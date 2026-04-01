@@ -7,24 +7,52 @@
 
 <div class="grid-2">
     <div class="card">
-        <div class="card-header">Step 1: Download Template</div>
+        <div class="card-header">Accepted Formats</div>
         <div class="card-body">
-            <p style="margin-bottom:12px;font-size:0.9rem;">Download the template, fill it with grade data from your SIS, then upload.</p>
-            <a href="{{ url_for('data_import.grades_template') }}" class="btn btn-primary">Download Excel Template</a>
-            <div style="margin-top:16px;font-size:0.82rem;color:var(--gray);">
-                <strong>4x4 Bell Schedule:</strong>
-                <ul style="margin-top:4px;padding-left:20px;">
-                    <li>4 classes per quarter, 5 credits each</li>
-                    <li>Q1-Q2 = Term 1 (Semester 1 classes)</li>
-                    <li>Q3-Q4 = Term 2 (Semester 2 classes)</li>
-                    <li>8 total classes per year</li>
+            <p style="margin-bottom:12px;font-size:0.9rem;">Upload a grade report directly from Synergy or any CSV/Excel with similar columns.</p>
+            <div style="font-size:0.82rem;color:var(--gray);">
+                <strong>Synergy Grade Report</strong> (auto-detected):
+                <div style="margin-top:8px;overflow-x:auto;">
+                    <table style="font-size:0.78rem;border-collapse:collapse;white-space:nowrap;">
+                        <tr style="background:var(--bg);">
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Student Name</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Perm ID</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Grade</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">...</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Period</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Course Title</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Teacher Name</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;background:#e0e7ff;font-weight:600;">Quarter 3</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Credits Att</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Doe, Jane</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">8023677</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">9</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">...</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">1</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Intro to Robotics</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Smith, J.</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;background:#e0e7ff;font-weight:600;">B</td>
+                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">5</td>
+                        </tr>
+                    </table>
+                </div>
+                <ul style="margin-top:10px;padding-left:20px;">
+                    <li>The <strong>"Quarter 3"</strong> column header tells the app which quarter the grades are from</li>
+                    <li><strong>"Grade"</strong> column = grade level (9, 10, 11, 12), not the letter grade</li>
+                    <li>Students matched by <strong>Perm ID</strong> — must already be in your caseload</li>
+                    <li>Extra columns (Gender, GPA, Section ID) are safely ignored</li>
                 </ul>
+            </div>
+            <div style="margin-top:12px;">
+                <a href="{{ url_for('data_import.grades_template') }}" class="btn btn-secondary" style="font-size:0.82rem;">Download Blank Template</a>
             </div>
         </div>
     </div>
 
     <div class="card">
-        <div class="card-header">Step 2: Upload Data</div>
+        <div class="card-header">Upload Grade Data</div>
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -35,9 +63,10 @@
                 <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
                     <strong>What happens on upload:</strong>
                     <ul style="margin-top:4px;padding-left:20px;">
-                        <li>Records matched to students by Student ID #</li>
-                        <li>Same student+year+quarter+course updates existing record</li>
-                        <li>AI will use this data for course recommendations</li>
+                        <li>Students matched by Perm ID</li>
+                        <li>Quarter auto-detected from column header (e.g., "Quarter 3")</li>
+                        <li>Same student + quarter + course updates existing record</li>
+                        <li>Credits read from "Credits Att" column (defaults to 5 if missing)</li>
                     </ul>
                 </div>
                 <button type="submit" class="btn btn-success">Upload & Import</button>
