@@ -704,15 +704,18 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
         });
     }
 
-    /* ---- Audio Recording ---- */
+    /* ---- Audio Recording (WAV format for Whisper compatibility) ---- */
     var recordBtn = document.getElementById('recordBtn');
     var recordLabel = document.getElementById('recordLabel');
     var recordTimerEl = document.getElementById('recordTimer');
-    var mediaRecorder = null;
-    var audioChunks = [];
+    var audioContext = null;
+    var audioStream = null;
+    var scriptProcessor = null;
+    var audioBuffers = [];
     var recStartTime = 0;
     var recInterval = null;
     var isRecording = false;
+    var sampleRate = 16000; // Whisper prefers 16kHz
 
     recordBtn.addEventListener('click', function() {
         if (isRecording) {
@@ -727,15 +730,20 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
             alert('Your browser does not support audio recording.');
             return;
         }
-        navigator.mediaDevices.getUserMedia({audio: true}).then(function(stream) {
-            audioChunks = [];
-            mediaRecorder = new MediaRecorder(stream, {mimeType: 'audio/webm'});
-            mediaRecorder.ondataavailable = function(e) { if (e.data.size > 0) audioChunks.push(e.data); };
-            mediaRecorder.onstop = function() {
-                stream.getTracks().forEach(function(t) { t.stop(); });
-                uploadAudio();
+        navigator.mediaDevices.getUserMedia({audio: {sampleRate: sampleRate, channelCount: 1}}).then(function(stream) {
+            audioStream = stream;
+            audioBuffers = [];
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({sampleRate: sampleRate});
+            var source = audioContext.createMediaStreamSource(stream);
+            // Use ScriptProcessorNode to capture raw PCM
+            scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+            scriptProcessor.onaudioprocess = function(e) {
+                var data = e.inputBuffer.getChannelData(0);
+                audioBuffers.push(new Float32Array(data));
             };
-            mediaRecorder.start(1000);
+            source.connect(scriptProcessor);
+            scriptProcessor.connect(audioContext.destination);
+
             isRecording = true;
             recordBtn.classList.add('recording');
             recordLabel.textContent = 'Stop';
@@ -752,19 +760,62 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
     }
 
     function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
         isRecording = false;
         recordBtn.classList.remove('recording');
         recordLabel.textContent = 'Record';
         clearInterval(recInterval);
         recordTimerEl.style.display = 'none';
+
+        if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
+        if (audioStream) { audioStream.getTracks().forEach(function(t) { t.stop(); }); audioStream = null; }
+
+        // Encode to WAV
+        var wavBlob = encodeWAV(audioBuffers, audioContext ? audioContext.sampleRate : sampleRate);
+        if (audioContext) { audioContext.close(); audioContext = null; }
+        uploadAudio(wavBlob);
     }
 
-    function uploadAudio() {
-        var blob = new Blob(audioChunks, {type: 'audio/webm'});
-        if (blob.size < 1000) { alert('Recording too short.'); return; }
+    function encodeWAV(buffers, rate) {
+        // Merge all buffers
+        var totalLen = 0;
+        for (var i = 0; i < buffers.length; i++) totalLen += buffers[i].length;
+        var merged = new Float32Array(totalLen);
+        var offset = 0;
+        for (var i = 0; i < buffers.length; i++) {
+            merged.set(buffers[i], offset);
+            offset += buffers[i].length;
+        }
+        // Convert to 16-bit PCM
+        var pcm = new Int16Array(merged.length);
+        for (var i = 0; i < merged.length; i++) {
+            var s = Math.max(-1, Math.min(1, merged[i]));
+            pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        // Build WAV header
+        var buffer = new ArrayBuffer(44 + pcm.length * 2);
+        var view = new DataView(buffer);
+        function writeStr(o, s) { for (var i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); }
+        writeStr(0, 'RIFF');
+        view.setUint32(4, 36 + pcm.length * 2, true);
+        writeStr(8, 'WAVE');
+        writeStr(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true); // PCM
+        view.setUint16(22, 1, true); // mono
+        view.setUint32(24, rate, true);
+        view.setUint32(28, rate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeStr(36, 'data');
+        view.setUint32(40, pcm.length * 2, true);
+        var pcmBytes = new Uint8Array(buffer, 44);
+        var pcmView = new Uint8Array(pcm.buffer);
+        pcmBytes.set(pcmView);
+        return new Blob([buffer], {type: 'audio/wav'});
+    }
+
+    function uploadAudio(blob) {
+        if (blob.size < 2000) { alert('Recording too short.'); return; }
 
         // Show processing modal
         var modal = document.getElementById('audioModal');
@@ -775,7 +826,7 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
         result.style.display = 'none';
 
         var fd = new FormData();
-        fd.append('audio', blob, 'recording.webm');
+        fd.append('audio', blob, 'recording.wav');
         fd.append('meeting_type', document.querySelector('[name="meeting_type"]').value);
 
         fetch('{{ url_for("meeting_notes.transcribe_audio") }}', {method: 'POST', body: fd})
