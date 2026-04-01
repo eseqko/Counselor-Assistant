@@ -3,7 +3,7 @@ import io
 import csv
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
 from flask_login import login_required, current_user
-from app import db
+from app import db, csrf
 from app.models.student import Student
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
@@ -413,15 +413,115 @@ def grades_template():
                      as_attachment=True, download_name='Grades_Import_Template.xlsx')
 
 
+@data_import_bp.route('/grades/preview', methods=['POST'])
+@csrf.exempt
+@login_required
+def grades_preview():
+    """AJAX endpoint: parse uploaded file and return preview JSON."""
+    from flask import jsonify
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'No file provided'}), 400
+
+    _header, rows = _parse_upload_file(file)
+    if _header is None:
+        return jsonify({'error': 'Could not read file'}), 400
+
+    col_map = _build_grade_col_map(_header)
+    header_quarter = col_map.get('_quarter_from_header')
+
+    # Detect columns found
+    detected = {}
+    for key in ('perm_id', 'grade', 'course_title', 'period', 'credits_att',
+                'grade_level', 'staff_name', 'student_name', 'school_year'):
+        if key in col_map:
+            idx = col_map[key]
+            detected[key] = _header[idx] if idx < len(_header) else key
+
+    # Count students on caseload vs not
+    id_cache = {
+        s.student_id_number: True
+        for s in Student.query.with_entities(Student.student_id_number).all()
+    }
+    # Also build name-based lookup for fallback
+    name_cache = {}
+    for s in Student.query.with_entities(Student.last_name, Student.first_name, Student.student_id_number).all():
+        key = f"{s.last_name.strip().lower()}, {s.first_name.strip().lower()}"
+        name_cache[key] = s.student_id_number
+
+    total_rows = 0
+    matched = 0
+    unmatched = 0
+    empty_grade = 0
+    sample_rows = []
+
+    for row in rows:
+        while len(row) < 16:
+            row.append('')
+        sid = _col(row, col_map, 'perm_id')
+        grade_val = _col(row, col_map, 'grade')
+        course = _col(row, col_map, 'course_title')
+        student_name = _col(row, col_map, 'student_name')
+
+        if not sid and not course:
+            continue
+        total_rows += 1
+
+        if not grade_val:
+            empty_grade += 1
+            continue
+
+        found = id_cache.get(str(sid).strip())
+        if not found and student_name:
+            found = student_name.strip().lower() in name_cache
+        if found:
+            matched += 1
+        else:
+            unmatched += 1
+
+        if len(sample_rows) < 5:
+            sample_rows.append({
+                'student': student_name or sid,
+                'course': course,
+                'grade': grade_val,
+                'matched': bool(found),
+            })
+
+    # Build current school year default
+    now = date.today()
+    yr = now.year if now.month >= 7 else now.year - 1
+    default_school_year = f"{yr}-{yr + 1}"
+
+    return jsonify({
+        'columns': detected,
+        'quarter': header_quarter,
+        'total_rows': total_rows,
+        'matched': matched,
+        'unmatched': unmatched,
+        'empty_grade': empty_grade,
+        'sample': sample_rows,
+        'default_school_year': default_school_year,
+    })
+
+
 @data_import_bp.route('/grades/upload', methods=['GET', 'POST'])
 @login_required
 def grades_upload():
     """Upload grades data from Excel or CSV."""
+    # Build school year options for the dropdown
+    now = date.today()
+    yr = now.year if now.month >= 7 else now.year - 1
+    school_year_options = [f"{y}-{y + 1}" for y in range(yr, yr - 4, -1)]
+    default_school_year = school_year_options[0]
+
     if request.method == 'POST':
         file = request.files.get('file')
         if not file:
             flash('Please select a file.', 'danger')
             return redirect(url_for('data_import.grades_upload'))
+
+        # School year from form (since Synergy doesn't include it)
+        form_school_year = request.form.get('school_year', '').strip() or default_school_year
 
         _header, rows = _parse_upload_file(file)
         if rows is None:
@@ -430,15 +530,22 @@ def grades_upload():
         added = 0
         updated = 0
         skipped = 0
+        not_on_caseload = 0
         errors = []
         BATCH_SIZE = 200
 
-        # Pre-load student lookup cache
+        # Pre-load student lookup caches
         student_cache = {
             s.student_id_number: s.id
             for s in Student.query.with_entities(
                 Student.student_id_number, Student.id).all()
         }
+        # Name-based fallback: "last, first" → student_id_number
+        name_to_sid = {}
+        for s in Student.query.with_entities(
+                Student.last_name, Student.first_name, Student.student_id_number).all():
+            key = f"{s.last_name.strip().lower()}, {s.first_name.strip().lower()}"
+            name_to_sid[key] = s.student_id_number
 
         # Build column index from header row
         col_map = _build_grade_col_map(_header)
@@ -453,7 +560,7 @@ def grades_upload():
 
             # Extract values by mapped column positions
             student_id_str = _col(row, col_map, 'perm_id')
-            school_year = _col(row, col_map, 'school_year')
+            school_year = _col(row, col_map, 'school_year') or form_school_year
             letter_grade = _col(row, col_map, 'grade')
             mark_name = _col(row, col_map, 'mark_name')
             course_name = _col(row, col_map, 'course_title')
@@ -461,6 +568,7 @@ def grades_upload():
             period_str = _col(row, col_map, 'period')
             audit_class = _col(row, col_map, 'audit_class')
             credits_att = _col(row, col_map, 'credits_att')
+            student_name = _col(row, col_map, 'student_name')
 
             if not student_id_str and not course_name:
                 continue
@@ -471,8 +579,8 @@ def grades_upload():
                 continue
 
             row_errors = []
-            if not student_id_str:
-                row_errors.append('Perm ID required')
+            if not student_id_str and not student_name:
+                row_errors.append('Perm ID or Student Name required')
             if not course_name:
                 row_errors.append('Course Title required')
 
@@ -520,10 +628,19 @@ def grades_upload():
                 skipped += 1
                 continue
 
+            # ── Resolve student: Perm ID first, then name fallback ──
             sid_clean = str(student_id_str).strip()
             student_db_id = student_cache.get(sid_clean)
+
+            if not student_db_id and student_name:
+                # Try "Last, First" name matching
+                name_key = student_name.strip().lower()
+                fallback_sid = name_to_sid.get(name_key)
+                if fallback_sid:
+                    student_db_id = student_cache.get(fallback_sid)
+
             if not student_db_id:
-                errors.append(f'Row {row_idx}: Perm ID {student_id_str} not found')
+                not_on_caseload += 1
                 continue
 
             # Detect honors/AP from course title
@@ -570,18 +687,28 @@ def grades_upload():
 
         db.session.commit()
         log_action('import', 'grades',
-                   details=f'Imported grades: {added} added, {updated} updated')
+                   details=f'Imported grades: {added} added, {updated} updated'
+                           + (f', {not_on_caseload} not on caseload' if not_on_caseload else ''))
+
+        if not_on_caseload:
+            msg = f'{added} added, {updated} updated. {not_on_caseload} students not on your caseload (skipped).'
+        else:
+            msg = f'{added} added, {updated} updated.'
 
         if errors:
-            flash(f'Imported with issues: {added} added, {updated} updated, {len(errors)} errors.', 'warning')
+            flash(f'Imported with issues: {msg} {len(errors)} errors.', 'warning')
         else:
-            flash(f'Grades imported: {added} added, {updated} updated.', 'success')
+            flash(f'Grades imported: {msg}', 'success')
 
         return render_template('data_import/grades_upload.html',
-                               added=added, updated=updated, errors=errors)
+                               added=added, updated=updated, errors=errors,
+                               school_year_options=school_year_options,
+                               default_school_year=form_school_year)
 
     return render_template('data_import/grades_upload.html',
-                           added=0, updated=0, errors=None)
+                           added=0, updated=0, errors=None,
+                           school_year_options=school_year_options,
+                           default_school_year=default_school_year)
 
 
 # =====================================================================

@@ -5,76 +5,157 @@
 
 <div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
 
-<div class="grid-2">
-    <div class="card">
-        <div class="card-header">Accepted Formats</div>
+<!-- ── Step flow container ── -->
+<div id="upload-flow">
+
+    <!-- STEP 1: Drop / Select file -->
+    <div class="card" id="step-drop">
+        <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+            <span style="background:var(--primary);color:#fff;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700;">1</span>
+            Drop Your Synergy Grade Report
+        </div>
         <div class="card-body">
-            <p style="margin-bottom:12px;font-size:0.9rem;">Upload a grade report directly from Synergy or any CSV/Excel with similar columns.</p>
-            <div style="font-size:0.82rem;color:var(--gray);">
-                <strong>Synergy Grade Report</strong> (auto-detected):
-                <div style="margin-top:8px;overflow-x:auto;">
-                    <table style="font-size:0.78rem;border-collapse:collapse;white-space:nowrap;">
-                        <tr style="background:var(--bg);">
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Student Name</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Perm ID</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Grade</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">...</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Period</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Course Title</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Teacher Name</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;background:#e0e7ff;font-weight:600;">Quarter 3</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Credits Att</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Doe, Jane</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">8023677</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">9</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">...</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">1</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Intro to Robotics</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">Smith, J.</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;background:#e0e7ff;font-weight:600;">B</td>
-                            <td style="padding:4px 8px;border:1px solid #e5e7eb;">5</td>
-                        </tr>
-                    </table>
+            <form id="grade-form" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="school_year" id="school-year-input" value="{{ default_school_year }}">
+
+                <!-- Drop zone -->
+                <div id="drop-zone" style="border:2px dashed var(--primary);border-radius:10px;padding:40px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg);">
+                    <div id="drop-icon" style="font-size:2.5rem;margin-bottom:8px;">&#128196;</div>
+                    <div style="font-size:1rem;font-weight:600;color:var(--dark);">Drag & drop your file here</div>
+                    <div style="font-size:0.82rem;color:var(--gray);margin-top:4px;">or click to browse &mdash; .xlsx or .csv</div>
+                    <input type="file" name="file" id="file-input" accept=".xlsx,.xls,.csv" required style="display:none;">
                 </div>
-                <ul style="margin-top:10px;padding-left:20px;">
-                    <li>The <strong>"Quarter 3"</strong> column header tells the app which quarter the grades are from</li>
-                    <li><strong>"Grade"</strong> column = grade level (9, 10, 11, 12), not the letter grade</li>
-                    <li>Students matched by <strong>Perm ID</strong> — must already be in your caseload</li>
-                    <li>Extra columns (Gender, GPA, Section ID) are safely ignored</li>
-                </ul>
-            </div>
-            <div style="margin-top:12px;">
-                <a href="{{ url_for('data_import.grades_template') }}" class="btn btn-secondary" style="font-size:0.82rem;">Download Blank Template</a>
-            </div>
+
+                <!-- File selected indicator -->
+                <div id="file-info" style="display:none;margin-top:12px;padding:10px 14px;background:#ecfdf5;border-radius:8px;font-size:0.88rem;color:#065f46;">
+                    <span style="font-weight:600;">&#9989;</span>
+                    <span id="file-name"></span>
+                    <span id="file-size" style="color:var(--gray);margin-left:8px;"></span>
+                    <a href="#" id="file-clear" style="float:right;color:var(--danger);font-size:0.8rem;">Remove</a>
+                </div>
+
+                <!-- Synergy format hint (collapsed by default) -->
+                <details style="margin-top:14px;font-size:0.82rem;color:var(--gray);">
+                    <summary style="cursor:pointer;font-weight:600;color:var(--dark);">What format does it need?</summary>
+                    <div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:6px;">
+                        <p style="margin-bottom:8px;">Export directly from <strong>Synergy → Grades</strong>. The app auto-detects:</p>
+                        <div style="overflow-x:auto;">
+                            <table style="font-size:0.78rem;border-collapse:collapse;white-space:nowrap;">
+                                <tr style="background:var(--bg);">
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Student Name</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Perm ID</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Grade</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Period</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Course Title</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Teacher Name</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;background:#e0e7ff;font-weight:600;">Quarter 3</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Credits Att</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Doe, Jane</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">8023677</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">9</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">1</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Intro to Robotics</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">Smith, J.</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;background:#e0e7ff;font-weight:600;">B</td>
+                                    <td style="padding:4px 8px;border:1px solid #e5e7eb;">5</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <ul style="margin-top:8px;padding-left:20px;">
+                            <li>"Quarter 3" column header = where letter grades live + tells the app the quarter</li>
+                            <li>"Grade" column = grade level (9-12), not the letter grade</li>
+                            <li>Students matched by <strong>Perm ID</strong> first, then by <strong>Student Name</strong> as fallback</li>
+                        </ul>
+                        <div style="margin-top:8px;">
+                            <a href="{{ url_for('data_import.grades_template') }}" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;">Download Blank Template</a>
+                        </div>
+                    </div>
+                </details>
+            </form>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header">Upload Grade Data</div>
+    <!-- STEP 2: Preview (populated by JS after file selected) -->
+    <div class="card" id="step-preview" style="display:none;margin-top:16px;">
+        <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+            <span style="background:var(--primary);color:#fff;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700;">2</span>
+            Preview &amp; Confirm
+        </div>
         <div class="card-body">
-            <form method="POST" enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="form-group">
-                    <label>Select File (.xlsx or .csv)</label>
-                    <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required style="padding:8px;">
+            <!-- Loading state -->
+            <div id="preview-loading" style="text-align:center;padding:20px;color:var(--gray);">
+                <div style="font-size:1.2rem;">&#9203;</div>
+                Scanning file&hellip;
+            </div>
+
+            <!-- Preview content -->
+            <div id="preview-content" style="display:none;">
+                <!-- Detection summary -->
+                <div class="stats-grid" style="margin-bottom:16px;">
+                    <div class="stat-card info">
+                        <div class="stat-value" id="preview-total">0</div>
+                        <div class="stat-label">Total Rows</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-value" id="preview-matched">0</div>
+                        <div class="stat-label">Students Matched</div>
+                    </div>
+                    <div class="stat-card" id="unmatched-card" style="display:none;">
+                        <div class="stat-value" id="preview-unmatched">0</div>
+                        <div class="stat-label">Not on Caseload</div>
+                    </div>
                 </div>
-                <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
-                    <strong>What happens on upload:</strong>
-                    <ul style="margin-top:4px;padding-left:20px;">
-                        <li>Students matched by Perm ID</li>
-                        <li>Quarter auto-detected from column header (e.g., "Quarter 3")</li>
-                        <li>Same student + quarter + course updates existing record</li>
-                        <li>Credits read from "Credits Att" column (defaults to 5 if missing)</li>
-                    </ul>
+
+                <!-- Detected columns -->
+                <div style="background:var(--bg);border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:0.82rem;">
+                    <strong>Detected:</strong>
+                    <span id="detected-cols" style="color:var(--gray);"></span>
+                    <span id="detected-quarter" style="margin-left:8px;font-weight:600;color:var(--primary);"></span>
                 </div>
-                <button type="submit" class="btn btn-success">Upload & Import</button>
-            </form>
+
+                <!-- Sample rows -->
+                <div id="sample-table-wrap" style="margin-bottom:14px;overflow-x:auto;">
+                    <table style="font-size:0.82rem;width:100%;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;">Student</th>
+                                <th style="text-align:left;">Course</th>
+                                <th>Grade</th>
+                                <th>Match</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sample-rows"></tbody>
+                    </table>
+                </div>
+
+                <!-- School year selector -->
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+                    <label style="font-weight:600;font-size:0.88rem;white-space:nowrap;">School Year:</label>
+                    <select id="school-year-select" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.88rem;">
+                        {% for yr in school_year_options %}
+                        <option value="{{ yr }}" {% if yr == default_school_year %}selected{% endif %}>{{ yr }}</option>
+                        {% endfor %}
+                    </select>
+                    <span style="font-size:0.78rem;color:var(--gray);">Synergy doesn't include this &mdash; select the correct year</span>
+                </div>
+
+                <!-- Import button -->
+                <button type="button" id="import-btn" class="btn btn-success" style="font-size:1rem;padding:10px 28px;">
+                    &#128640; Import Grades
+                </button>
+                <button type="button" id="cancel-btn" class="btn btn-secondary" style="margin-left:8px;">Cancel</button>
+            </div>
+
+            <!-- Preview error -->
+            <div id="preview-error" style="display:none;color:var(--danger);padding:12px;font-size:0.88rem;"></div>
         </div>
     </div>
 </div>
 
+<!-- STEP 3: Results (shown after import) -->
 {% if added or updated %}
 <div class="card" style="margin-top:20px;">
     <div class="card-header">Import Results</div>
@@ -115,5 +196,166 @@
     </div>
 </div>
 {% endif %}
+
+<script>
+(function() {
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    const fileClear = document.getElementById('file-clear');
+    const stepPreview = document.getElementById('step-preview');
+    const previewLoading = document.getElementById('preview-loading');
+    const previewContent = document.getElementById('preview-content');
+    const previewError = document.getElementById('preview-error');
+    const gradeForm = document.getElementById('grade-form');
+    const schoolYearSelect = document.getElementById('school-year-select');
+    const schoolYearInput = document.getElementById('school-year-input');
+
+    // Drag & drop
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#16a34a';
+        dropZone.style.background = '#f0fdf4';
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = 'var(--primary)';
+        dropZone.style.background = 'var(--bg)';
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--primary)';
+        dropZone.style.background = 'var(--bg)';
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) handleFile(fileInput.files[0]);
+    });
+
+    fileClear.addEventListener('click', (e) => {
+        e.preventDefault();
+        resetUI();
+    });
+
+    function resetUI() {
+        fileInput.value = '';
+        fileInfo.style.display = 'none';
+        stepPreview.style.display = 'none';
+        dropZone.style.display = '';
+    }
+
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+        return (bytes/(1024*1024)).toFixed(1) + ' MB';
+    }
+
+    function handleFile(file) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!['csv','xlsx','xls'].includes(ext)) {
+            alert('Please select a .csv or .xlsx file');
+            return;
+        }
+        fileName.textContent = file.name;
+        fileSize.textContent = formatSize(file.size);
+        fileInfo.style.display = 'block';
+        dropZone.style.display = 'none';
+        fetchPreview(file);
+    }
+
+    function fetchPreview(file) {
+        stepPreview.style.display = '';
+        previewLoading.style.display = '';
+        previewContent.style.display = 'none';
+        previewError.style.display = 'none';
+
+        const fd = new FormData();
+        fd.append('file', file);
+
+        fetch('{{ url_for("data_import.grades_preview") }}', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                previewLoading.style.display = 'none';
+                if (data.error) {
+                    previewError.textContent = data.error;
+                    previewError.style.display = '';
+                    return;
+                }
+                renderPreview(data);
+                previewContent.style.display = '';
+            })
+            .catch(err => {
+                previewLoading.style.display = 'none';
+                previewError.textContent = 'Could not preview file: ' + err.message;
+                previewError.style.display = '';
+            });
+    }
+
+    function renderPreview(data) {
+        document.getElementById('preview-total').textContent = data.total_rows;
+        document.getElementById('preview-matched').textContent = data.matched;
+        const unmatchedCard = document.getElementById('unmatched-card');
+        if (data.unmatched > 0) {
+            document.getElementById('preview-unmatched').textContent = data.unmatched;
+            unmatchedCard.style.display = '';
+            unmatchedCard.className = 'stat-card danger';
+        } else {
+            unmatchedCard.style.display = 'none';
+        }
+
+        // Detected columns
+        const colNames = Object.values(data.columns);
+        document.getElementById('detected-cols').textContent = colNames.join(', ');
+        const qSpan = document.getElementById('detected-quarter');
+        qSpan.textContent = data.quarter ? 'Quarter ' + data.quarter + ' detected' : '';
+
+        // Sample rows
+        const tbody = document.getElementById('sample-rows');
+        tbody.innerHTML = '';
+        (data.sample || []).forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + esc(r.student) + '</td>' +
+                '<td>' + esc(r.course) + '</td>' +
+                '<td style="text-align:center;font-weight:600;">' + esc(r.grade) + '</td>' +
+                '<td style="text-align:center;">' +
+                    (r.matched ? '<span style="color:#16a34a;">&#10003;</span>' : '<span style="color:#dc2626;">&#10007;</span>') +
+                '</td>';
+            tbody.appendChild(tr);
+        });
+
+        // School year default from server
+        if (data.default_school_year) {
+            schoolYearSelect.value = data.default_school_year;
+        }
+    }
+
+    function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+
+    // School year sync
+    schoolYearSelect.addEventListener('change', () => {
+        schoolYearInput.value = schoolYearSelect.value;
+    });
+
+    // Import button
+    document.getElementById('import-btn').addEventListener('click', () => {
+        schoolYearInput.value = schoolYearSelect.value;
+        // Re-attach the file since we need to re-upload
+        gradeForm.submit();
+    });
+
+    // Cancel
+    document.getElementById('cancel-btn').addEventListener('click', resetUI);
+})();
+</script>
 
 {% endblock %}
