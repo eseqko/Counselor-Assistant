@@ -7,11 +7,11 @@ class ServiceRecord(db.Model):
     __tablename__ = 'service_records'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
     # Service details
-    date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date(), index=True)
     service_type = db.Column(db.String(50), nullable=False)
     topic = db.Column(db.String(200))
     description = db.Column(db.Text)

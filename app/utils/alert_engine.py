@@ -235,21 +235,28 @@ def _check_no_contact_students(user, students, today):
     """Students not contacted in 30+ days."""
     alerts = []
     threshold = today - timedelta(days=30)
+    student_ids = [s.id for s in students]
+
+    # Single bulk query: last note date per student
+    last_contact = dict(
+        db.session.query(
+            Note.student_id,
+            db.func.max(Note.session_date)
+        ).filter(
+            Note.author_id == user.id,
+            Note.student_id.in_(student_ids),
+        ).group_by(Note.student_id).all()
+    )
 
     for student in students:
-        last_note = (Note.query
-                     .filter_by(author_id=user.id, student_id=student.id)
-                     .order_by(Note.session_date.desc())
-                     .first())
-
-        if last_note and last_note.session_date and last_note.session_date >= threshold:
+        last_date = last_contact.get(student.id)
+        if last_date and last_date >= threshold:
             continue
 
-        # No recent contact
         name = student.first_name + ' ' + student.last_name
-        if last_note and last_note.session_date:
-            days_since = (today - last_note.session_date).days
-            detail = f'Last contact: {days_since} days ago ({last_note.session_date.strftime("%m/%d")})'
+        if last_date:
+            days_since = (today - last_date).days
+            detail = f'Last contact: {days_since} days ago ({last_date.strftime("%m/%d")})'
         else:
             detail = 'No counseling notes on record'
 
@@ -307,14 +314,20 @@ def _check_attendance_alerts(user, student_ids, student_map, today):
     alerts = []
     cutoff = today - timedelta(days=30)
 
-    for sid in student_ids:
-        absent_count = AttendanceRecord.query.filter(
-            AttendanceRecord.student_id == sid,
+    # Single bulk query: absence count per student
+    absence_counts = dict(
+        db.session.query(
+            AttendanceRecord.student_id,
+            db.func.count(AttendanceRecord.id)
+        ).filter(
+            AttendanceRecord.student_id.in_(student_ids),
             AttendanceRecord.date >= cutoff,
             AttendanceRecord.status == 'absent',
-            AttendanceRecord.period == 0,  # period 0 = full day
-        ).count()
+            AttendanceRecord.period == 0,
+        ).group_by(AttendanceRecord.student_id).all()
+    )
 
+    for sid, absent_count in absence_counts.items():
         if absent_count < 3:
             continue
 
@@ -386,14 +399,17 @@ def _check_post_meeting_followups(user, today):
         CalendarEvent.status != 'cancelled',
     ).all()
 
-    for event in events:
-        # Check if a note was already written for that day
-        has_note = Note.query.filter(
-            Note.author_id == user.id,
-            Note.session_date == yesterday,
-        ).first()
+    if not events:
+        return alerts
 
-        if not has_note:
+    # Single check: any note written for yesterday?
+    has_note = Note.query.filter(
+        Note.author_id == user.id,
+        Note.session_date == yesterday,
+    ).first()
+
+    if not has_note:
+        for event in events:
             alerts.append(_alert(
                 PRIORITY_LOW, CATEGORY_WORKFLOW,
                 f'Follow-up needed from yesterday',
@@ -461,28 +477,34 @@ def _check_new_students(user, students, today):
     alerts = []
     recent_cutoff = today - timedelta(days=7)
 
-    for student in students:
-        if not student.enrollment_date:
-            continue
-        if student.enrollment_date < recent_cutoff:
-            continue
+    # Filter to recent students first
+    recent = [s for s in students
+              if s.enrollment_date and s.enrollment_date >= recent_cutoff]
+    if not recent:
+        return alerts
 
+    # Bulk check which of these have notes
+    recent_ids = [s.id for s in recent]
+    has_notes = set(
+        sid for (sid,) in db.session.query(Note.student_id).filter(
+            Note.author_id == user.id,
+            Note.student_id.in_(recent_ids),
+        ).distinct().all()
+    )
+
+    for student in recent:
+        if student.id in has_notes:
+            continue
         name = student.first_name + ' ' + student.last_name
-        # Check if there's already a note for this student
-        has_note = Note.query.filter_by(
-            author_id=user.id, student_id=student.id
-        ).first()
-
-        if not has_note:
-            days_since = (today - student.enrollment_date).days
-            alerts.append(_alert(
-                PRIORITY_MEDIUM, CATEGORY_STUDENT,
-                f'New student: {name}',
-                f'Added {days_since} day{"s" if days_since != 1 else ""} ago — '
-                f'schedule intro meeting and review records',
-                student_id=student.id, student_name=name,
-                action_url=f'/notes/add?student_id={student.id}',
-                action_label='Add Note',
-            ))
+        days_since = (today - student.enrollment_date).days
+        alerts.append(_alert(
+            PRIORITY_MEDIUM, CATEGORY_STUDENT,
+            f'New student: {name}',
+            f'Added {days_since} day{"s" if days_since != 1 else ""} ago — '
+            f'schedule intro meeting and review records',
+            student_id=student.id, student_name=name,
+            action_url=f'/notes/add?student_id={student.id}',
+            action_label='Add Note',
+        ))
 
     return alerts

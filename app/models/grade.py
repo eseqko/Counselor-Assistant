@@ -7,7 +7,7 @@ class GradeRecord(db.Model):
     __tablename__ = 'grade_records'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
 
     # Course info (4x4 schedule: 4 classes/quarter, 5 credits each)
     school_year = db.Column(db.String(9))   # e.g., "2025-2026"
@@ -17,7 +17,7 @@ class GradeRecord(db.Model):
     period = db.Column(db.Integer)            # 1-4
 
     # Grade data
-    letter_grade = db.Column(db.String(5))   # A, B, C, D, F, P, NP, I
+    letter_grade = db.Column(db.String(5), index=True)   # A, B, C, D, F, P, NP, I
     percent_grade = db.Column(db.Float)      # 0-100
     credits_earned = db.Column(db.Float, default=5.0)
     credits_attempted = db.Column(db.Float, default=5.0)
