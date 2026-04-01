@@ -110,6 +110,21 @@
                 <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
                 <span class="page-title">{% block page_title %}Dashboard{% endblock %}</span>
             </div>
+            <!-- Global instant search -->
+            <div id="global-search" style="position:relative;flex:1;max-width:360px;margin:0 16px;">
+                <input type="text" id="global-search-input" class="form-control"
+                       placeholder="Search students, notes, meetings..."
+                       autocomplete="off"
+                       style="padding:6px 12px 6px 32px;font-size:0.85rem;border-radius:8px;
+                              background:var(--bg);border:1px solid var(--border);width:100%;">
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
+                             font-size:0.85rem;color:var(--text-muted);pointer-events:none;">&#128269;</span>
+                <div id="search-results" style="display:none;position:absolute;top:100%;left:0;right:0;
+                     margin-top:4px;background:var(--surface);border:1px solid var(--border);
+                     border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.15);z-index:9999;
+                     max-height:420px;overflow-y:auto;"></div>
+            </div>
+
             <div class="user-info" style="display:flex;align-items:center;gap:12px;">
                 <div class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown()" style="position:relative;cursor:pointer;font-size:1.2rem;line-height:1;" title="Action Items">
                     &#128276;
@@ -264,6 +279,98 @@
             var bell = document.getElementById('notif-bell');
             if (bell && !bell.contains(e.target)) {
                 dropdown.style.display = 'none';
+            }
+        });
+    })();
+
+    /* ── Global instant search ── */
+    (function(){
+        var input = document.getElementById('global-search-input');
+        var results = document.getElementById('search-results');
+        if (!input || !results) return;
+
+        var debounce = null;
+        var selectedIdx = -1;
+
+        input.addEventListener('input', function(){
+            clearTimeout(debounce);
+            var q = input.value.trim();
+            if (q.length < 2) { results.style.display = 'none'; return; }
+            debounce = setTimeout(function(){ doSearch(q); }, 200);
+        });
+
+        input.addEventListener('keydown', function(e){
+            var items = results.querySelectorAll('.search-item');
+            if (!items.length) return;
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIdx = Math.min(selectedIdx + 1, items.length - 1);
+                updateHighlight(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIdx = Math.max(selectedIdx - 1, 0);
+                updateHighlight(items);
+            } else if (e.key === 'Enter' && selectedIdx >= 0 && items[selectedIdx]) {
+                e.preventDefault();
+                items[selectedIdx].click();
+            } else if (e.key === 'Escape') {
+                results.style.display = 'none';
+                selectedIdx = -1;
+            }
+        });
+
+        function updateHighlight(items) {
+            for (var i = 0; i < items.length; i++) {
+                items[i].style.background = i === selectedIdx ? 'var(--hover-bg)' : '';
+            }
+        }
+
+        function doSearch(q) {
+            fetch('/api/search?q=' + encodeURIComponent(q))
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    selectedIdx = -1;
+                    if (!data.results || !data.results.length) {
+                        results.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:0.84rem;text-align:center;">No results found</div>';
+                        results.style.display = 'block';
+                        return;
+                    }
+                    var html = '';
+                    var lastType = '';
+                    data.results.forEach(function(r){
+                        if (r.type !== lastType) {
+                            var label = r.type === 'student' ? 'Students' : r.type === 'note' ? 'Notes' : 'Meeting Notes';
+                            html += '<div style="padding:6px 14px;font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;'
+                                  + (lastType ? 'border-top:1px solid var(--border);' : '') + '">' + label + '</div>';
+                            lastType = r.type;
+                        }
+                        html += '<a href="' + r.url + '" class="search-item" style="display:flex;align-items:center;gap:10px;padding:8px 14px;text-decoration:none;color:var(--text);cursor:pointer;">';
+                        html += '<span style="font-size:1.1rem;flex-shrink:0;">' + r.icon + '</span>';
+                        html += '<div style="flex:1;min-width:0;">';
+                        html += '<div style="font-size:0.86rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(r.title) + '</div>';
+                        if (r.subtitle) html += '<div style="font-size:0.76rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.subtitle + '</div>';
+                        html += '</div></a>';
+                    });
+                    results.innerHTML = html;
+                    results.style.display = 'block';
+                }).catch(function(){ results.style.display = 'none'; });
+        }
+
+        /* Close on outside click */
+        document.addEventListener('click', function(e){
+            var box = document.getElementById('global-search');
+            if (box && !box.contains(e.target)) {
+                results.style.display = 'none';
+                selectedIdx = -1;
+            }
+        });
+
+        /* Ctrl+K / Cmd+K to focus search */
+        document.addEventListener('keydown', function(e){
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                input.focus();
+                input.select();
             }
         });
     })();

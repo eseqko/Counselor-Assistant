@@ -78,6 +78,7 @@ def create_app(config_class=Config):
     from app.routes.analytics import analytics_bp
     from app.routes.setup import setup_bp
     from app.routes.meeting_notes import meeting_notes_bp
+    from app.routes.search import search_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -103,6 +104,7 @@ def create_app(config_class=Config):
     app.register_blueprint(analytics_bp, url_prefix='/analytics')
     app.register_blueprint(setup_bp)
     app.register_blueprint(meeting_notes_bp, url_prefix='/meeting-notes')
+    app.register_blueprint(search_bp)
 
     # First-run setup redirect
     @app.before_request

@@ -1,5 +1,8 @@
-/* Theme overrides — loaded after style.css.
+/* Theme overrides + global search styles — loaded after style.css.
    Each theme redefines CSS variables; existing components adapt automatically. */
+
+/* ── Global search result hover ── */
+.search-item:hover { background: var(--hover-bg); }
 
 /* ── Semantic aliases (light theme defaults) ── */
 :root {
