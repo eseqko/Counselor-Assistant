@@ -319,9 +319,10 @@
                 e.preventDefault();
                 selectedIdx = Math.max(selectedIdx - 1, 0);
                 updateHL(items);
-            } else if (e.key === 'Enter' && selectedIdx >= 0 && items[selectedIdx]) {
+            } else if (e.key === 'Enter') {
                 e.preventDefault();
-                items[selectedIdx].click();
+                var target = (selectedIdx >= 0 && items[selectedIdx]) ? items[selectedIdx] : items[0];
+                if (target) window.location.href = target.href;
             }
         });
 

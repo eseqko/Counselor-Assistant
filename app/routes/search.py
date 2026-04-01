@@ -37,7 +37,7 @@ def instant_search():
             'icon': '&#128100;',
             'title': f'{s.first_name} {s.last_name}',
             'subtitle': f'Grade {s.grade_level} &middot; ID: {s.student_id_number}',
-            'url': url_for('caseload.view', student_id=s.id),
+            'url': url_for('caseload.view_student', id=s.id),
         })
 
     # ── Counselor Notes ──
@@ -63,7 +63,7 @@ def instant_search():
             'icon': '&#128221;',
             'title': preview[:80],
             'subtitle': sub,
-            'url': url_for('notes.view', note_id=n.id),
+            'url': url_for('notes.view_note', id=n.id),
         })
 
     # ── Meeting Notes ──
