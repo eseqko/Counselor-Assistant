@@ -5,6 +5,7 @@ AlertCache table so subsequent page loads are instant.
 """
 import json
 from datetime import datetime, date, timedelta, timezone
+from sqlalchemy.orm import joinedload
 from app import db
 from app.models.student import Student
 from app.models.note import Note
@@ -206,7 +207,7 @@ def _check_iep504_reviews(user, student_ids, student_map, today):
 def _check_overdue_followups(user, today):
     """Follow-up tasks that are overdue."""
     alerts = []
-    overdue_notes = Note.query.filter(
+    overdue_notes = Note.query.options(joinedload(Note.student)).filter(
         Note.author_id == user.id,
         Note.follow_up_needed == True,
         Note.follow_up_date < today,

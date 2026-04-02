@@ -15,4 +15,3 @@ def log_action(action, resource_type=None, resource_id=None, details=None):
         ip_address=request.remote_addr if request else None,
     )
     db.session.add(entry)
-    db.session.commit()
