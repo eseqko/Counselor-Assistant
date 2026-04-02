@@ -40,10 +40,10 @@
         </span>
         <div style="display:flex;gap:6px;align-items:center;">
             <button class="btn btn-sm btn-outline" onclick="refreshAlerts()" title="Refresh">&#8635;</button>
-            <button class="btn btn-sm btn-outline" onclick="toggleAlertPanel()" id="alert-toggle">Collapse</button>
+            <button class="btn btn-sm btn-outline" onclick="toggleAlertPanel()" id="alert-toggle">Expand</button>
         </div>
     </div>
-    <div class="card-body" id="alert-list">
+    <div class="card-body" id="alert-list" style="display:none;">
         {% for alert in alerts %}
         <div class="alert-item priority-{{ alert.priority_label }}">
             <div class="alert-priority-dot"></div>
