@@ -12,6 +12,27 @@ login_manager.login_message_category = 'info'
 csrf = CSRFProtect()
 
 
+def _add_missing_indexes(app):
+    """Create indexes on frequently-filtered foreign key columns."""
+    import sqlalchemy
+    indexes = [
+        ('ix_notes_author_id', 'notes', 'author_id'),
+        ('ix_service_records_counselor_id', 'service_records', 'counselor_id'),
+        ('ix_calendar_events_owner_id', 'calendar_events', 'owner_id'),
+        ('ix_meeting_notes_author_id', 'meeting_notes', 'author_id'),
+        ('ix_grades_student_id', 'grades', 'student_id'),
+        ('ix_attendance_student_id', 'attendance_records', 'student_id'),
+    ]
+    for idx_name, table, column in indexes:
+        try:
+            db.session.execute(sqlalchemy.text(
+                f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"
+            ))
+        except Exception:
+            pass  # Table may not exist yet
+    db.session.commit()
+
+
 def _add_missing_columns(app):
     """Add any columns defined in models but missing from the SQLite database."""
     import sqlalchemy
@@ -106,17 +127,20 @@ def create_app(config_class=Config):
     app.register_blueprint(meeting_notes_bp, url_prefix='/meeting-notes')
     app.register_blueprint(search_bp)
 
-    # First-run setup redirect
+    # First-run setup redirect (cached after first successful check)
     @app.before_request
     def check_setup():
+        if getattr(app, '_setup_done', False):
+            return
         from flask import redirect, url_for
-        # Allow setup routes, static files, and public booking pages
         allowed = ('/setup', '/static', '/scheduling/book/')
         if any(request.path.startswith(p) for p in allowed):
             return
         from app.routes.setup import needs_setup
         if needs_setup():
             return redirect(url_for('setup.index'))
+        else:
+            app._setup_done = True
 
     # Theme context processor — injects user_theme into all templates
     @app.context_processor
@@ -129,13 +153,16 @@ def create_app(config_class=Config):
             }
         return {'user_theme': 'light', 'user_reduced_motion': False}
 
-    # Security headers
+    # Security + cache headers
     @app.after_request
-    def set_security_headers(response):
+    def set_headers(response):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        # Cache static assets so browsers don't re-download CSS/JS every page load
+        if request.path.startswith('/static/'):
+            response.headers['Cache-Control'] = 'public, max-age=43200'
         return response
 
     # Return JSON (not HTML) for CSRF errors on API endpoints
@@ -161,8 +188,9 @@ def create_app(config_class=Config):
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 
-        # Auto-migrate: add any missing columns to existing tables
+        # Auto-migrate: add any missing columns/indexes to existing tables
         _add_missing_columns(app)
+        _add_missing_indexes(app)
 
         # Create default admin user if none exists
         from app.models.user import User

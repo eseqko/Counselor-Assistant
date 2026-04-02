@@ -1,6 +1,7 @@
 """Global instant search across students, notes, and meeting notes."""
 from flask import Blueprint, request, jsonify, url_for
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
 from app import db, csrf
 from app.models.student import Student
 from app.models.note import Note
@@ -40,8 +41,8 @@ def instant_search():
             'url': url_for('caseload.view_student', id=s.id),
         })
 
-    # ── Counselor Notes ──
-    notes = Note.query.filter(
+    # ── Counselor Notes (eager-load student to avoid N+1) ──
+    notes = Note.query.options(joinedload(Note.student)).filter(
         Note.author_id == current_user.id,
         db.or_(
             Note.title.ilike(like),
@@ -50,9 +51,8 @@ def instant_search():
     ).order_by(Note.session_date.desc()).limit(5).all()
 
     for n in notes:
-        # Truncate content for preview
         preview = (n.title or n.content[:60] or 'Untitled note')
-        student = Student.query.get(n.student_id)
+        student = n.student  # already loaded via joinedload
         sub = ''
         if student:
             sub = f'{student.first_name} {student.last_name}'
