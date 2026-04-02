@@ -100,6 +100,7 @@ def create_app(config_class=Config):
     from app.routes.setup import setup_bp
     from app.routes.meeting_notes import meeting_notes_bp
     from app.routes.search import search_bp
+    from app.routes.mail_merge import mail_merge_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -126,6 +127,7 @@ def create_app(config_class=Config):
     app.register_blueprint(setup_bp)
     app.register_blueprint(meeting_notes_bp, url_prefix='/meeting-notes')
     app.register_blueprint(search_bp)
+    app.register_blueprint(mail_merge_bp, url_prefix='/mail-merge')
 
     # First-run setup redirect (cached after first successful check)
     @app.before_request
