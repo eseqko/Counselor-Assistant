@@ -672,9 +672,18 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
         tab.addEventListener('click', function() { switchFormat(this.dataset.format); });
     });
 
-    // Serialize before form submit
-    document.getElementById('noteForm').addEventListener('submit', function() {
+    // Serialize before form submit — also remove 'required' from hidden textarea
+    // so the browser doesn't silently block submission when in non-flow formats
+    document.getElementById('noteForm').addEventListener('submit', function(e) {
         serializeToContent();
+        var content = ta.value.trim();
+        if (!content) {
+            e.preventDefault();
+            alert('Please add some content before saving.');
+            return;
+        }
+        // Remove required so hidden textarea doesn't block form submit
+        ta.removeAttribute('required');
     });
 
     // Initialize format on load
