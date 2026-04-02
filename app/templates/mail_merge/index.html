@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+{% block title %}Mail Merge{% endblock %}
+{% block page_title %}Mail Merge — Letter Generator{% endblock %}
+
+{% block head %}
+<style>
+/* ── Layout ─────────────────────────────────────────── */
+.mm-container { display:flex; gap:20px; min-height:calc(100vh - 140px); }
+.mm-sidebar   { width:340px; flex-shrink:0; display:flex; flex-direction:column; gap:16px; }
+.mm-main      { flex:1; min-width:0; }
+
+/* ── Cards ──────────────────────────────────────────── */
+.mm-card {
+    background:var(--white); border-radius:10px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.1); padding:18px;
+}
+.mm-card h3 {
+    margin:0 0 12px; font-size:0.88rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.3px; color:var(--gray);
+}
+
+/* ── Template selector ──────────────────────────────── */
+.template-list { display:flex; flex-direction:column; gap:6px; }
+.template-opt {
+    padding:10px 12px; border-radius:8px; cursor:pointer;
+    border:2px solid transparent; transition:all 0.15s;
+    font-size:0.85rem; font-weight:500;
+}
+.template-opt:hover { background:var(--bg); }
+.template-opt.selected { border-color:var(--primary); background:var(--bg); }
+.template-opt .cat-tag {
+    font-size:0.7rem; padding:2px 6px; border-radius:4px;
+    background:var(--primary-light); color:white; margin-left:6px;
+}
+
+/* ── Student picker ─────────────────────────────────── */
+.student-filter { margin-bottom:10px; }
+.student-filter input, .student-filter select {
+    width:100%; padding:8px 10px; border:1px solid var(--light-gray);
+    border-radius:6px; font-size:0.82rem; margin-bottom:6px;
+}
+.student-list {
+    max-height:300px; overflow-y:auto; display:flex;
+    flex-direction:column; gap:2px;
+}
+.student-row {
+    display:flex; align-items:center; gap:8px;
+    padding:6px 8px; border-radius:6px; font-size:0.82rem; cursor:pointer;
+}
+.student-row:hover { background:var(--bg); }
+.student-row input[type="checkbox"] { flex-shrink:0; }
+.student-row .sname { flex:1; }
+.student-row .risk-dot {
+    width:8px; height:8px; border-radius:50%; flex-shrink:0;
+}
+.risk-dot.critical { background:var(--danger); }
+.risk-dot.at-risk  { background:#E6A800; }
+.risk-dot.warning  { background:#BF8700; }
+.risk-dot.on-track { background:var(--success); }
+.risk-dot.unknown  { background:var(--gray); }
+
+.select-actions { display:flex; gap:8px; margin-bottom:8px; }
+.select-actions button {
+    font-size:0.75rem; padding:4px 8px; border:1px solid var(--light-gray);
+    border-radius:4px; cursor:pointer; background:var(--white);
+}
+.select-actions button:hover { background:var(--bg); }
+
+.selected-count {
+    font-size:0.78rem; color:var(--gray); margin-top:6px;
+    font-weight:600;
+}
+
+/* ── Preview area ───────────────────────────────────── */
+.preview-toolbar {
+    display:flex; align-items:center; gap:10px; margin-bottom:14px;
+    flex-wrap:wrap;
+}
+.preview-toolbar .btn { font-size:0.82rem; padding:8px 16px; }
+.letter-nav {
+    display:flex; align-items:center; gap:8px; margin-left:auto;
+    font-size:0.82rem;
+}
+.letter-nav button {
+    padding:4px 10px; border:1px solid var(--light-gray);
+    border-radius:4px; cursor:pointer; background:var(--white);
+}
+.letter-nav button:hover { background:var(--bg); }
+
+.letter-preview {
+    background:white; border:1px solid var(--light-gray);
+    border-radius:8px; padding:40px 50px; min-height:500px;
+    font-family:'Times New Roman', Times, serif; font-size:13px;
+    line-height:1.6; white-space:pre-wrap; color:#222;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+.letter-preview.empty {
+    display:flex; align-items:center; justify-content:center;
+    color:var(--gray); font-family:inherit; font-style:italic;
+    font-size:0.9rem;
+}
+
+/* ── Merge field chips ──────────────────────────────── */
+.merge-fields { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+.merge-field {
+    font-size:0.7rem; padding:3px 7px; border-radius:4px;
+    background:var(--bg); border:1px solid var(--light-gray);
+    cursor:pointer; font-family:monospace;
+}
+.merge-field:hover { background:var(--primary-light); color:white; }
+
+/* ── Edit mode ──────────────────────────────────────── */
+.letter-editor {
+    width:100%; min-height:500px; padding:20px; border:1px solid var(--light-gray);
+    border-radius:8px; font-family:'Courier New', monospace; font-size:0.85rem;
+    line-height:1.6; resize:vertical;
+}
+
+/* ── Print styles ───────────────────────────────────── */
+@media print {
+    body * { visibility:hidden; }
+    .print-area, .print-area * { visibility:visible; }
+    .print-area {
+        position:absolute; left:0; top:0; width:100%;
+    }
+    .print-letter {
+        page-break-after:always; padding:0.75in 1in;
+        font-family:'Times New Roman', Times, serif;
+        font-size:12pt; line-height:1.5; white-space:pre-wrap;
+    }
+    .print-letter:last-child { page-break-after:auto; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mm-container">
+    <!-- ── Left sidebar: template + student picker ── -->
+    <div class="mm-sidebar">
+        <div class="mm-card">
+            <h3>Letter Template</h3>
+            <div class="template-list" id="templateList">
+                {% for t in templates %}
+                <div class="template-opt" data-id="{{ t.id }}" onclick="selectTemplate('{{ t.id }}')">
+                    {{ t.name }}
+                    <span class="cat-tag">{{ t.category }}</span>
+                    {% if not t.builtin %}
+                    <span class="cat-tag" style="background:var(--gray);">custom</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <div style="margin-top:10px;">
+                <button class="btn btn-outline" style="font-size:0.78rem; width:100%;" onclick="toggleEditor()">
+                    Edit / Create Template
+                </button>
+            </div>
+        </div>
+
+        <div class="mm-card">
+            <h3>Select Students</h3>
+            <div class="student-filter">
+                <input type="text" id="studentSearch" placeholder="Search by name..." oninput="filterStudents()">
+                <select id="riskFilter" onchange="filterStudents()">
+                    <option value="">All Risk Levels</option>
+                    <option value="critical">Critical</option>
+                    <option value="at-risk">At-Risk</option>
+                    <option value="warning">Warning</option>
+                    <option value="on-track">On Track</option>
+                </select>
+                <select id="gradeFilter" onchange="filterStudents()">
+                    <option value="">All Grades</option>
+                    <option value="12">Grade 12</option>
+                    <option value="11">Grade 11</option>
+                    <option value="10">Grade 10</option>
+                    <option value="9">Grade 9</option>
+                </select>
+            </div>
+            <div class="select-actions">
+                <button onclick="selectAll()">Select Visible</button>
+                <button onclick="deselectAll()">Deselect All</button>
+                <button onclick="selectAtRisk()">Select At-Risk+</button>
+            </div>
+            <div class="student-list" id="studentList">
+                {% for s in students %}
+                <label class="student-row" data-name="{{ s.name|lower }}" data-risk="{{ s.risk }}" data-grade="{{ s.grade_level }}">
+                    <input type="checkbox" class="student-cb" value="{{ s.id }}">
+                    <span class="sname">{{ s.name }}</span>
+                    <span class="risk-dot {{ s.risk }}" title="{{ s.risk }} — {{ s.pct }}%"></span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="selected-count" id="selectedCount">0 students selected</div>
+        </div>
+    </div>
+
+    <!-- ── Main area: preview / editor ── -->
+    <div class="mm-main">
+        <!-- Editor (hidden by default) -->
+        <div class="mm-card" id="editorPanel" style="display:none; margin-bottom:16px;">
+            <h3>Edit Template</h3>
+            <input type="text" id="templateName" placeholder="Template name..."
+                   style="width:100%; padding:8px; margin-bottom:8px; border:1px solid var(--light-gray); border-radius:6px; font-size:0.85rem;">
+            <textarea class="letter-editor" id="letterEditor"></textarea>
+            <div style="margin-top:8px;">
+                <strong style="font-size:0.78rem; color:var(--gray);">Available merge fields (click to insert):</strong>
+                <div class="merge-fields">
+                    <span class="merge-field" onclick="insertField('{{student_name}}')">{{student_name}}</span>
+                    <span class="merge-field" onclick="insertField('{{student_first_name}}')">{{student_first_name}}</span>
+                    <span class="merge-field" onclick="insertField('{{student_last_name}}')">{{student_last_name}}</span>
+                    <span class="merge-field" onclick="insertField('{{student_id}}')">{{student_id}}</span>
+                    <span class="merge-field" onclick="insertField('{{grade_level}}')">{{grade_level}}</span>
+                    <span class="merge-field" onclick="insertField('{{address}}')">{{address}}</span>
+                    <span class="merge-field" onclick="insertField('{{parent_name}}')">{{parent_name}}</span>
+                    <span class="merge-field" onclick="insertField('{{parent_email}}')">{{parent_email}}</span>
+                    <span class="merge-field" onclick="insertField('{{parent_phone}}')">{{parent_phone}}</span>
+                    <span class="merge-field" onclick="insertField('{{counselor_name}}')">{{counselor_name}}</span>
+                    <span class="merge-field" onclick="insertField('{{date}}')">{{date}}</span>
+                    <span class="merge-field" onclick="insertField('{{credits_completed}}')">{{credits_completed}}</span>
+                    <span class="merge-field" onclick="insertField('{{credits_needed}}')">{{credits_needed}}</span>
+                    <span class="merge-field" onclick="insertField('{{credits_required}}')">{{credits_required}}</span>
+                    <span class="merge-field" onclick="insertField('{{progress_pct}}')">{{progress_pct}}</span>
+                    <span class="merge-field" onclick="insertField('{{risk_level}}')">{{risk_level}}</span>
+                    <span class="merge-field" onclick="insertField('{{current_courses}}')">{{current_courses}}</span>
+                </div>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px;">
+                <button class="btn btn-primary" onclick="saveTemplate()">Save as New Template</button>
+                <button class="btn btn-outline" onclick="useEditorText()">Use Without Saving</button>
+            </div>
+        </div>
+
+        <!-- Preview toolbar -->
+        <div class="preview-toolbar">
+            <button class="btn btn-primary" onclick="generateLetters()">Generate Letters</button>
+            <button class="btn btn-outline" onclick="printLetters()">Print All</button>
+            <div class="letter-nav" id="letterNav" style="display:none;">
+                <button onclick="prevLetter()">&laquo; Prev</button>
+                <span id="letterIndex">1 of 1</span>
+                <button onclick="nextLetter()">Next &raquo;</button>
+            </div>
+        </div>
+
+        <!-- Letter preview -->
+        <div class="mm-card" id="previewCard">
+            <div class="letter-preview empty" id="letterPreview">
+                Select a template and students, then click "Generate Letters" to preview.
+            </div>
+        </div>
+
+        <!-- Hidden print area -->
+        <div class="print-area" id="printArea" style="display:none;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF = '{{ csrf_token() }}';
+const templates = {{ templates|tojson }};
+let selectedTemplateId = null;
+let customBody = '';
+let letters = [];
+let currentIdx = 0;
+
+// ── Template selection ──
+function selectTemplate(id) {
+    selectedTemplateId = id;
+    document.querySelectorAll('.template-opt').forEach(el => {
+        el.classList.toggle('selected', el.dataset.id === id);
+    });
+    // Load into editor if open
+    const t = templates.find(t => t.id === id);
+    if (t) {
+        document.getElementById('letterEditor').value = t.body;
+        document.getElementById('templateName').value = t.builtin ? '' : t.name;
+    }
+    customBody = '';
+}
+
+// ── Editor toggle ──
+function toggleEditor() {
+    const panel = document.getElementById('editorPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function insertField(field) {
+    const editor = document.getElementById('letterEditor');
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, start) + field + editor.value.substring(end);
+    editor.focus();
+    editor.selectionStart = editor.selectionEnd = start + field.length;
+}
+
+function useEditorText() {
+    customBody = document.getElementById('letterEditor').value;
+    selectedTemplateId = null;
+    document.querySelectorAll('.template-opt').forEach(el => el.classList.remove('selected'));
+    document.getElementById('editorPanel').style.display = 'none';
+    showToast('Using edited template text');
+}
+
+function saveTemplate() {
+    const name = document.getElementById('templateName').value.trim();
+    const body = document.getElementById('letterEditor').value.trim();
+    if (!name) return showToast('Please enter a template name', true);
+    if (!body) return showToast('Template body is empty', true);
+
+    fetch('/mail-merge/api/template', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({name, body, category: 'custom'})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            showToast('Template saved!');
+            templates.push(data.template);
+            // Add to list
+            const list = document.getElementById('templateList');
+            const div = document.createElement('div');
+            div.className = 'template-opt';
+            div.dataset.id = data.template.id;
+            div.onclick = () => selectTemplate(data.template.id);
+            div.innerHTML = `${data.template.name} <span class="cat-tag">custom</span>`;
+            list.appendChild(div);
+        } else {
+            showToast(data.error, true);
+        }
+    });
+}
+
+// ── Student filtering ──
+function filterStudents() {
+    const search = document.getElementById('studentSearch').value.toLowerCase();
+    const risk = document.getElementById('riskFilter').value;
+    const grade = document.getElementById('gradeFilter').value;
+
+    document.querySelectorAll('.student-row').forEach(row => {
+        const matchName = !search || row.dataset.name.includes(search);
+        const matchRisk = !risk || row.dataset.risk === risk;
+        const matchGrade = !grade || row.dataset.grade === grade;
+        row.style.display = (matchName && matchRisk && matchGrade) ? '' : 'none';
+    });
+}
+
+function getVisibleRows() {
+    return [...document.querySelectorAll('.student-row')].filter(r => r.style.display !== 'none');
+}
+
+function selectAll() {
+    getVisibleRows().forEach(r => { r.querySelector('input').checked = true; });
+    updateCount();
+}
+
+function deselectAll() {
+    document.querySelectorAll('.student-cb').forEach(cb => { cb.checked = false; });
+    updateCount();
+}
+
+function selectAtRisk() {
+    document.querySelectorAll('.student-row').forEach(row => {
+        const risk = row.dataset.risk;
+        const cb = row.querySelector('input');
+        if (risk === 'critical' || risk === 'at-risk') {
+            cb.checked = true;
+        }
+    });
+    updateCount();
+}
+
+function updateCount() {
+    const n = document.querySelectorAll('.student-cb:checked').length;
+    document.getElementById('selectedCount').textContent = `${n} student${n !== 1 ? 's' : ''} selected`;
+}
+
+document.addEventListener('change', e => {
+    if (e.target.classList.contains('student-cb')) updateCount();
+});
+
+// ── Letter generation ──
+function generateLetters() {
+    const studentIds = [...document.querySelectorAll('.student-cb:checked')].map(cb => parseInt(cb.value));
+    if (!studentIds.length) return showToast('Select at least one student', true);
+    if (!selectedTemplateId && !customBody) return showToast('Select or create a template first', true);
+
+    const preview = document.getElementById('letterPreview');
+    preview.textContent = 'Generating letters...';
+    preview.classList.remove('empty');
+
+    fetch('/mail-merge/api/preview', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({
+            template_id: selectedTemplateId || '',
+            student_ids: studentIds,
+            custom_body: customBody,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.ok) return showToast(data.error, true);
+        letters = data.letters;
+        currentIdx = 0;
+        showLetter();
+    })
+    .catch(() => showToast('Failed to generate letters', true));
+}
+
+function showLetter() {
+    const preview = document.getElementById('letterPreview');
+    const nav = document.getElementById('letterNav');
+    if (!letters.length) {
+        preview.textContent = 'No letters generated.';
+        preview.classList.add('empty');
+        nav.style.display = 'none';
+        return;
+    }
+    preview.textContent = letters[currentIdx].content;
+    preview.classList.remove('empty');
+    nav.style.display = letters.length > 1 ? 'flex' : 'none';
+    document.getElementById('letterIndex').textContent =
+        `${currentIdx + 1} of ${letters.length} — ${letters[currentIdx].student_name}`;
+}
+
+function prevLetter() {
+    if (currentIdx > 0) { currentIdx--; showLetter(); }
+}
+function nextLetter() {
+    if (currentIdx < letters.length - 1) { currentIdx++; showLetter(); }
+}
+
+// ── Print ──
+function printLetters() {
+    if (!letters.length) return showToast('Generate letters first', true);
+    const area = document.getElementById('printArea');
+    area.innerHTML = letters.map(l =>
+        `<div class="print-letter">${escapeHtml(l.content)}</div>`
+    ).join('');
+    area.style.display = 'block';
+    window.print();
+    setTimeout(() => { area.style.display = 'none'; }, 500);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ── Toast ──
+function showToast(msg, isError) {
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = `
+        position:fixed; bottom:24px; right:24px; padding:12px 20px;
+        border-radius:8px; font-size:0.85rem; font-weight:500; z-index:9999;
+        color:white; background:${isError ? 'var(--danger)' : 'var(--success)'};
+        box-shadow:0 2px 12px rgba(0,0,0,0.15); transition:opacity 0.3s;
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 2500);
+}
+</script>
+{% endblock %}
