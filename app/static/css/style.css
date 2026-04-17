@@ -99,6 +99,28 @@ body {
 .nav-group.is-collapsed .nav-chevron { transform: rotate(-90deg); }
 .nav-group.is-collapsed .nav-group-items { display: none; }
 
+/* Top-right user menu */
+.user-chip:hover { background: var(--light-gray); }
+.user-menu-item:hover { background: var(--light-gray); }
+.theme-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s;
+}
+.theme-btn:hover { background: var(--light-gray); }
+.theme-btn.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
 .nav-item {
     display: flex;
     align-items: center;
