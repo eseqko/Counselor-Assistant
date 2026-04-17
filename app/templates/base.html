@@ -43,6 +43,9 @@
             <a href="{{ url_for('graduation.index') }}" class="nav-item {% if request.blueprint == 'graduation' %}active{% endif %}">
                 <span class="nav-icon">&#127891;</span> Graduation Tracker
             </a>
+            <a href="{{ url_for('academic_plan.index') }}" class="nav-item {% if request.blueprint == 'academic_plan' %}active{% endif %}">
+                <span class="nav-icon">&#128197;</span> Academic Plan
+            </a>
             <a href="{{ url_for('iep504.index') }}" class="nav-item {% if request.blueprint == 'iep504' %}active{% endif %}">
                 <span class="nav-icon">&#9855;</span> IEP/504 Oversight
             </a>
