@@ -159,6 +159,16 @@ def create_app(config_class=Config):
             }
         return {'user_theme': 'light', 'user_reduced_motion': False}
 
+    # Cache-bust static assets by file mtime so browsers refetch on change.
+    @app.context_processor
+    def inject_static_version():
+        def static_v(filename):
+            try:
+                return int(os.path.getmtime(os.path.join(app.static_folder, filename)))
+            except OSError:
+                return 0
+        return {'static_v': static_v}
+
     # Security + cache headers
     @app.after_request
     def set_headers(response):
