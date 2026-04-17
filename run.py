@@ -22,9 +22,12 @@ if __name__ == '__main__':
     print("  No data leaves this computer.")
     print()
     print("  Open your browser to: http://127.0.0.1:5000")
+    print("  For mobile (Tailscale): http://<your-tailscale-ip>:5000")
+    print("  See TAILSCALE_SETUP.md for iPhone setup.")
     print()
     print("  Press Ctrl+C to stop the server.")
     print("=" * 60)
     print()
-    app.run(host='127.0.0.1', port=5000,
+    host = os.environ.get('HOST', '0.0.0.0')
+    app.run(host=host, port=5000,
             debug=os.environ.get('FLASK_DEBUG', '').lower() == 'true')

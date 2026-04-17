@@ -167,6 +167,10 @@ def create_app(config_class=Config):
         # Cache static assets so browsers don't re-download CSS/JS every page load
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=43200'
+        # Service worker must be able to control the root scope and always load fresh
+        if request.path == '/static/sw.js':
+            response.headers['Service-Worker-Allowed'] = '/'
+            response.headers['Cache-Control'] = 'no-cache'
         return response
 
     # Return JSON (not HTML) for CSRF errors on API endpoints
