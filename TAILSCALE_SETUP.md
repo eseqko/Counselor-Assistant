@@ -40,11 +40,17 @@ and all student data stays on your PC (FERPA-safe).
 
 ### 4. Start Counselor Assistant
 - Run `start.bat` on your PC the way you always do.
-- The console now shows two lines:
+- The app auto-detects your Tailscale IP and binds **only** to the Tailscale
+  interface — so the school LAN cannot see the port. The console prints
+  something like:
   ```
-  Open your browser to: http://127.0.0.1:5000
-  For mobile (Tailscale): http://<your-tailscale-ip>:5000
+  Tailscale detected. Server bound to: 100.101.102.103
+  On this PC:   http://100.101.102.103:5000
+  On iPhone:    http://100.101.102.103:5000 (via Tailscale)
+  The school LAN cannot see this port.
   ```
+- **On the PC, use the Tailscale URL** (not `127.0.0.1`) — just bookmark
+  the address printed in the console.
 
 ### 5. Open it on your iPhone
 1. Make sure Tailscale on your iPhone shows **Connected**.
@@ -76,8 +82,15 @@ Tap it any time. It launches full-screen, like a real app.
 **"Safari can't open the page"**
 - Double-check the Tailscale IP you typed. It starts with `100.` and has four
   numbers separated by dots.
-- On the PC, open `http://127.0.0.1:5000` in a browser — if that doesn't work,
-  Counselor Assistant isn't running. Start it with `start.bat`.
+- On the PC, open `http://<your-tailscale-ip>:5000` in a browser — if that
+  doesn't work, Counselor Assistant isn't running. Start it with `start.bat`.
+
+**"IT warned me about the app listening on the network"**
+- The app now binds **only to your Tailscale interface** (100.x.x.x) — it
+  does NOT listen on the school LAN. If the console at startup says
+  "Tailscale detected. Server bound to: 100.x.x.x", you're safe.
+- If the console says "Tailscale not detected. Local-only mode.", Tailscale
+  isn't running on the PC. Start it before launching the app.
 
 **"I can reach it from the PC but not the phone"**
 - Open the Tailscale app on your iPhone. If it says "Not Connected", tap the
