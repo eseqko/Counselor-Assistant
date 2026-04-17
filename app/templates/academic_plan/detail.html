@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+{% block title %}Academic Plan — {{ student.first_name }} {{ student.last_name }}{% endblock %}
+{% block page_title %}Academic Plan — {{ student.first_name }} {{ student.last_name }}{% endblock %}
+
+{% block head %}
+<style>
+.ap-layout { display:flex; gap:20px; min-height:calc(100vh - 140px); }
+.ap-grid-wrap { flex:1; min-width:0; }
+.ap-sidebar { width:300px; flex-shrink:0; display:flex; flex-direction:column; gap:16px; }
+
+.ap-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+.ap-toolbar .btn { font-size:0.82rem; padding:8px 16px; }
+
+/* ── 4-year grid ── */
+.year-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+.year-col {
+    background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.1);
+    overflow:hidden;
+}
+.year-header {
+    padding:10px 14px; font-weight:700; font-size:0.88rem;
+    text-align:center; color:white;
+}
+.year-header.historical { background:var(--gray); }
+.year-header.current { background:var(--primary); }
+.year-header.planned { background:var(--accent, #6366f1); }
+.year-header.empty { background:var(--light-gray); color:var(--gray); }
+
+.term-label {
+    padding:4px 14px; font-size:0.7rem; font-weight:600; text-transform:uppercase;
+    letter-spacing:0.3px; color:var(--gray); background:var(--bg); border-top:1px solid var(--light-gray);
+}
+
+.slot {
+    padding:8px 12px; border-bottom:1px solid var(--light-gray);
+    font-size:0.8rem; min-height:44px; display:flex; align-items:center;
+    gap:6px; position:relative;
+}
+.slot.historical { background:#f9fafb; }
+.slot.current { background:#eff6ff; }
+.slot.ai { background:#f5f3ff; }
+.slot.editable { cursor:pointer; }
+.slot.editable:hover { background:var(--bg); }
+.slot.empty-slot { color:var(--light-gray); font-style:italic; }
+
+.slot-title { flex:1; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.slot-grade {
+    font-size:0.72rem; font-weight:700; padding:2px 6px; border-radius:4px;
+    flex-shrink:0;
+}
+.slot-grade.passing { background:#E8F8E8; color:var(--success); }
+.slot-grade.failing { background:#FCE8E8; color:var(--danger); }
+.slot-grade.progress { background:#EFF6FF; color:var(--primary); }
+
+.slot-tag {
+    font-size:0.62rem; padding:1px 5px; border-radius:3px; font-weight:600;
+    flex-shrink:0;
+}
+.slot-tag.ai-tag { background:#EDE9FE; color:#7C3AED; }
+.slot-tag.ag-tag { background:#DBEAFE; color:#2563EB; }
+
+.slot-remove {
+    position:absolute; right:4px; top:4px; background:none; border:none;
+    color:var(--gray); cursor:pointer; font-size:0.7rem; display:none;
+    padding:2px 4px; border-radius:3px;
+}
+.slot.editable:hover .slot-remove { display:block; }
+.slot-remove:hover { background:var(--danger); color:white; }
+
+/* ── Course picker popover ── */
+.picker-overlay {
+    display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.3); z-index:100;
+}
+.picker-overlay.active { display:flex; align-items:center; justify-content:center; }
+.picker-panel {
+    background:var(--white); border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.2);
+    width:500px; max-height:70vh; display:flex; flex-direction:column;
+}
+.picker-header { padding:16px; border-bottom:1px solid var(--light-gray); }
+.picker-header input {
+    width:100%; padding:8px 12px; border:1px solid var(--light-gray);
+    border-radius:6px; font-size:0.85rem;
+}
+.picker-list { overflow-y:auto; flex:1; padding:8px; }
+.picker-item {
+    padding:8px 12px; border-radius:6px; cursor:pointer; font-size:0.82rem;
+    display:flex; justify-content:space-between; align-items:center;
+}
+.picker-item:hover { background:var(--bg); }
+.picker-item .pi-title { font-weight:500; }
+.picker-item .pi-meta { font-size:0.72rem; color:var(--gray); }
+.picker-cancel { padding:12px; border-top:1px solid var(--light-gray); text-align:center; }
+
+/* ── Sidebar: projection panel ── */
+.ap-card {
+    background:var(--white); border-radius:10px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.1); padding:16px;
+}
+.ap-card h3 {
+    margin:0 0 10px; font-size:0.82rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.3px; color:var(--gray);
+}
+
+.risk-banner {
+    padding:10px 14px; border-radius:8px; font-weight:700; font-size:0.85rem;
+    text-align:center; margin-bottom:4px;
+}
+.risk-banner.critical { background:#FCE8E8; color:var(--danger); }
+.risk-banner.at-risk  { background:#FFF3D6; color:#996300; }
+.risk-banner.warning  { background:#FFF8E1; color:#BF8700; }
+.risk-banner.on-track { background:#E8F8E8; color:var(--success); }
+.risk-banner.unknown  { background:var(--light-gray); color:var(--gray); }
+
+.proj-table { width:100%; font-size:0.78rem; }
+.proj-table th { text-align:left; padding:4px 6px; font-weight:600; color:var(--gray); font-size:0.7rem; text-transform:uppercase; }
+.proj-table td { padding:4px 6px; }
+.proj-table .gap { color:var(--danger); font-weight:600; }
+
+.statement-text { font-size:0.82rem; color:var(--text); line-height:1.5; margin-top:8px; }
+
+.notes-area {
+    width:100%; min-height:80px; padding:10px; border:1px solid var(--light-gray);
+    border-radius:6px; font-size:0.82rem; resize:vertical;
+}
+
+.lock-info { font-size:0.78rem; color:var(--success); font-weight:600; margin-top:8px; }
+
+/* ── Print button on page ── */
+@media print {
+    body * { visibility:hidden; }
+    .print-area, .print-area * { visibility:visible; }
+    .print-area { position:absolute; left:0; top:0; width:100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ap-layout">
+    <div class="ap-grid-wrap">
+        <!-- Toolbar -->
+        <div class="ap-toolbar">
+            <a href="{{ url_for('academic_plan.index') }}" class="btn btn-outline" style="font-size:0.78rem;">&larr; All Plans</a>
+            <button class="btn btn-primary" id="btnAutoBuild" onclick="autoBuild()" {% if plan and plan.is_locked %}disabled{% endif %}>
+                Auto-Build (AI)
+            </button>
+            <button class="btn btn-primary" id="btnSave" onclick="savePlan()" {% if plan and plan.is_locked %}disabled{% endif %}>
+                Save
+            </button>
+            <button class="btn btn-outline" id="btnLock" onclick="toggleLock()">
+                {% if plan and plan.is_locked %}Unlock{% else %}Lock &amp; Sign{% endif %}
+            </button>
+            <a href="{{ url_for('graduation.student_detail', student_id=student.id) }}"
+               class="btn btn-outline" style="font-size:0.78rem;">View Graduation Audit</a>
+            <a href="{{ url_for('academic_plan.print_plan', student_id=student.id) }}" class="btn btn-outline" target="_blank">Print</a>
+        </div>
+
+        <!-- 4-year grid -->
+        <div class="year-grid" id="yearGrid">
+            {% for gl in range(9, 13) %}
+            {% set year = grid[gl] %}
+            {% set yeartype = 'historical' if year.is_historical else ('current' if year.is_current else ('planned' if year.is_planned else 'empty')) %}
+            <div class="year-col" data-grade="{{ gl }}">
+                <div class="year-header {{ yeartype }}">
+                    Grade {{ gl }}
+                    {% if year.is_current %} (Current){% endif %}
+                    {% if year.is_historical %} (Complete){% endif %}
+                </div>
+
+                <div class="term-label">Term 1 (Q1-Q2)</div>
+                {% for slot in year.term1 %}
+                <div class="slot {{ slot.source }} {% if not year.is_historical and not year.is_current %}editable{% endif %}{% if slot.source == 'empty' %} empty-slot{% endif %}"
+                     data-grade="{{ gl }}" data-term="term1" data-slot="{{ slot.slot }}"
+                     {% if not year.is_historical and not year.is_current %}onclick="openPicker({{ gl }}, 'term1', {{ slot.slot }})"{% endif %}>
+                    {% if slot.source != 'empty' %}
+                    <span class="slot-title" title="{{ slot.course_title }}">{{ slot.course_title }}</span>
+                    {% if slot.letter_grade %}
+                    <span class="slot-grade {% if slot.letter_grade in ['F','NP','I','W'] %}failing{% elif slot.source == 'current' %}progress{% else %}passing{% endif %}">
+                        {{ slot.letter_grade }}
+                    </span>
+                    {% endif %}
+                    {% if slot.source == 'ai' %}<span class="slot-tag ai-tag">AI</span>{% endif %}
+                    {% if slot.is_ag %}<span class="slot-tag ag-tag">a-g</span>{% endif %}
+                    {% if not year.is_historical and not year.is_current %}
+                    <button class="slot-remove" onclick="event.stopPropagation(); clearSlot({{ gl }}, 'term1', {{ slot.slot }})" title="Remove">&times;</button>
+                    {% endif %}
+                    {% else %}
+                    <span class="slot-title">+ Add course</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <div class="term-label">Term 2 (Q3-Q4)</div>
+                {% for slot in year.term2 %}
+                <div class="slot {{ slot.source }} {% if not year.is_historical and not year.is_current %}editable{% endif %}{% if slot.source == 'empty' %} empty-slot{% endif %}"
+                     data-grade="{{ gl }}" data-term="term2" data-slot="{{ slot.slot }}"
+                     {% if not year.is_historical and not year.is_current %}onclick="openPicker({{ gl }}, 'term2', {{ slot.slot }})"{% endif %}>
+                    {% if slot.source != 'empty' %}
+                    <span class="slot-title" title="{{ slot.course_title }}">{{ slot.course_title }}</span>
+                    {% if slot.letter_grade %}
+                    <span class="slot-grade {% if slot.letter_grade in ['F','NP','I','W'] %}failing{% elif slot.source == 'current' %}progress{% else %}passing{% endif %}">
+                        {{ slot.letter_grade }}
+                    </span>
+                    {% endif %}
+                    {% if slot.source == 'ai' %}<span class="slot-tag ai-tag">AI</span>{% endif %}
+                    {% if slot.is_ag %}<span class="slot-tag ag-tag">a-g</span>{% endif %}
+                    {% if not year.is_historical and not year.is_current %}
+                    <button class="slot-remove" onclick="event.stopPropagation(); clearSlot({{ gl }}, 'term2', {{ slot.slot }})" title="Remove">&times;</button>
+                    {% endif %}
+                    {% else %}
+                    <span class="slot-title">+ Add course</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if plan and plan.is_locked %}
+        <div class="lock-info">Plan locked by {{ current_user.display_name }} on {{ plan.locked_at.strftime('%b %d, %Y') if plan.locked_at else 'N/A' }}.</div>
+        {% endif %}
+    </div>
+
+    <!-- ── Right sidebar: projections ── -->
+    <div class="ap-sidebar">
+        <div class="ap-card">
+            <h3>Projected Graduation</h3>
+            <div class="risk-banner {{ projection.risk }}" id="riskBanner">
+                {{ projection.risk|upper }} — {{ projection.total_projected|int }}/{{ projection.total_required }} credits
+            </div>
+            <div class="statement-text" id="projStatement">{{ projection.statement }}</div>
+        </div>
+
+        <div class="ap-card">
+            <h3>Credits by Subject</h3>
+            <table class="proj-table" id="creditsTable">
+                <thead><tr><th>Subject</th><th>Req</th><th>Proj</th><th>Gap</th></tr></thead>
+                <tbody>
+                    {% for subj, data in projection.credits.items() %}
+                    <tr>
+                        <td>{{ subj }}</td>
+                        <td>{{ data.required|int }}</td>
+                        <td>{{ data.projected|int }}</td>
+                        <td class="{% if data.gap > 0 %}gap{% endif %}">{{ data.gap|int if data.gap > 0 else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if projection.ag %}
+        <div class="ap-card">
+            <h3>A-G Status ({{ projection.ag_met }}/7)</h3>
+            <table class="proj-table">
+                <thead><tr><th>Area</th><th>Req</th><th>Proj</th><th>Met?</th></tr></thead>
+                <tbody>
+                    {% for area, data in projection.ag.items() %}
+                    <tr>
+                        <td>{{ data.label }}</td>
+                        <td>{{ data.required|int }}</td>
+                        <td>{{ data.projected|int }}</td>
+                        <td>{% if data.isMet %}Yes{% else %}<span class="gap">No</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="ap-card">
+            <h3>Counselor Notes</h3>
+            <textarea class="notes-area" id="planNotes" {% if plan and plan.is_locked %}disabled{% endif %}
+                      placeholder="Notes about this student's plan...">{{ plan.notes if plan and plan.notes else '' }}</textarea>
+        </div>
+    </div>
+</div>
+
+<!-- Course picker overlay -->
+<div class="picker-overlay" id="pickerOverlay">
+    <div class="picker-panel">
+        <div class="picker-header">
+            <input type="text" id="pickerSearch" placeholder="Search courses..." oninput="filterPicker()">
+        </div>
+        <div class="picker-list" id="pickerList"></div>
+        <div class="picker-cancel">
+            <button class="btn btn-outline" onclick="closePicker()">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var CSRF = '{{ csrf_token() }}';
+var studentId = {{ student.id }};
+var currentGrade = {{ current_grade }};
+var isLocked = {{ 'true' if plan and plan.is_locked else 'false' }};
+var catalog = {{ catalog|tojson }};
+
+// In-memory plan state (future years only)
+var planState = {};
+{% if plan and plan.plan_json %}
+try { planState = JSON.parse('{{ plan.plan_json|safe }}'); } catch(e) { planState = {}; }
+{% endif %}
+
+// ── Picker ──
+var pickerTarget = null;  // {grade, term, slot}
+
+function openPicker(grade, term, slot) {
+    if (isLocked) return;
+    pickerTarget = {grade: grade, term: term, slot: slot};
+    var list = document.getElementById('pickerList');
+    list.innerHTML = '';
+    // Filter catalog for this grade level
+    var filtered = catalog.filter(function(c) {
+        return c.grade_levels.indexOf(String(grade)) >= 0;
+    });
+    filtered.forEach(function(c) {
+        var div = document.createElement('div');
+        div.className = 'picker-item';
+        div.innerHTML = '<div><span class="pi-title">' + escHtml(c.title) + '</span>' +
+            ' <span class="pi-meta">(' + escHtml(c.course_number || '') + ')</span></div>' +
+            '<div class="pi-meta">' + escHtml(c.subject_area) +
+            ' &middot; ' + c.credits + 'cr' +
+            (c.is_ag ? ' &middot; a-g' : '') + '</div>';
+        div.onclick = function() { pickCourse(c); };
+        list.appendChild(div);
+    });
+    document.getElementById('pickerSearch').value = '';
+    document.getElementById('pickerOverlay').classList.add('active');
+    document.getElementById('pickerSearch').focus();
+}
+
+function closePicker() {
+    document.getElementById('pickerOverlay').classList.remove('active');
+    pickerTarget = null;
+}
+
+function filterPicker() {
+    var q = document.getElementById('pickerSearch').value.toLowerCase();
+    document.querySelectorAll('.picker-item').forEach(function(el) {
+        el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+
+function pickCourse(course) {
+    if (!pickerTarget) return;
+    var gl = String(pickerTarget.grade);
+    if (!planState[gl]) planState[gl] = {term1: [], term2: []};
+    var term = planState[gl][pickerTarget.term] || [];
+    // Ensure slots array is filled
+    while (term.length <= pickerTarget.slot) {
+        term.push({slot: term.length, course_number:'', course_title:'', credits:5, subject_area:'', is_ag:false, source:'empty'});
+    }
+    term[pickerTarget.slot] = {
+        slot: pickerTarget.slot,
+        course_number: course.course_number || '',
+        course_title: course.title || '',
+        credits: course.credits || 5,
+        subject_area: course.subject_area || '',
+        is_ag: course.is_ag || false,
+        source: 'planned',
+    };
+    planState[gl][pickerTarget.term] = term;
+    closePicker();
+    refreshGrid();
+}
+
+function clearSlot(grade, term, slotIdx) {
+    if (isLocked) return;
+    var gl = String(grade);
+    if (planState[gl] && planState[gl][term] && planState[gl][term][slotIdx]) {
+        planState[gl][term][slotIdx] = {slot: slotIdx, course_number:'', course_title:'', credits:5, subject_area:'', is_ag:false, source:'empty'};
+    }
+    refreshGrid();
+}
+
+function refreshGrid() {
+    // Re-render only future-year slots from planState
+    for (var gl = currentGrade + 1; gl <= 12; gl++) {
+        var glStr = String(gl);
+        var yearData = planState[glStr] || {term1:[], term2:[]};
+        ['term1', 'term2'].forEach(function(term) {
+            for (var i = 0; i < 4; i++) {
+                var slot = (yearData[term] && yearData[term][i]) ? yearData[term][i] : {source:'empty'};
+                var el = document.querySelector('.slot[data-grade="'+gl+'"][data-term="'+term+'"][data-slot="'+i+'"]');
+                if (!el) continue;
+                el.className = 'slot editable ' + (slot.source || 'empty') + (slot.source === 'empty' ? ' empty-slot' : '');
+                if (slot.source !== 'empty' && slot.course_title) {
+                    el.innerHTML =
+                        '<span class="slot-title" title="' + escHtml(slot.course_title) + '">' + escHtml(slot.course_title) + '</span>' +
+                        (slot.source === 'ai' ? '<span class="slot-tag ai-tag">AI</span>' : '') +
+                        (slot.is_ag ? '<span class="slot-tag ag-tag">a-g</span>' : '') +
+                        '<button class="slot-remove" onclick="event.stopPropagation(); clearSlot('+gl+',\''+term+'\','+i+')" title="Remove">&times;</button>';
+                } else {
+                    el.innerHTML = '<span class="slot-title">+ Add course</span>';
+                }
+                el.onclick = (function(g,t,s){ return function(){ openPicker(g,t,s); }; })(gl, term, i);
+            }
+        });
+    }
+}
+
+// ── Save ──
+function savePlan() {
+    if (isLocked) return;
+    var notes = document.getElementById('planNotes').value;
+    fetch('/academic-plan/student/' + studentId + '/save', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({plan: planState, notes: notes})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            updateProjection(data.projection);
+            showToast('Plan saved!');
+        } else {
+            showToast(data.error || 'Save failed', true);
+        }
+    })
+    .catch(function() { showToast('Save failed', true); });
+}
+
+// ── Auto-build ──
+function autoBuild() {
+    if (isLocked) return;
+    document.getElementById('btnAutoBuild').disabled = true;
+    document.getElementById('btnAutoBuild').textContent = 'Building...';
+    fetch('/academic-plan/student/' + studentId + '/auto-build', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        document.getElementById('btnAutoBuild').disabled = false;
+        document.getElementById('btnAutoBuild').textContent = 'Auto-Build (AI)';
+        if (data.ok) {
+            // Merge AI plan into state
+            for (var gl in data.plan) {
+                planState[gl] = data.plan[gl];
+            }
+            refreshGrid();
+            showToast('Plan auto-built! Review and click Save.');
+        } else {
+            showToast(data.error || 'Auto-build failed', true);
+        }
+    })
+    .catch(function() {
+        document.getElementById('btnAutoBuild').disabled = false;
+        document.getElementById('btnAutoBuild').textContent = 'Auto-Build (AI)';
+        showToast('Auto-build failed', true);
+    });
+}
+
+// ── Lock ──
+function toggleLock() {
+    fetch('/academic-plan/student/' + studentId + '/lock', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            isLocked = data.is_locked;
+            location.reload();
+        }
+    });
+}
+
+// ── Projection update ──
+function updateProjection(proj) {
+    var banner = document.getElementById('riskBanner');
+    banner.className = 'risk-banner ' + proj.risk;
+    banner.textContent = proj.risk.toUpperCase() + ' \u2014 ' + Math.round(proj.total_projected) + '/' + proj.total_required + ' credits';
+    document.getElementById('projStatement').textContent = proj.statement;
+
+    // Update credits table
+    var tbody = document.querySelector('#creditsTable tbody');
+    tbody.innerHTML = '';
+    for (var subj in proj.credits) {
+        var d = proj.credits[subj];
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + subj + '</td><td>' + Math.round(d.required) + '</td><td>' +
+            Math.round(d.projected) + '</td><td class="' + (d.gap > 0 ? 'gap' : '') + '">' +
+            (d.gap > 0 ? Math.round(d.gap) : '\u2014') + '</td>';
+        tbody.appendChild(tr);
+    }
+}
+
+function escHtml(t) {
+    var d = document.createElement('div');
+    d.textContent = t || '';
+    return d.innerHTML;
+}
+
+function showToast(msg, isError) {
+    var el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:0.85rem;font-weight:500;z-index:9999;color:white;background:' + (isError ? 'var(--danger)' : 'var(--success)') + ';box-shadow:0 2px 12px rgba(0,0,0,0.15);transition:opacity 0.3s;';
+    document.body.appendChild(el);
+    setTimeout(function() { el.style.opacity = '0'; setTimeout(function() { el.remove(); }, 300); }, 2500);
+}
+</script>
+{% endblock %}

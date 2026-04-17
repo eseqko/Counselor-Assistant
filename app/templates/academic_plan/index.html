@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Academic Plans{% endblock %}
+{% block page_title %}4-Year Academic Plans{% endblock %}
+
+{% block head %}
+<style>
+.plan-stats {
+    display:flex; gap:16px; margin-bottom:20px; flex-wrap:wrap;
+}
+.plan-stat {
+    background:var(--white); border-radius:10px; padding:16px 24px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.1); text-align:center; min-width:120px;
+}
+.plan-stat .val { font-size:1.6rem; font-weight:700; }
+.plan-stat .lbl { font-size:0.75rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.3px; }
+.plan-stat.critical .val { color:var(--danger); }
+.plan-stat.at-risk .val { color:#E6A800; }
+.plan-stat.on-track .val { color:var(--success); }
+
+.plan-table { width:100%; font-size:0.85rem; background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.1); overflow:hidden; }
+.plan-table th {
+    text-align:left; padding:12px 14px; font-weight:600;
+    border-bottom:2px solid var(--light-gray); font-size:0.78rem;
+    text-transform:uppercase; letter-spacing:0.3px; color:var(--gray);
+}
+.plan-table td { padding:10px 14px; border-bottom:1px solid var(--light-gray); vertical-align:middle; }
+.plan-table tr:hover { background:var(--bg); }
+.plan-table .student-name { font-weight:600; color:var(--primary-dark); }
+.plan-table .student-name a { color:inherit; text-decoration:none; }
+.plan-table .student-name a:hover { text-decoration:underline; }
+
+.status-badge {
+    display:inline-block; padding:3px 10px; border-radius:12px;
+    font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.3px;
+}
+.status-none   { background:var(--light-gray); color:var(--gray); }
+.status-draft  { background:#FFF3D6; color:#996300; }
+.status-locked { background:#E8F8E8; color:var(--success); }
+
+.risk-badge {
+    display:inline-block; padding:3px 10px; border-radius:12px;
+    font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.3px;
+}
+.risk-critical { background:#FCE8E8; color:var(--danger); }
+.risk-at-risk  { background:#FFF3D6; color:#996300; }
+.risk-warning  { background:#FFF8E1; color:#BF8700; }
+.risk-on-track { background:#E8F8E8; color:var(--success); }
+.risk-unknown  { background:var(--light-gray); color:var(--gray); }
+
+.grade-badge {
+    display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem;
+    font-weight:600; background:var(--bg); color:var(--text);
+}
+
+.filter-bar { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.filter-bar select, .filter-bar input {
+    padding:8px 12px; border:1px solid var(--light-gray); border-radius:6px; font-size:0.82rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set total = rows|length %}
+{% set no_plan = rows|selectattr('plan_status', 'equalto', 'none')|list|length %}
+{% set drafts = rows|selectattr('plan_status', 'equalto', 'draft')|list|length %}
+{% set locked = rows|selectattr('plan_status', 'equalto', 'locked')|list|length %}
+{% set critical = rows|selectattr('risk', 'equalto', 'critical')|list|length %}
+{% set at_risk = rows|selectattr('risk', 'equalto', 'at-risk')|list|length %}
+
+<div class="plan-stats">
+    <div class="plan-stat"><div class="val">{{ total }}</div><div class="lbl">Students</div></div>
+    <div class="plan-stat"><div class="val">{{ locked }}</div><div class="lbl">Plans Locked</div></div>
+    <div class="plan-stat"><div class="val">{{ drafts }}</div><div class="lbl">Drafts</div></div>
+    <div class="plan-stat"><div class="val">{{ no_plan }}</div><div class="lbl">No Plan</div></div>
+    <div class="plan-stat critical"><div class="val">{{ critical }}</div><div class="lbl">Critical</div></div>
+    <div class="plan-stat at-risk"><div class="val">{{ at_risk }}</div><div class="lbl">At-Risk</div></div>
+</div>
+
+<div class="filter-bar">
+    <input type="text" id="nameFilter" placeholder="Search by name..." oninput="filterTable()">
+    <select id="gradeFilter" onchange="filterTable()">
+        <option value="">All Grades</option>
+        <option value="12">Grade 12</option>
+        <option value="11">Grade 11</option>
+        <option value="10">Grade 10</option>
+        <option value="9">Grade 9</option>
+    </select>
+    <select id="statusFilter" onchange="filterTable()">
+        <option value="">All Statuses</option>
+        <option value="none">No Plan</option>
+        <option value="draft">Draft</option>
+        <option value="locked">Locked</option>
+    </select>
+</div>
+
+<table class="plan-table">
+    <thead>
+        <tr>
+            <th>Student</th>
+            <th>Grade</th>
+            <th>Plan Status</th>
+            <th>Projected Credits</th>
+            <th>A-G</th>
+            <th>Risk</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody id="planTableBody">
+        {% for r in rows %}
+        <tr data-name="{{ r.student.last_name|lower }},{{ r.student.first_name|lower }}"
+            data-grade="{{ r.student.grade_level }}"
+            data-status="{{ r.plan_status }}">
+            <td class="student-name">
+                <a href="{{ url_for('academic_plan.student_detail', student_id=r.student.id) }}">
+                    {{ r.student.last_name }}, {{ r.student.first_name }}
+                </a>
+            </td>
+            <td><span class="grade-badge">{{ r.student.grade_level }}</span></td>
+            <td>
+                <span class="status-badge status-{{ r.plan_status }}">
+                    {% if r.plan_status == 'none' %}No Plan
+                    {% elif r.plan_status == 'draft' %}Draft
+                    {% else %}Locked{% endif %}
+                </span>
+            </td>
+            <td>{% if r.plan_status != 'none' %}{{ r.credits|int }}/225{% else %}—{% endif %}</td>
+            <td>{% if r.plan_status != 'none' %}{{ r.ag }}/7{% else %}—{% endif %}</td>
+            <td><span class="risk-badge risk-{{ r.risk }}">{{ r.risk }}</span></td>
+            <td>
+                <a href="{{ url_for('academic_plan.student_detail', student_id=r.student.id) }}"
+                   class="btn btn-outline" style="font-size:0.78rem; padding:4px 12px;">
+                    {% if r.plan_status == 'none' %}Create{% else %}Open{% endif %}
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterTable() {
+    var name = document.getElementById('nameFilter').value.toLowerCase();
+    var grade = document.getElementById('gradeFilter').value;
+    var status = document.getElementById('statusFilter').value;
+    document.querySelectorAll('#planTableBody tr').forEach(function(row) {
+        var matchName = !name || row.dataset.name.includes(name);
+        var matchGrade = !grade || row.dataset.grade === grade;
+        var matchStatus = !status || row.dataset.status === status;
+        row.style.display = (matchName && matchGrade && matchStatus) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

@@ -462,6 +462,142 @@ Ground your analysis in ASCA and MTSS frameworks."""
 
 @ai_bp.route('/course-recommendations', methods=['POST'])
 @login_required
+def build_recommended_schedule(student, target_grade_level=None,
+                               exclude_course_numbers=None,
+                               credit_gaps=None, ag_deficiencies=None):
+    """Score and rank course picks for a target grade level.
+
+    Returns (term1, term2, alternates, failed_course_names) where each of the
+    first three is a list of (score, reasons, course).  Caller can override
+    credit_gaps / ag_deficiencies for multi-year planning; when None they are
+    computed from the student's transcript.
+    """
+    if target_grade_level is None:
+        target_grade_level = (student.grade_level or 9) + 1
+    if exclude_course_numbers is None:
+        exclude_course_numbers = set()
+
+    # --- Gather student needs (unless caller pre-computed) ---
+    if credit_gaps is None or ag_deficiencies is None:
+        latest_transcript = student.transcript_records.first()
+        if credit_gaps is None:
+            credit_gaps = {}
+            if latest_transcript and latest_transcript.credits_json:
+                try:
+                    creds = json.loads(latest_transcript.credits_json)
+                    for subj, d in creds.items():
+                        req = d.get('required', 0) or 0
+                        comp = d.get('completed', 0) or 0
+                        need = max(0, req - comp)
+                        if need > 0:
+                            credit_gaps[subj.lower().strip()] = need
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        if ag_deficiencies is None:
+            ag_deficiencies = {}
+            if latest_transcript and latest_transcript.ag_json:
+                try:
+                    ag = json.loads(latest_transcript.ag_json)
+                    for area, d in ag.items():
+                        if not d.get('isMet', False):
+                            ag_deficiencies[area] = {
+                                'label': d.get('label', area),
+                                'needed': d.get('needed', 0)
+                            }
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+    # Gather failed courses
+    recent_grades = GradeRecord.query.filter_by(
+        student_id=student.id
+    ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
+
+    failed_course_names = set()
+    for g in recent_grades:
+        if g.letter_grade in ('F', 'NP', 'I', 'W'):
+            failed_course_names.add((g.course_name or '').strip())
+
+    # --- Load catalog ---
+    all_courses = Course.query.filter_by(is_active=True).order_by(Course.title).all()
+    if not all_courses:
+        return [], [], [], failed_course_names
+
+    def course_fits_grade(course):
+        if not course.grade_levels:
+            return True
+        return str(target_grade_level) in course.grade_levels
+
+    def course_matches_subject(course, subject_keyword):
+        keyword = subject_keyword.lower().strip()
+        fields = [
+            (course.department.name if course.department else ''),
+            (course.subject_area or ''),
+            (course.meets_requirement or ''),
+            (course.title or ''),
+        ]
+        return any(keyword in f.lower() for f in fields)
+
+    scored_courses = []
+
+    for c in all_courses:
+        if not course_fits_grade(c):
+            continue
+        if c.course_number and c.course_number in exclude_course_numbers:
+            continue
+
+        score = 0
+        reasons = []
+
+        for failed in failed_course_names:
+            if failed.lower() in (c.title or '').lower() or (c.title or '').lower() in failed.lower():
+                score += 100
+                reasons.append(f"Retake of failed course: {failed}")
+                break
+
+        for gap_subject, credits_needed in credit_gaps.items():
+            if course_matches_subject(c, gap_subject):
+                score += 50 + credits_needed
+                reasons.append(f"Fills {gap_subject} credit gap ({int(credits_needed)} credits needed)")
+                break
+
+        for area, info in ag_deficiencies.items():
+            area_label = info['label'].lower()
+            if course_matches_subject(c, area_label):
+                score += 40
+                reasons.append(f"Addresses a-g Area {area} ({info['label']}) deficiency")
+                break
+
+        if c.course_type == 'required':
+            score += 20
+            if not reasons:
+                reasons.append("Required course")
+
+        if c.meets_requirement:
+            score += 10
+            if not reasons:
+                reasons.append(f"Meets graduation requirement: {c.meets_requirement}")
+
+        if c.course_type == 'cte':
+            score += 5
+            if not reasons:
+                reasons.append("CTE pathway course")
+
+        if score == 0:
+            score = 1
+            reasons.append("Elective option")
+
+        scored_courses.append((score, reasons, c))
+
+    scored_courses.sort(key=lambda x: x[0], reverse=True)
+
+    selected = scored_courses[:8]
+    alternates = scored_courses[8:12]
+    term1 = selected[:4]
+    term2 = selected[4:8]
+
+    return term1, term2, alternates, failed_course_names
+
+
 def course_recommendations():
     """Generate AI-powered course recommendations for next year based on transcript and grades."""
     data = request.get_json()
@@ -471,51 +607,9 @@ def course_recommendations():
 
     student = Student.query.get_or_404(student_id)
 
-    # --- Gather student needs ---
-    latest_transcript = student.transcript_records.first()
-    credit_gaps = {}   # subject -> credits needed
-    ag_deficiencies = {}  # area letter -> {label, needed}
-    if latest_transcript:
-        if latest_transcript.credits_json:
-            try:
-                creds = json.loads(latest_transcript.credits_json)
-                for subj, d in creds.items():
-                    req = d.get('required', 0) or 0
-                    comp = d.get('completed', 0) or 0
-                    need = max(0, req - comp)
-                    if need > 0:
-                        credit_gaps[subj.lower().strip()] = need
-            except (json.JSONDecodeError, TypeError):
-                pass
-        if latest_transcript.ag_json:
-            try:
-                ag = json.loads(latest_transcript.ag_json)
-                for area, d in ag.items():
-                    if not d.get('isMet', False):
-                        ag_deficiencies[area] = {
-                            'label': d.get('label', area),
-                            'needed': d.get('needed', 0)
-                        }
-            except (json.JSONDecodeError, TypeError):
-                pass
+    term1, term2, alternates, failed_course_names = build_recommended_schedule(student)
 
-    # Gather failed courses
-    recent_grades = GradeRecord.query.filter_by(
-        student_id=student.id
-    ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
-
-    completed_course_names = set()
-    failed_course_names = set()
-    for g in recent_grades:
-        completed_course_names.add((g.course_name or '').lower().strip())
-        if g.letter_grade in ('F', 'NP', 'I', 'W'):
-            failed_course_names.add((g.course_name or '').strip())
-
-    # --- Load catalog and graduation requirements ---
-    all_courses = Course.query.filter_by(is_active=True).order_by(Course.title).all()
-    grad_reqs = GraduationRequirement.query.order_by(GraduationRequirement.sort_order).all()
-
-    if not all_courses:
+    if not term1 and not term2:
         return jsonify({
             'recommendations': '',
             'empty_catalog': True,
@@ -526,92 +620,8 @@ def course_recommendations():
             )
         })
 
-    # Build lookup: subject/department keywords -> courses
+    selected = list(term1) + list(term2)
     next_grade = (student.grade_level or 9) + 1
-
-    def course_fits_grade(course):
-        if not course.grade_levels:
-            return True
-        return str(next_grade) in course.grade_levels
-
-    def course_matches_subject(course, subject_keyword):
-        """Check if a course matches a subject keyword by department, subject_area, meets_requirement, or title."""
-        keyword = subject_keyword.lower().strip()
-        fields = [
-            (course.department.name if course.department else ''),
-            (course.subject_area or ''),
-            (course.meets_requirement or ''),
-            (course.title or ''),
-        ]
-        return any(keyword in f.lower() for f in fields)
-
-    # --- Score and rank courses by student needs ---
-    # Priority 1: Retakes of failed courses (match by title)
-    # Priority 2: Courses filling credit gaps
-    # Priority 3: Courses filling a-g deficiencies
-    # Priority 4: Required courses for grade level
-    # Priority 5: Electives
-
-    scored_courses = []  # list of (score, reason, course)
-
-    for c in all_courses:
-        if not course_fits_grade(c):
-            continue
-
-        score = 0
-        reasons = []
-
-        # Check if this is a retake of a failed course
-        for failed in failed_course_names:
-            if failed.lower() in (c.title or '').lower() or (c.title or '').lower() in failed.lower():
-                score += 100
-                reasons.append(f"Retake of failed course: {failed}")
-                break
-
-        # Check if it fills a credit gap
-        for gap_subject, credits_needed in credit_gaps.items():
-            if course_matches_subject(c, gap_subject):
-                score += 50 + credits_needed  # Higher need = higher priority
-                reasons.append(f"Fills {gap_subject} credit gap ({int(credits_needed)} credits needed)")
-                break
-
-        # Check if it fills an a-g deficiency
-        for area, info in ag_deficiencies.items():
-            area_label = info['label'].lower()
-            if course_matches_subject(c, area_label):
-                score += 40
-                reasons.append(f"Addresses a-g Area {area} ({info['label']}) deficiency")
-                break
-
-        # Boost required courses
-        if c.course_type == 'required':
-            score += 20
-            if not reasons:
-                reasons.append("Required course")
-
-        # Boost courses that meet graduation requirements
-        if c.meets_requirement:
-            score += 10
-            if not reasons:
-                reasons.append(f"Meets graduation requirement: {c.meets_requirement}")
-
-        # Small boost for electives if nothing else matched
-        if score == 0:
-            score = 1
-            reasons.append("Elective option")
-
-        scored_courses.append((score, reasons, c))
-
-    # Sort by score descending, take top candidates
-    scored_courses.sort(key=lambda x: x[0], reverse=True)
-
-    # Pick top 8 for the schedule, plus extras as alternates
-    selected = scored_courses[:8]
-    alternates = scored_courses[8:12]
-
-    # --- Build the schedule output ---
-    term1 = selected[:4]
-    term2 = selected[4:8]
 
     def format_course_line(rank, item):
         score, reasons, c = item
