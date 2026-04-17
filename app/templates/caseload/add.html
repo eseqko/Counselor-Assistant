@@ -129,6 +129,37 @@
                 </div>
             </div>
 
+            <h3 style="margin:20px 0 8px;font-size:1rem;">AB Graduation Exemptions</h3>
+            <p style="font-size:0.82rem;color:var(--gray);margin:0 0 12px;">
+                CA Ed Code: students in these populations who transfer after their 2nd year of HS may graduate with 130 state minimum credits instead of 225 district credits.
+            </p>
+            <div style="display:flex;gap:20px;flex-wrap:wrap;margin:8px 0 12px;">
+                {% for field, label, bill in ab_populations %}
+                <div class="form-check">
+                    <input type="checkbox" name="{{ field }}" id="{{ field }}">
+                    <label for="{{ field }}" style="font-size:0.85rem;">{{ label }} <span style="font-size:0.72rem;color:var(--gray);">({{ bill }})</span></label>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Exemption Status</label>
+                    <select name="ab_exemption_status" class="form-control">
+                        {% for val, label in ab_statuses %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Transfer Date</label>
+                    <input type="date" name="ab_transfer_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Exemption Decision Date</label>
+                    <input type="date" name="ab_exemption_date" class="form-control">
+                </div>
+            </div>
+
             <div class="form-group" style="margin-top:16px;">
                 <label>Tags (comma-separated)</label>
                 <input type="text" name="tags" class="form-control" placeholder="e.g., at-risk, honors, new student">

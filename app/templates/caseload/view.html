@@ -24,6 +24,14 @@
             {% endif %}
             {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
             {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+            {% for bill in student.ab_bills %}
+            <span class="badge" style="background:#EDE9FE;color:#6D28D9;">{{ bill }}</span>
+            {% endfor %}
+            {% if student.ab_exemption_status == 'accepted' %}
+            <span class="badge" style="background:#DBEAFE;color:#1D4ED8;">State Min Accepted</span>
+            {% elif student.ab_exemption_status == 'eligible' %}
+            <span class="badge" style="background:#FEF3C7;color:#92400E;">Exemption Pending</span>
+            {% endif %}
         </div>
     </div>
     <div style="margin-left:auto;">
@@ -61,6 +69,15 @@
                 {% if student.date_of_birth %}<tr><td style="font-weight:600;">DOB</td><td>{{ student.date_of_birth.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
                 {% if student.gender %}<tr><td style="font-weight:600;">Gender</td><td>{{ student.gender }}</td></tr>{% endif %}
                 {% if student.ethnicity %}<tr><td style="font-weight:600;">Ethnicity</td><td>{{ student.ethnicity }}</td></tr>{% endif %}
+                {% if student.has_ab_population %}
+                <tr><td style="font-weight:600;">AB Exemption</td><td>
+                    {{ student.ab_bills|join(', ') }}
+                    {% if student.ab_exemption_status != 'none' %}
+                    — <strong>{{ student.ab_exemption_status|capitalize }}</strong>
+                    {% endif %}
+                    {% if student.ab_transfer_date %}<br><span style="font-size:0.82rem;color:var(--gray);">Transfer: {{ student.ab_transfer_date.strftime('%m/%d/%Y') }}</span>{% endif %}
+                </td></tr>
+                {% endif %}
             </table>
             <div style="margin-top:12px;">
                 {% for tag in student.tags %}

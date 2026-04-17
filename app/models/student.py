@@ -48,6 +48,18 @@ class Student(db.Model):
     # Keep legacy column for migration compatibility
     ell_status = db.Column(db.Boolean, default=False)
 
+    # AB Graduation Exemption — California Ed Code special populations
+    # Population flags (which bills the student qualifies under)
+    is_foster_youth = db.Column(db.Boolean, default=False)       # AB 167/216
+    is_homeless = db.Column(db.Boolean, default=False)           # AB 1806
+    is_migrant_newcomer = db.Column(db.Boolean, default=False)   # AB 2121
+    is_formerly_incarcerated = db.Column(db.Boolean, default=False)  # AB 2306/1124
+    is_military_connected = db.Column(db.Boolean, default=False) # AB 365
+    # Waiver status: none, eligible, accepted, declined
+    ab_exemption_status = db.Column(db.String(20), default='none')
+    ab_exemption_date = db.Column(db.Date)
+    ab_transfer_date = db.Column(db.Date)
+
     # Special programs
     special_programs = db.Column(db.Text)  # JSON list of programs
     notes_text = db.Column(db.Text)  # Quick notes field
@@ -88,6 +100,21 @@ class Student(db.Model):
         ('EL 3', 'EL 3'),
     ]
 
+    AB_EXEMPTION_STATUSES = [
+        ('none', 'None'),
+        ('eligible', 'Eligible — Not Yet Decided'),
+        ('accepted', 'Accepted — Using State Minimum'),
+        ('declined', 'Declined — Using District Requirements'),
+    ]
+
+    AB_POPULATION_FIELDS = [
+        ('is_foster_youth', 'Foster Youth', 'AB 167/216'),
+        ('is_homeless', 'Homeless', 'AB 1806'),
+        ('is_migrant_newcomer', 'Migrant/Newcomer', 'AB 2121'),
+        ('is_formerly_incarcerated', 'Formerly Incarcerated', 'AB 2306/1124'),
+        ('is_military_connected', 'Military Connected', 'AB 365'),
+    ]
+
     @property
     def full_name(self):
         return f"{self.last_name}, {self.first_name}"
@@ -105,6 +132,31 @@ class Student(db.Model):
         if self.el_status == 'Newcomer' and self.el_level:
             return f"Newcomer ({self.el_level})"
         return self.el_status or 'EO'
+
+    @property
+    def has_ab_population(self):
+        return any([self.is_foster_youth, self.is_homeless,
+                     self.is_migrant_newcomer, self.is_formerly_incarcerated,
+                     self.is_military_connected])
+
+    @property
+    def ab_bills(self):
+        bills = []
+        if self.is_foster_youth:
+            bills.append('AB 167/216')
+        if self.is_homeless:
+            bills.append('AB 1806')
+        if self.is_migrant_newcomer:
+            bills.append('AB 2121')
+        if self.is_formerly_incarcerated:
+            bills.append('AB 2306/1124')
+        if self.is_military_connected:
+            bills.append('AB 365')
+        return bills
+
+    @property
+    def uses_state_minimum(self):
+        return self.ab_exemption_status == 'accepted'
 
 
 class Tag(db.Model):

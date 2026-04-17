@@ -96,6 +96,7 @@
                     <td>
                         {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
                         {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+                        {% if student.has_ab_population %}<span class="badge" style="background:#EDE9FE;color:#6D28D9;font-size:0.68rem;">AB</span>{% endif %}
                     </td>
                     <td>{% for tag in student.tags %}<span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span> {% endfor %}</td>
                     <td>

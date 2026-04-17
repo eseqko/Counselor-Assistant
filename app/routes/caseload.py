@@ -89,6 +89,14 @@ def add_student():
             el_level=el_level,
             ell_status=(el_status in ('Newcomer', 'LTEL', 'RFEP')),
             enrollment_date=parse_date(request.form.get('enrollment_date')),
+            is_foster_youth='is_foster_youth' in request.form,
+            is_homeless='is_homeless' in request.form,
+            is_migrant_newcomer='is_migrant_newcomer' in request.form,
+            is_formerly_incarcerated='is_formerly_incarcerated' in request.form,
+            is_military_connected='is_military_connected' in request.form,
+            ab_exemption_status=request.form.get('ab_exemption_status', 'none'),
+            ab_transfer_date=parse_date(request.form.get('ab_transfer_date')),
+            ab_exemption_date=parse_date(request.form.get('ab_exemption_date')),
         )
         # Handle tags
         tag_names = request.form.get('tags', '').split(',')
@@ -109,7 +117,9 @@ def add_student():
 
     tags = Tag.query.order_by(Tag.name).all()
     return render_template('caseload/add.html', tags=tags,
-        el_statuses=Student.EL_STATUSES, el_levels=Student.EL_LEVELS)
+        el_statuses=Student.EL_STATUSES, el_levels=Student.EL_LEVELS,
+        ab_populations=Student.AB_POPULATION_FIELDS,
+        ab_statuses=Student.AB_EXEMPTION_STATUSES)
 
 
 @caseload_bp.route('/<int:id>')
@@ -182,6 +192,16 @@ def edit_student(id):
         student.el_level = request.form.get('el_level', '') if student.el_status == 'Newcomer' else ''
         student.ell_status = (student.el_status in ('Newcomer', 'LTEL', 'RFEP'))
 
+        # AB Graduation Exemption fields
+        student.is_foster_youth = 'is_foster_youth' in request.form
+        student.is_homeless = 'is_homeless' in request.form
+        student.is_migrant_newcomer = 'is_migrant_newcomer' in request.form
+        student.is_formerly_incarcerated = 'is_formerly_incarcerated' in request.form
+        student.is_military_connected = 'is_military_connected' in request.form
+        student.ab_exemption_status = request.form.get('ab_exemption_status', 'none')
+        student.ab_transfer_date = parse_date(request.form.get('ab_transfer_date'))
+        student.ab_exemption_date = parse_date(request.form.get('ab_exemption_date'))
+
         db.session.commit()
         log_action('update', 'student', student.id, f'Updated student {student.full_name}')
         flash(f'Student {student.full_name} updated.', 'success')
@@ -189,7 +209,9 @@ def edit_student(id):
 
     tags = Tag.query.order_by(Tag.name).all()
     return render_template('caseload/edit.html', student=student, tags=tags,
-        el_statuses=Student.EL_STATUSES, el_levels=Student.EL_LEVELS)
+        el_statuses=Student.EL_STATUSES, el_levels=Student.EL_LEVELS,
+        ab_populations=Student.AB_POPULATION_FIELDS,
+        ab_statuses=Student.AB_EXEMPTION_STATUSES)
 
 
 @caseload_bp.route('/<int:id>/delete', methods=['POST'])
