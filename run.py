@@ -29,11 +29,13 @@ def detect_tailscale_ip():
             )
             if result.returncode == 0:
                 ip = result.stdout.strip().splitlines()[0].strip()
-                if ip.startswith('100.'):
+                # Trust whatever tailscale reports — self-hosted tailnets
+                # (Headscale, custom ACLs) may use non-100.x ranges.
+                if ip:
                     return ip
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             continue
-    # Fallback: scan local interfaces for a 100.x address
+    # Fallback: scan local interfaces for a 100.x CGNAT address
     try:
         for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
             if ip.startswith('100.'):
