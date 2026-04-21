@@ -36,6 +36,16 @@
     </div>
     <div style="margin-left:auto;">
         <div class="btn-group">
+            {% if current_user.synergy_base_url %}
+            <button type="button" class="btn btn-sm btn-outline" id="open-synergy-btn"
+                    data-synergy-url="{{ current_user.synergy_base_url }}"
+                    data-student-id="{{ student.student_id_number }}"
+                    data-student-name="{{ student.display_name }}"
+                    onclick="openInSynergy(this)"
+                    title="Open Synergy in a new tab and copy this student's ID to your clipboard">
+                Open in Synergy
+            </button>
+            {% endif %}
             <a href="{{ url_for('caseload.edit_student', id=student.id) }}" class="btn btn-sm btn-outline">Edit</a>
             <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Note</a>
             <a href="{{ url_for('service_log.add_record', student_id=student.id) }}" class="btn btn-sm btn-success">+ Service</a>

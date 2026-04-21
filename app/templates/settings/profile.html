@@ -18,6 +18,16 @@
                 <label>Username</label>
                 <input type="text" class="form-control" value="{{ current_user.username }}" disabled>
             </div>
+            <div class="form-group">
+                <label>Synergy URL <span style="font-weight:normal;color:var(--text-muted);font-size:0.8rem;">(optional)</span></label>
+                <input type="url" name="synergy_base_url" class="form-control"
+                       value="{{ current_user.synergy_base_url or '' }}"
+                       placeholder="https://ca-juhsd.edupoint.com/">
+                <small style="color:var(--text-muted);font-size:0.8rem;">
+                    Paste your district's Synergy login URL. When set, student profiles show an "Open in Synergy" button
+                    that opens Synergy and copies the student's ID for quick pasting into the Find dialog.
+                </small>
+            </div>
             <div class="btn-group" style="margin-top:16px;">
                 <button type="submit" class="btn btn-primary">Save</button>
                 <a href="{{ url_for('settings.index') }}" class="btn btn-outline">Cancel</a>

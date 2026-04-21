@@ -87,6 +87,10 @@ def profile():
     if request.method == 'POST':
         current_user.display_name = request.form.get('display_name', current_user.display_name)
         current_user.school_name = request.form.get('school_name', '')
+        synergy_url = request.form.get('synergy_base_url', '').strip()
+        if synergy_url and not synergy_url.startswith(('http://', 'https://')):
+            synergy_url = 'https://' + synergy_url
+        current_user.synergy_base_url = synergy_url
         db.session.commit()
         flash('Profile updated.', 'success')
         return redirect(url_for('settings.profile'))

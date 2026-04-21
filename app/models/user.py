@@ -28,6 +28,7 @@ class User(UserMixin, db.Model):
     setup_completed = db.Column(db.Boolean, default=False)  # First-run wizard completed
     theme_preference = db.Column(db.String(20), default='light')  # light, dark, school, focus, auto
     reduced_motion = db.Column(db.Boolean, default=False)
+    synergy_base_url = db.Column(db.String(500), default='')  # e.g. https://ca-juhsd.edupoint.com/
 
     # Relationships
     notes = db.relationship('Note', backref='author', lazy='dynamic')

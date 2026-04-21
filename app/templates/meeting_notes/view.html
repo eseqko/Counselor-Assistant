@@ -121,6 +121,16 @@
             {{ s.first_name }} {{ s.last_name }}
             <span class="s-grade">Gr {{ s.grade_level }}</span>
         </a>
+        {% if current_user.synergy_base_url %}
+        <button type="button" class="student-link no-print"
+                style="background:#fef3c7;color:#92400e;border:none;cursor:pointer;font:inherit;"
+                data-synergy-url="{{ current_user.synergy_base_url }}"
+                data-student-id="{{ s.student_id_number }}"
+                onclick="openInSynergy(this)"
+                title="Open Synergy and copy {{ s.first_name }}'s ID">
+            &#8599; Synergy
+        </button>
+        {% endif %}
         {% endfor %}
     </div>
     {% endif %}
