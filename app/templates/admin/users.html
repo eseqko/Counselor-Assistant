@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Manage Users — Admin{% endblock %}
+{% block page_title %}Manage Users{% endblock %}
+
+{% block content %}
+<div style="max-width:900px;margin:0 auto;">
+
+    <div style="margin-bottom:16px;">
+        <a href="{{ url_for('admin.index') }}" style="font-size:0.86rem;color:var(--primary-light);">
+            &larr; Back to Department Dashboard
+        </a>
+    </div>
+
+    <div class="card" style="padding:20px;border-radius:12px;margin-bottom:20px;">
+        <h3 style="margin:0 0 14px;font-size:0.96rem;">Add New Counselor</h3>
+        <form method="POST" action="{{ url_for('admin.add_user') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="flex:1;min-width:140px;">
+                <label style="font-weight:600;font-size:0.82rem;display:block;margin-bottom:4px;">Username</label>
+                <input type="text" name="username" class="form-control" required placeholder="jsmith"
+                       style="width:100%;">
+            </div>
+            <div style="flex:1;min-width:140px;">
+                <label style="font-weight:600;font-size:0.82rem;display:block;margin-bottom:4px;">Display Name</label>
+                <input type="text" name="display_name" class="form-control" placeholder="Jane Smith"
+                       style="width:100%;">
+            </div>
+            <div style="flex:1;min-width:140px;">
+                <label style="font-weight:600;font-size:0.82rem;display:block;margin-bottom:4px;">Password</label>
+                <input type="password" name="password" class="form-control" required placeholder="Temporary password"
+                       style="width:100%;">
+            </div>
+            <div style="min-width:120px;">
+                <label style="font-weight:600;font-size:0.82rem;display:block;margin-bottom:4px;">Role</label>
+                <select name="role" class="form-control" style="width:100%;">
+                    <option value="counselor">Counselor</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="border-radius:8px;padding:8px 20px;">
+                &#43; Add User
+            </button>
+        </form>
+    </div>
+
+    <div class="card" style="border-radius:12px;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.86rem;">
+            <thead>
+                <tr style="background:var(--bg);border-bottom:2px solid var(--border);">
+                    <th style="padding:10px 14px;text-align:left;">User</th>
+                    <th style="padding:10px 14px;text-align:left;">Role</th>
+                    <th style="padding:10px 14px;text-align:left;">Last Login</th>
+                    <th style="padding:10px 14px;text-align:center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 14px;">
+                        <div style="font-weight:600;">{{ user.display_name }}</div>
+                        <div style="font-size:0.78rem;color:var(--text-muted);">{{ user.username }}</div>
+                    </td>
+                    <td style="padding:10px 14px;">
+                        <span style="font-size:0.78rem;padding:2px 8px;border-radius:999px;
+                            {% if user.role == 'admin' %}background:#e8eaf6;color:#283593;
+                            {% else %}background:var(--bg);color:var(--text-muted);{% endif %}">
+                            {{ user.role }}
+                        </span>
+                    </td>
+                    <td style="padding:10px 14px;font-size:0.82rem;color:var(--text-muted);">
+                        {% if user.last_login %}{{ user.last_login.strftime('%b %d, %Y') }}{% else %}Never{% endif %}
+                    </td>
+                    <td style="padding:10px 14px;text-align:center;">
+                        <button onclick="editUser({{ user.id }}, '{{ user.display_name }}', '{{ user.role }}')"
+                                class="btn btn-sm btn-secondary" style="border-radius:6px;padding:3px 10px;font-size:0.78rem;">
+                            Edit
+                        </button>
+                        {% if user.id != current_user.id %}
+                        <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}"
+                              style="display:inline;" onsubmit="return confirm('Delete {{ user.display_name }}?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm"
+                                    style="border-radius:6px;padding:3px 10px;font-size:0.78rem;
+                                           background:#c62828;color:#fff;border:none;cursor:pointer;">
+                                Delete
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;
+     align-items:center;justify-content:center;padding:20px;">
+    <div style="background:var(--surface);border-radius:12px;max-width:450px;width:100%;padding:24px;position:relative;">
+        <button onclick="document.getElementById('edit-modal').style.display='none'" style="position:absolute;top:12px;right:16px;
+                background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+        <h3 style="margin:0 0 16px;font-size:1rem;">Edit User</h3>
+        <form id="edit-form" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="margin-bottom:12px;">
+                <label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Display Name</label>
+                <input type="text" name="display_name" id="edit-name" class="form-control" style="width:100%;">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Role</label>
+                <select name="role" id="edit-role" class="form-control" style="width:100%;">
+                    <option value="counselor">Counselor</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">New Password (leave blank to keep)</label>
+                <input type="password" name="new_password" class="form-control" placeholder="Optional"
+                       style="width:100%;">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;border-radius:8px;">Save Changes</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function editUser(id, name, role) {
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-role').value = role;
+    document.getElementById('edit-form').action = '{{ url_for("admin.edit_user", user_id=0) }}'.replace('/0/', '/' + id + '/');
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+</script>
+{% endblock %}

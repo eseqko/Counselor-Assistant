@@ -1,0 +1,129 @@
+{% extends "student_portal/base_student.html" %}
+{% block title %}{{ tool.title }} — Student Portal{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+    <a href="{{ url_for('student_portal.index', token=token) }}" style="font-size:0.86rem;color:var(--primary-light);">
+        &larr; Back to all tools
+    </a>
+</div>
+
+<div class="card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <span style="font-size:1.8rem;">{{ tool.icon|safe }}</span>
+        <div>
+            <h2 style="margin:0;font-size:1.1rem;">{{ tool.title }}</h2>
+            <div style="font-size:0.84rem;color:var(--text-muted);">{{ tool.description }}</div>
+        </div>
+    </div>
+
+    {% if not ai_available %}
+    <div style="padding:12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;margin-bottom:14px;
+                font-size:0.84rem;color:#991b1b;">
+        AI is temporarily offline. Please try again later.
+    </div>
+    {% endif %}
+
+    <form id="tool-form" style="margin-top:14px;">
+        {% for field in tool.inputs %}
+        <div style="margin-bottom:14px;">
+            <label style="font-weight:600;font-size:0.86rem;display:block;margin-bottom:4px;">
+                {{ field.label }}{% if field.required %} <span style="color:var(--error);">*</span>{% endif %}
+            </label>
+            {% if field.type == 'select' %}
+            <select name="{{ field.name }}" class="form-control tool-input"
+                    {% if field.required %}required{% endif %}>
+                <option value="">Select...</option>
+                {% for opt in field.options %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+            </select>
+            {% elif field.type == 'textarea' %}
+            <textarea name="{{ field.name }}" class="form-control tool-input" rows="3"
+                      placeholder="{{ field.placeholder or '' }}"
+                      {% if field.required %}required{% endif %}></textarea>
+            {% else %}
+            <input type="text" name="{{ field.name }}" class="form-control tool-input"
+                   placeholder="{{ field.placeholder or '' }}"
+                   {% if field.required %}required{% endif %}>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <button type="submit" id="generate-btn" class="btn btn-primary"
+                {% if not ai_available %}disabled{% endif %}
+                style="width:100%;padding:12px;">
+            &#9889; Generate
+        </button>
+    </form>
+</div>
+
+<div id="loading-panel" style="display:none;text-align:center;padding:30px;">
+    <div style="font-size:1rem;color:var(--text-muted);">Thinking...</div>
+    <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px;">This may take 30-60 seconds.</div>
+</div>
+
+<div id="output-panel" style="display:none;" class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="margin:0;font-size:1rem;">Result</h3>
+        <button onclick="copyOutput()" class="btn btn-secondary"
+                style="padding:6px 14px;font-size:0.8rem;">&#128203; Copy</button>
+    </div>
+    <div id="output-content"
+         style="white-space:pre-wrap;font-size:0.88rem;line-height:1.6;
+                padding:16px;background:var(--bg);border-radius:8px;
+                border:1px solid var(--border);max-height:500px;overflow-y:auto;">
+    </div>
+</div>
+
+<script>
+document.getElementById('tool-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var btn = document.getElementById('generate-btn');
+    var outputPanel = document.getElementById('output-panel');
+    var loading = document.getElementById('loading-panel');
+    var outputContent = document.getElementById('output-content');
+
+    var inputs = {};
+    document.querySelectorAll('.tool-input').forEach(function(el) {
+        inputs[el.name] = el.value;
+    });
+
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    loading.style.display = 'block';
+    outputPanel.style.display = 'none';
+
+    fetch('{{ url_for("student_portal.generate", token=token) }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tool_id: '{{ tool.id }}', inputs: inputs })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '&#9889; Generate';
+        if (data.error) {
+            outputContent.textContent = 'Error: ' + data.error;
+        } else {
+            outputContent.textContent = data.output;
+        }
+        outputPanel.style.display = 'block';
+        outputPanel.scrollIntoView({behavior: 'smooth'});
+    })
+    .catch(function(err) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '&#9889; Generate';
+        outputContent.textContent = 'Something went wrong. Please try again.';
+        outputPanel.style.display = 'block';
+    });
+});
+
+function copyOutput() {
+    var text = document.getElementById('output-content').textContent;
+    navigator.clipboard.writeText(text);
+}
+</script>
+{% endblock %}

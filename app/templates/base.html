@@ -71,6 +71,11 @@
             <a href="{{ url_for('knowledge_base.index') }}" class="nav-item {% if request.blueprint == 'knowledge_base' %}active{% endif %}">
                 <span class="nav-icon">&#128218;</span> Knowledge Base
             </a>
+            {% if current_user.is_authenticated and current_user.role == 'admin' %}
+            <a href="{{ url_for('admin.index') }}" class="nav-item {% if request.blueprint == 'admin' %}active{% endif %}">
+                <span class="nav-icon">&#128736;</span> Admin
+            </a>
+            {% endif %}
 
             {% set more_blueprints = ('service_log', 'iep504', 'activity_log', 'meeting_notes', 'meeting_prep', 'email_drafts', 'mail_merge', 'availability', 'data_import', 'reports', 'analytics', 'course_catalog', 'glossary') %}
             {% set more_endpoints = ('reports.index', 'reports.cohort_trends') %}
