@@ -89,3 +89,33 @@ def generate(prompt, system=None, temperature=0.7, timeout=None):
     )
     resp.raise_for_status()
     return resp.json().get('response', '').strip()
+
+
+def generate_stream(prompt, system=None, temperature=0.7, timeout=None):
+    """Yield (token, done) tuples from Ollama's streaming NDJSON endpoint."""
+    payload = {
+        'model': get_model(),
+        'prompt': prompt,
+        'stream': True,
+        'options': {
+            'temperature': temperature,
+        },
+    }
+    if system:
+        payload['system'] = system
+
+    resp = requests.post(
+        f'{get_base_url()}/api/generate',
+        json=payload,
+        timeout=timeout if timeout is not None else DEFAULT_GENERATE_TIMEOUT,
+        stream=True,
+    )
+    resp.raise_for_status()
+    for line in resp.iter_lines():
+        if line:
+            data = json.loads(line)
+            token = data.get('response', '')
+            done = data.get('done', False)
+            yield token, done
+            if done:
+                break

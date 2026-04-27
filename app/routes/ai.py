@@ -12,6 +12,7 @@ from app.models.grade import GradeRecord
 from app.models.transcript import TranscriptRecord
 from app.models.course import Course, Department, GraduationRequirement
 from app.utils import ollama_client
+from app.utils.stream_helpers import stream_sse
 from app.utils.audit import log_action
 from collections import defaultdict
 from datetime import date, timedelta
@@ -126,18 +127,66 @@ Keep your response concise and actionable."""
         return jsonify({'error': f'AI generation failed: {str(e)}'}), 500
 
 
-@ai_bp.route('/student-insights', methods=['POST'])
+@ai_bp.route('/note-feedback-stream', methods=['POST'])
 @login_required
-def student_insights():
-    """Generate support insights for a student based on their service history."""
+def note_feedback_stream():
     data = request.get_json()
-    student_id = data.get('student_id')
-    if not student_id:
-        return jsonify({'error': 'Missing student_id'}), 400
+    note_id = data.get('note_id')
+    if not note_id:
+        return jsonify({'error': 'Missing note_id'}), 400
 
-    student = Student.query.get_or_404(student_id)
+    note = Note.query.get_or_404(note_id)
+    student = note.student
+    student_context = f"Student: Grade {student.grade_level or 'N/A'}"
+    if student.iep_status:
+        student_context += ", has IEP"
+    if student.section_504:
+        student_context += ", has 504 Plan"
+    if student.el_status and student.el_status != 'EO':
+        student_context += f", EL Status: {student.el_status}"
 
-    # Gather student profile
+    recent_notes = Note.query.filter_by(
+        student_id=student.id, author_id=current_user.id
+    ).order_by(Note.session_date.desc()).limit(5).all()
+
+    notes_context = ""
+    for n in recent_notes:
+        if n.id != note.id:
+            notes_context += f"\n- {n.session_date}: {n.note_type} — {n.title or '(untitled)'}"
+
+    prompt = f"""Review this counseling session note and provide feedback.
+
+{student_context}
+Previous sessions with this student:{notes_context or ' (first session)'}
+
+--- CURRENT NOTE ---
+Type: {note.note_type}
+Date: {note.session_date}
+Title: {note.title or '(untitled)'}
+ASCA Domain: {note.asca_domain or 'Not specified'}
+Duration: {note.duration_minutes or 'N/A'} minutes
+Delivery: {note.delivery_method or 'N/A'}
+Content:
+{note.content}
+
+Follow-up needed: {'Yes' if note.follow_up_needed else 'No'}
+{('Follow-up notes: ' + note.follow_up_notes) if note.follow_up_notes else ''}
+--- END NOTE ---
+
+Please provide:
+1. **Completeness Check** — Is any important documentation missing?
+2. **ASCA Alignment** — Does the domain ({note.asca_domain or 'not specified'}) match the content? Suggest if wrong.
+3. **Follow-Up Suggestions** — Based on the note content, what follow-up actions or interventions might be appropriate?
+4. **Documentation Tips** — Any improvements to make the note more thorough for compliance purposes?
+
+Keep your response concise and actionable."""
+
+    log_action('ai_feedback', 'note', note.id, 'Generated AI feedback for note')
+    return stream_sse(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+
+
+def _build_student_insights_prompt(student):
+    """Build the full insights prompt for a student. Returns the prompt string."""
     profile = f"Grade {student.grade_level or 'N/A'}"
     designations = []
     if student.iep_status:
@@ -153,7 +202,6 @@ def student_insights():
     if tags:
         profile += f" | Tags: {', '.join(tags)}"
 
-    # Recent notes summary
     notes = Note.query.filter_by(
         student_id=student.id, author_id=current_user.id
     ).order_by(Note.session_date.desc()).limit(10).all()
@@ -167,7 +215,6 @@ def student_insights():
             domains[n.asca_domain] += 1
         notes_summary += f"\n- {n.session_date} [{n.note_type}] {n.title or ''}: {n.content[:150]}"
 
-    # Service records
     services = ServiceRecord.query.filter_by(
         student_id=student.id
     ).order_by(ServiceRecord.date.desc()).limit(10).all()
@@ -178,14 +225,12 @@ def student_insights():
         if s.outcome:
             services_summary += f" (Outcome: {s.outcome[:80]})"
 
-    # Check for overdue follow-ups
     overdue = Note.query.filter(
         Note.student_id == student.id,
         Note.follow_up_needed == True,
         Note.follow_up_date < date.today()
     ).count()
 
-    # --- Attendance data ---
     thirty_days_ago = date.today() - timedelta(days=30)
     absences_30 = AttendanceRecord.query.filter(
         AttendanceRecord.student_id == student.id,
@@ -207,7 +252,6 @@ def student_insights():
         att_rate = round(present / total_att * 100, 1)
         att_context = f"\n\nATTENDANCE (Last 30 days): {total_att} records | {absences_30} absences, {tardies_30} tardies | Rate: {att_rate}%"
 
-    # --- Grades data ---
     recent_grades = GradeRecord.query.filter_by(
         student_id=student.id
     ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).limit(8).all()
@@ -221,7 +265,6 @@ def student_insights():
         avg_gpa = round(sum(gpa_vals) / len(gpa_vals), 2) if gpa_vals else 'N/A'
         grades_context = f"\n\nGRADES (Most Recent): Avg GPA: {avg_gpa} | Failing: {len(failing)}\n" + "\n".join(grade_lines)
 
-    # --- Transcript context (detailed) ---
     transcript_context = ""
     latest_tr = student.transcript_records.first()
     if latest_tr:
@@ -231,7 +274,6 @@ def student_insights():
         elif latest_tr.cte_completed:
             transcript_context += f" ({int(latest_tr.cte_completed)} CTE credits)"
 
-        # Credit breakdown by subject area
         if latest_tr.credits_json:
             try:
                 creds = json.loads(latest_tr.credits_json)
@@ -250,7 +292,6 @@ def student_insights():
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        # a-g area details
         if latest_tr.ag_json:
             try:
                 ag = json.loads(latest_tr.ag_json)
@@ -269,7 +310,7 @@ def student_insights():
             except (json.JSONDecodeError, TypeError):
                 pass
 
-    prompt = f"""Analyze this student's counseling history and provide support recommendations.
+    return f"""Analyze this student's counseling history and provide support recommendations.
 
 STUDENT PROFILE: {profile}
 Total notes: {len(notes)} | Total services: {len(services)}
@@ -291,6 +332,16 @@ Please provide:
 
 Keep recommendations practical and ASCA-aligned."""
 
+
+@ai_bp.route('/student-insights', methods=['POST'])
+@login_required
+def student_insights():
+    data = request.get_json()
+    student_id = data.get('student_id')
+    if not student_id:
+        return jsonify({'error': 'Missing student_id'}), 400
+    student = Student.query.get_or_404(student_id)
+    prompt = _build_student_insights_prompt(student)
     try:
         response = ollama_client.generate(prompt, system=COUNSELOR_SYSTEM_PROMPT)
         log_action('ai_feedback', 'student', student.id, 'Generated AI insights for student')
@@ -299,36 +350,66 @@ Keep recommendations practical and ASCA-aligned."""
         return jsonify({'error': f'AI generation failed: {str(e)}'}), 500
 
 
+@ai_bp.route('/student-insights-stream', methods=['POST'])
+@login_required
+def student_insights_stream():
+    data = request.get_json()
+    student_id = data.get('student_id')
+    if not student_id:
+        return jsonify({'error': 'Missing student_id'}), 400
+    student = Student.query.get_or_404(student_id)
+    prompt = _build_student_insights_prompt(student)
+    log_action('ai_feedback', 'student', student.id, 'Generated AI insights for student')
+    return stream_sse(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+
+
+def _build_report_prompt(report_type, report_data):
+    """Build the prompt for report insights. Returns prompt string or None."""
+    if report_type == 'use_of_time':
+        return _build_use_of_time_prompt(report_data)
+    elif report_type == 'caseload_summary':
+        return _build_caseload_prompt(report_data)
+    elif report_type == 'topic_delivery':
+        return _build_topic_delivery_prompt(report_data)
+    elif report_type == 'early_warning':
+        return _build_early_warning_prompt(report_data)
+    elif report_type == 'cohort_trends':
+        return _build_cohort_trends_prompt(report_data)
+    return None
+
+
 @ai_bp.route('/report-insights', methods=['POST'])
 @login_required
 def report_insights():
-    """Generate AI insights for a report."""
     data = request.get_json()
     report_type = data.get('report_type', '')
     report_data = data.get('report_data', {})
-
     if not report_type:
         return jsonify({'error': 'Missing report_type'}), 400
-
-    if report_type == 'use_of_time':
-        prompt = _build_use_of_time_prompt(report_data)
-    elif report_type == 'caseload_summary':
-        prompt = _build_caseload_prompt(report_data)
-    elif report_type == 'topic_delivery':
-        prompt = _build_topic_delivery_prompt(report_data)
-    elif report_type == 'early_warning':
-        prompt = _build_early_warning_prompt(report_data)
-    elif report_type == 'cohort_trends':
-        prompt = _build_cohort_trends_prompt(report_data)
-    else:
+    prompt = _build_report_prompt(report_type, report_data)
+    if prompt is None:
         return jsonify({'error': f'Unsupported report type: {report_type}'}), 400
-
     try:
         response = ollama_client.generate(prompt, system=COUNSELOR_SYSTEM_PROMPT)
         log_action('ai_feedback', 'report', details=f'Generated AI insights for {report_type}')
         return jsonify({'insights': response})
     except Exception as e:
         return jsonify({'error': f'AI generation failed: {str(e)}'}), 500
+
+
+@ai_bp.route('/report-insights-stream', methods=['POST'])
+@login_required
+def report_insights_stream():
+    data = request.get_json()
+    report_type = data.get('report_type', '')
+    report_data = data.get('report_data', {})
+    if not report_type:
+        return jsonify({'error': 'Missing report_type'}), 400
+    prompt = _build_report_prompt(report_type, report_data)
+    if prompt is None:
+        return jsonify({'error': f'Unsupported report type: {report_type}'}), 400
+    log_action('ai_feedback', 'report', details=f'Generated AI insights for {report_type}')
+    return stream_sse(prompt, system=COUNSELOR_SYSTEM_PROMPT)
 
 
 def _build_use_of_time_prompt(data):

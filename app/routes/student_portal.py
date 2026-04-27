@@ -5,6 +5,7 @@ from app import db, csrf
 from app.models.user import User
 from app.utils.student_tools_registry import STUDENT_TOOLS, get_student_tool
 from app.utils import ollama_client
+from app.utils.stream_helpers import stream_sse
 
 student_portal_bp = Blueprint('student_portal', __name__,
                               template_folder='../templates/student_portal')
@@ -73,3 +74,32 @@ def generate(token):
         return jsonify({'error': 'AI generation took too long. Please try again.'}), 504
 
     return jsonify({'output': response})
+
+
+@student_portal_bp.route('/<token>/generate-stream', methods=['POST'])
+@csrf.exempt
+def generate_stream(token):
+    counselor = _get_counselor_by_token(token)
+    if not counselor:
+        return jsonify({'error': 'Invalid portal link'}), 404
+
+    data = request.get_json()
+    tool_id = data.get('tool_id')
+    tool = get_student_tool(tool_id)
+    if not tool:
+        return jsonify({'error': 'Tool not found'}), 404
+
+    inputs = data.get('inputs', {})
+    filled = {}
+    for field in tool['inputs']:
+        filled[field['name']] = inputs.get(field['name'], '')
+
+    try:
+        prompt = tool['prompt_template'].format(**filled)
+    except KeyError as e:
+        return jsonify({'error': f'Missing input: {e}'}), 400
+
+    if not ollama_client.is_available():
+        return jsonify({'error': 'AI is temporarily unavailable. Please try again later.'}), 503
+
+    return stream_sse(prompt, system=tool['system_prompt'])

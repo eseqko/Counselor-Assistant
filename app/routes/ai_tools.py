@@ -14,6 +14,7 @@ from app.models.service_record import ServiceRecord
 from app.models.calendar_event import CalendarEvent
 from app.utils.ai_tools_registry import AI_TOOLS, CATEGORIES, get_tool, get_tools_by_category, search_tools
 from app.utils import ollama_client
+from app.utils.stream_helpers import stream_sse
 from app.utils.audit import log_action
 from app.models.knowledge_base import KnowledgeDocument, KnowledgeChunk
 from app.utils.knowledge_base import build_knowledge_context
@@ -141,6 +142,85 @@ def generate():
                f'Generated: {tool["title"]}')
 
     return jsonify({'output': response, 'history_id': entry.id})
+
+
+@ai_tools_bp.route('/generate-stream', methods=['POST'])
+@login_required
+def generate_stream():
+    data = request.get_json()
+    tool_id = data.get('tool_id')
+    tool = get_tool(tool_id)
+    if not tool:
+        return jsonify({'error': 'Tool not found'}), 404
+
+    student_id = data.get('student_id')
+    inputs = data.get('inputs', {})
+
+    student_context = ''
+    if student_id and tool.get('supports_student_context'):
+        student_context = _build_student_context(int(student_id))
+
+    filled_inputs = {}
+    for field in tool['inputs']:
+        filled_inputs[field['name']] = inputs.get(field['name'], '')
+    filled_inputs['student_context'] = student_context
+
+    kb_context = ''
+    all_chunks = KnowledgeChunk.query.join(KnowledgeDocument).filter(
+        KnowledgeDocument.user_id == current_user.id
+    ).all()
+    if all_chunks:
+        search_terms = ' '.join(v for v in filled_inputs.values() if v and v != student_context)
+        search_terms += ' ' + tool['title']
+        kb_context = build_knowledge_context(search_terms, all_chunks)
+    filled_inputs['knowledge_context'] = kb_context
+
+    try:
+        prompt = tool['prompt_template'].format(**filled_inputs)
+    except KeyError as e:
+        return jsonify({'error': f'Missing input: {e}'}), 400
+
+    system_prompt = tool['system_prompt']
+    if kb_context:
+        system_prompt += (
+            '\n\nYou have access to the counselor\'s district knowledge base below. '
+            'Reference specific policies, procedures, or details from these documents when relevant. '
+            'Cite the source document name when you use information from it.'
+            + kb_context
+        )
+
+    return stream_sse(prompt, system=system_prompt)
+
+
+@ai_tools_bp.route('/save-history', methods=['POST'])
+@login_required
+def save_history():
+    data = request.get_json()
+    tool_id = data.get('tool_id')
+    tool = get_tool(tool_id)
+    if not tool:
+        return jsonify({'error': 'Tool not found'}), 404
+
+    output_text = data.get('output', '').strip()
+    if not output_text:
+        return jsonify({'error': 'No output to save'}), 400
+
+    student_id = data.get('student_id')
+    inputs = data.get('inputs', {})
+
+    entry = AIToolHistory(
+        user_id=current_user.id,
+        tool_id=tool_id,
+        tool_title=tool['title'],
+        student_id=int(student_id) if student_id else None,
+        inputs_json=json.dumps(inputs),
+        output_text=output_text,
+    )
+    db.session.add(entry)
+    db.session.commit()
+
+    log_action('ai_tool_generate', 'ai_tool', entry.id, f'Generated: {tool["title"]}')
+    return jsonify({'ok': True, 'history_id': entry.id})
 
 
 @ai_tools_bp.route('/history')
@@ -424,3 +504,19 @@ def action_translate():
         return jsonify({'ok': False, 'error': f'Translation failed: {str(e)}'}), 500
 
     return jsonify({'ok': True, 'translated': translated, 'language': language})
+
+
+@ai_tools_bp.route('/actions/translate-stream', methods=['POST'])
+@login_required
+def action_translate_stream():
+    data = request.get_json()
+    text = data.get('content', '').strip()
+    if not text:
+        return jsonify({'ok': False, 'error': 'No text to translate'}), 400
+
+    language = data.get('language', 'Spanish')
+    system = (
+        f'You are a professional translator. Translate the following text to {language}. '
+        f'Preserve the formatting, tone, and meaning. Output only the translation.'
+    )
+    return stream_sse(text, system=system, temperature=0.3)

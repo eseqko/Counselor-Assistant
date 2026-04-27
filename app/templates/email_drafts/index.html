@@ -343,54 +343,66 @@
         });
     };
 
-    /* ── AI Draft ─────────────────────────────── */
+    /* ── AI Draft (streaming) ─────────────────────────────── */
+    function streamToTextarea(url, payload, btn, btnLabel) {
+        btn.textContent = btnLabel === 'AI Draft' ? 'Drafting...' : 'Improving...';
+        btn.disabled = true;
+        var textarea = document.getElementById('inp-body');
+
+        fetch(url, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        }).then(function(response) {
+            if (!response.ok) {
+                return response.json().then(function(d) { throw new Error(d.error || 'Failed'); });
+            }
+            textarea.value = '';
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            function pump() {
+                reader.read().then(function(r) {
+                    if (r.done) return;
+                    buffer += decoder.decode(r.value, {stream: true});
+                    var lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    lines.forEach(function(line) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                var data = JSON.parse(line.slice(6));
+                                if (data.token) { textarea.value += data.token; updatePreview(); }
+                                if (data.done) { btn.textContent = btnLabel; btn.disabled = false; }
+                                if (data.error) { alert(data.error); btn.textContent = btnLabel; btn.disabled = false; }
+                            } catch(e) {}
+                        }
+                    });
+                    pump();
+                });
+            }
+            pump();
+        }).catch(function(err) {
+            alert(err.message || 'AI processing failed.');
+            btn.textContent = btnLabel;
+            btn.disabled = false;
+        });
+    }
+
     window.aiDraft = function() {
         var context = prompt('Describe what this communication should be about:');
         if (!context) return;
-
         var btn = document.getElementById('btn-ai');
-        btn.textContent = 'Drafting...';
-        btn.disabled = true;
-
-        fetch(BASE + '/api/ai-draft', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({context:context, action:'draft', section:activeSection})
-        }).then(function(r){ return r.json(); }).then(function(data){
-            btn.textContent = 'AI Draft';
-            btn.disabled = false;
-            if (data.error) { alert(data.error); return; }
-            document.getElementById('inp-body').value = data.body;
-            updatePreview();
-        }).catch(function(){
-            btn.textContent = 'AI Draft';
-            btn.disabled = false;
-        });
+        streamToTextarea(BASE + '/api/ai-draft-stream',
+            {context:context, action:'draft', section:activeSection}, btn, 'AI Draft');
     };
 
     window.aiImprove = function() {
         var body = document.getElementById('inp-body').value.trim();
         if (!body) { alert('Write something first, then improve it.'); return; }
-
         var btn = document.getElementById('btn-ai-improve');
-        btn.textContent = 'Improving...';
-        btn.disabled = true;
-
-        fetch(BASE + '/api/ai-draft', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({current_body:body, action:'improve',
-                                  context:'School counselor communication', section:activeSection})
-        }).then(function(r){ return r.json(); }).then(function(data){
-            btn.textContent = 'AI Improve';
-            btn.disabled = false;
-            if (data.error) { alert(data.error); return; }
-            document.getElementById('inp-body').value = data.body;
-            updatePreview();
-        }).catch(function(){
-            btn.textContent = 'AI Improve';
-            btn.disabled = false;
-        });
+        streamToTextarea(BASE + '/api/ai-draft-stream',
+            {current_body:body, action:'improve',
+             context:'School counselor communication', section:activeSection}, btn, 'AI Improve');
     };
 
     /* ── Copy ─────────────────────────────────── */

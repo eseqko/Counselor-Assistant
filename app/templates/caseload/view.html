@@ -545,7 +545,7 @@ function getStudentInsights() {
     result.style.display = 'none';
     error.style.display = 'none';
 
-    fetch('/ai/student-insights', {
+    fetch('/ai/student-insights-stream', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -553,20 +553,36 @@ function getStudentInsights() {
         },
         body: JSON.stringify({ student_id: {{ student.id }} })
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        loading.style.display = 'none';
-        btn.disabled = false;
-        btn.textContent = 'Refresh Insights';
-        if (data.error) {
-            error.style.display = 'block';
-            error.textContent = data.error.includes('Connection') ?
-                'Could not connect to Ollama. Make sure it is running (ollama serve).' :
-                data.error;
-        } else {
-            result.style.display = 'block';
-            result.textContent = data.insights;
+    .then(function(response) {
+        if (!response.ok) {
+            return response.json().then(function(d) { throw new Error(d.error || 'Failed'); });
         }
+        loading.style.display = 'none';
+        result.style.display = 'block';
+        result.textContent = '';
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        function pump() {
+            reader.read().then(function(r) {
+                if (r.done) return;
+                buffer += decoder.decode(r.value, {stream: true});
+                var lines = buffer.split('\n');
+                buffer = lines.pop();
+                lines.forEach(function(line) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            var data = JSON.parse(line.slice(6));
+                            if (data.token) result.textContent += data.token;
+                            if (data.done) { btn.disabled = false; btn.textContent = 'Refresh Insights'; }
+                            if (data.error) { error.style.display = 'block'; error.textContent = data.error; }
+                        } catch(e) {}
+                    }
+                });
+                pump();
+            });
+        }
+        pump();
     })
     .catch(function(err) {
         loading.style.display = 'none';

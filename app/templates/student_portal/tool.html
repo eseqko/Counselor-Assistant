@@ -77,6 +77,36 @@
 </div>
 
 <script>
+function readSSEStream(response, outputEl, onDone, onError) {
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+    outputEl.textContent = '';
+
+    function pump() {
+        reader.read().then(function(result) {
+            if (result.done) return;
+            buffer += decoder.decode(result.value, {stream: true});
+            var lines = buffer.split('\n');
+            buffer = lines.pop();
+            lines.forEach(function(line) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        var data = JSON.parse(line.slice(6));
+                        if (data.token) outputEl.textContent += data.token;
+                        if (data.done && onDone) onDone(data.full_text || outputEl.textContent);
+                        if (data.error && onError) onError(data.error);
+                    } catch(e) {}
+                }
+            });
+            pump();
+        }).catch(function(err) {
+            if (onError) onError(err.message);
+        });
+    }
+    pump();
+}
+
 document.getElementById('tool-form').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('generate-btn');
@@ -94,23 +124,27 @@ document.getElementById('tool-form').addEventListener('submit', function(e) {
     loading.style.display = 'block';
     outputPanel.style.display = 'none';
 
-    fetch('{{ url_for("student_portal.generate", token=token) }}', {
+    fetch('{{ url_for("student_portal.generate_stream", token=token) }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ tool_id: '{{ tool.id }}', inputs: inputs })
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        loading.style.display = 'none';
-        btn.disabled = false;
-        btn.innerHTML = '&#9889; Generate';
-        if (data.error) {
-            outputContent.textContent = 'Error: ' + data.error;
-        } else {
-            outputContent.textContent = data.output;
+    .then(function(response) {
+        if (!response.ok) {
+            return response.json().then(function(d) { throw new Error(d.error || 'Generation failed'); });
         }
+        loading.style.display = 'none';
         outputPanel.style.display = 'block';
         outputPanel.scrollIntoView({behavior: 'smooth'});
+
+        readSSEStream(response, outputContent, function() {
+            btn.disabled = false;
+            btn.innerHTML = '&#9889; Generate';
+        }, function(errMsg) {
+            btn.disabled = false;
+            btn.innerHTML = '&#9889; Generate';
+            outputContent.textContent = 'Error: ' + errMsg;
+        });
     })
     .catch(function(err) {
         loading.style.display = 'none';
