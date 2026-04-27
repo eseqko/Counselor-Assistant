@@ -105,6 +105,8 @@ def create_app(config_class=Config):
     from app.routes.college_career import college_career_bp
     from app.routes.ai_tools import ai_tools_bp
     from app.routes.knowledge_base import kb_bp
+    from app.routes.admin import admin_bp
+    from app.routes.student_portal import student_portal_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -136,6 +138,8 @@ def create_app(config_class=Config):
     app.register_blueprint(college_career_bp, url_prefix='/college-career')
     app.register_blueprint(ai_tools_bp, url_prefix='/ai-tools')
     app.register_blueprint(kb_bp, url_prefix='/knowledge-base')
+    app.register_blueprint(admin_bp, url_prefix='/admin')
+    app.register_blueprint(student_portal_bp, url_prefix='/student-portal')
 
     # First-run setup redirect (cached after first successful check)
     @app.before_request
@@ -143,7 +147,7 @@ def create_app(config_class=Config):
         if getattr(app, '_setup_done', False):
             return
         from flask import redirect, url_for
-        allowed = ('/setup', '/static', '/scheduling/book/')
+        allowed = ('/setup', '/static', '/scheduling/book/', '/student-portal/')
         if any(request.path.startswith(p) for p in allowed):
             return
         from app.routes.setup import needs_setup

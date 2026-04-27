@@ -3,7 +3,7 @@ import os
 import re
 from collections import Counter
 
-ALLOWED_EXTENSIONS = {'pdf', 'txt', 'text', 'md'}
+ALLOWED_EXTENSIONS = {'pdf', 'txt', 'text', 'md', 'docx'}
 
 DOCUMENT_CATEGORIES = {
     'crisis_protocol': {'label': 'Crisis Protocol', 'icon': '&#128680;'},
@@ -30,6 +30,8 @@ def extract_text_from_file(filepath):
     ext = filepath.rsplit('.', 1)[-1].lower()
     if ext == 'pdf':
         return _extract_pdf(filepath)
+    elif ext == 'docx':
+        return _extract_docx(filepath)
     elif ext in ('txt', 'text', 'md'):
         return _extract_text(filepath)
     return '', []
@@ -47,6 +49,14 @@ def _extract_pdf(filepath):
             full_text.append(text)
             page_texts.append((i + 1, text))
     return '\n\n'.join(full_text), page_texts
+
+
+def _extract_docx(filepath):
+    from docx import Document
+    doc = Document(filepath)
+    paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    full_text = '\n\n'.join(paragraphs)
+    return full_text, [(1, full_text)]
 
 
 def _extract_text(filepath):

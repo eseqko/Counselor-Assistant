@@ -47,7 +47,7 @@ def upload():
             return redirect(url_for('knowledge_base.upload'))
 
         if not allowed_file(file.filename):
-            flash('Unsupported file type. Allowed: PDF, TXT, MD', 'error')
+            flash('Unsupported file type. Allowed: PDF, DOCX, TXT, MD', 'error')
             return redirect(url_for('knowledge_base.upload'))
 
         original_name = secure_filename(file.filename)

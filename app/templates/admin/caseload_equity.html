@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Caseload Equity — Admin{% endblock %}
+{% block page_title %}Caseload Equity{% endblock %}
+
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;">
+
+    <div style="margin-bottom:16px;">
+        <a href="{{ url_for('admin.index') }}" style="font-size:0.86rem;color:var(--primary-light);">
+            &larr; Back to Department Dashboard
+        </a>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:22px;">
+        {% for ed in equity_data %}
+        <div class="card" style="padding:18px;border-radius:10px;">
+            <div style="font-weight:700;font-size:0.94rem;margin-bottom:8px;">{{ ed.user.display_name }}</div>
+            <div style="font-size:2rem;font-weight:700;margin-bottom:8px;">{{ ed.total }}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">active students</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                {% for grade, count in ed.by_grade|dictsort %}
+                <span style="font-size:0.74rem;padding:2px 8px;border-radius:999px;background:var(--bg);
+                             border:1px solid var(--border);">
+                    Gr. {{ grade or '?' }}: {{ count }}
+                </span>
+                {% endfor %}
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:12px;">
+                {% if ed.iep %}<span>IEP: {{ ed.iep }}</span>{% endif %}
+                {% if ed.s504 %}<span>504: {{ ed.s504 }}</span>{% endif %}
+                {% if ed.el %}<span>EL: {{ ed.el }}</span>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if unassigned %}
+    <div class="card" style="padding:18px;border-radius:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="margin:0;font-size:0.96rem;color:#c62828;">
+                {{ unassigned|length }} Unassigned Student{{ 's' if unassigned|length != 1 else '' }}
+            </h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <select id="reassign-target" class="form-control" style="font-size:0.84rem;padding:4px 8px;">
+                    {% for c in counselors %}
+                    <option value="{{ c.id }}">{{ c.display_name }}</option>
+                    {% endfor %}
+                </select>
+                <button onclick="reassignSelected()" class="btn btn-sm btn-primary"
+                        style="border-radius:6px;white-space:nowrap;">Assign Selected</button>
+                <button onclick="selectAll()" class="btn btn-sm btn-secondary"
+                        style="border-radius:6px;">Select All</button>
+            </div>
+        </div>
+        <div style="max-height:400px;overflow-y:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.84rem;">
+                <thead>
+                    <tr style="background:var(--bg);border-bottom:1px solid var(--border);">
+                        <th style="padding:6px 10px;width:30px;"><input type="checkbox" id="select-all-cb" onchange="toggleAll(this)"></th>
+                        <th style="padding:6px 10px;text-align:left;">Name</th>
+                        <th style="padding:6px 10px;text-align:center;">Grade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in unassigned %}
+                    <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:6px 10px;"><input type="checkbox" class="student-cb" value="{{ s.id }}"></td>
+                        <td style="padding:6px 10px;">{{ s.last_name }}, {{ s.first_name }}</td>
+                        <td style="padding:6px 10px;text-align:center;">{{ s.grade_level or '?' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+var csrfToken = '{{ csrf_token() }}';
+
+function toggleAll(el) {
+    document.querySelectorAll('.student-cb').forEach(function(cb) { cb.checked = el.checked; });
+}
+function selectAll() {
+    document.querySelectorAll('.student-cb').forEach(function(cb) { cb.checked = true; });
+    document.getElementById('select-all-cb').checked = true;
+}
+function reassignSelected() {
+    var ids = [];
+    document.querySelectorAll('.student-cb:checked').forEach(function(cb) { ids.push(parseInt(cb.value)); });
+    if (!ids.length) { alert('Select at least one student.'); return; }
+    var counselorId = document.getElementById('reassign-target').value;
+    fetch('{{ url_for("admin.reassign_students") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({student_ids: ids, counselor_id: parseInt(counselorId)})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert(data.error || 'Failed');
+        }
+    });
+}
+</script>
+{% endblock %}
