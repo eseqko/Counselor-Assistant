@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if app_record else 'Add' }} College Application — {{ student.display_name }}{% endblock %}
+{% block page_title %}{{ 'Edit' if app_record else 'Add' }} College Application{% endblock %}
+
+{% block content %}
+
+<div style="margin-bottom:16px;">
+    <a href="{{ url_for('college_career.student_plan', student_id=student.id) }}" style="color:var(--primary);text-decoration:none;font-size:0.85rem;">&larr; Back to {{ student.first_name }}'s Plan</a>
+</div>
+
+<div class="card">
+    <div class="card-header">{{ 'Edit' if app_record else 'New' }} College Application for {{ student.display_name }}</div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('college_career.edit_application', app_id=app_record.id) if app_record else url_for('college_career.add_application', student_id=student.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div class="form-group">
+                    <label>College Name *</label>
+                    <input type="text" name="college_name" class="form-control" required value="{{ app_record.college_name if app_record else '' }}" placeholder="e.g., UC Berkeley">
+                </div>
+                <div class="form-group">
+                    <label>College Type</label>
+                    <select name="college_type" class="form-control">
+                        <option value="">Select...</option>
+                        {% for val, label in college_types %}
+                        <option value="{{ val }}" {{ 'selected' if app_record and app_record.college_type == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Application Type</label>
+                    <select name="application_type" class="form-control">
+                        <option value="">Select...</option>
+                        {% for val, label in app_types %}
+                        <option value="{{ val }}" {{ 'selected' if app_record and app_record.application_type == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" class="form-control">
+                        {% for val, label in statuses %}
+                        <option value="{{ val }}" {{ 'selected' if app_record and app_record.status == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Application Deadline</label>
+                    <input type="date" name="deadline" class="form-control" value="{{ app_record.deadline.strftime('%Y-%m-%d') if app_record and app_record.deadline else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Date Submitted</label>
+                    <input type="date" name="submitted_date" class="form-control" value="{{ app_record.submitted_date.strftime('%Y-%m-%d') if app_record and app_record.submitted_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Decision Date</label>
+                    <input type="date" name="decision_date" class="form-control" value="{{ app_record.decision_date.strftime('%Y-%m-%d') if app_record and app_record.decision_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Financial Aid Offered ($)</label>
+                    <input type="number" step="0.01" min="0" name="financial_aid_offered" class="form-control" value="{{ app_record.financial_aid_offered if app_record and app_record.financial_aid_offered else '' }}" placeholder="e.g., 15000">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:10px;">
+                <label>Notes</label>
+                <textarea name="notes" class="form-control" rows="3" placeholder="Any additional notes about this application...">{{ app_record.notes if app_record else '' }}</textarea>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:16px;">
+                <button type="submit" class="btn btn-primary">{{ 'Update' if app_record else 'Add' }} Application</button>
+                <a href="{{ url_for('college_career.student_plan', student_id=student.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

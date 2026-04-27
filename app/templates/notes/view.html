@@ -8,6 +8,7 @@
     <div class="card-header">
         {{ note.title or note.note_type }}
         <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline" id="copy-synergy-btn" onclick="copyForSynergy()" title="Copy a formatted version to paste into Synergy's log">Copy for Synergy</button>
             <a href="{{ url_for('notes.edit_note', id=note.id) }}" class="btn btn-sm btn-outline">Edit</a>
             <button class="btn btn-sm btn-outline btn-print">Print</button>
         </div>
@@ -62,6 +63,46 @@
 </div>
 <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
 <script>
+function copyForSynergy() {
+    var btn = document.getElementById('copy-synergy-btn');
+    var lines = [];
+    lines.push('[Counselor Contact — ' + {{ (note.session_date.strftime('%m/%d/%Y') if note.session_date else '')|tojson }} + ']');
+    {% if note.note_type %}lines.push('Type: ' + {{ note.note_type|tojson }});{% endif %}
+    {% if note.duration_minutes %}lines.push('Duration: {{ note.duration_minutes }} min');{% endif %}
+    {% if note.delivery_method %}lines.push('Delivery: ' + {{ note.delivery_method|tojson }});{% endif %}
+    {% if note.asca_domain %}lines.push('ASCA Domain: ' + {{ note.asca_domain|tojson }});{% endif %}
+    {% if note.topic_category %}lines.push('Topic: ' + {{ note.topic_category|tojson }});{% endif %}
+    lines.push('');
+    lines.push({{ (note.content or '')|tojson }});
+    {% if note.follow_up_needed %}
+    lines.push('');
+    lines.push('Follow-up needed{% if note.follow_up_date %} by {{ note.follow_up_date.strftime("%m/%d/%Y") }}{% endif %}.' + {{ (' ' + note.follow_up_notes if note.follow_up_notes else '')|tojson }});
+    {% endif %}
+    var text = lines.join('\n');
+
+    var done = function() {
+        var original = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.disabled = true;
+        setTimeout(function(){ btn.textContent = original; btn.disabled = false; }, 1600);
+    };
+    var fallback = function() {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch(e) { alert('Copy failed — select and copy manually:\n\n' + text); }
+        document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+        fallback();
+    }
+}
+
 function getNoteFeedback() {
     var btn = document.getElementById('ai-feedback-btn');
     var placeholder = document.getElementById('ai-feedback-placeholder');

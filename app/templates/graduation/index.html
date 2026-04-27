@@ -14,6 +14,15 @@
 .risk-on-track { background:#E8F8E8; color:var(--success); }
 .risk-unknown  { background:var(--light-gray); color:var(--gray); }
 
+.ab-badge {
+    display:inline-block; padding:2px 7px; border-radius:8px;
+    font-size:0.68rem; font-weight:700; letter-spacing:0.2px;
+    background:#EDE9FE; color:#6D28D9;
+}
+.ab-exempt-accepted { background:#DBEAFE; color:#1D4ED8; }
+.ab-exempt-eligible { background:#FEF3C7; color:#92400E; }
+.ab-exempt-declined { background:var(--light-gray); color:var(--gray); text-decoration:line-through; }
+
 .ag-badge {
     display:inline-block; padding:2px 8px; border-radius:10px;
     font-size:0.72rem; font-weight:600;
@@ -81,6 +90,12 @@
         <div class="stat-value">{{ risk_counts.get('on-track', 0) }}</div>
         <div class="stat-label">On Track</div>
     </div>
+    {% if exemption_count > 0 %}
+    <div class="stat-card" style="border-left:3px solid #6D28D9;">
+        <div class="stat-value" style="color:#6D28D9;">{{ exemption_count }}</div>
+        <div class="stat-label">AB Exemption</div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Filters -->
@@ -106,6 +121,10 @@
         <option value="verify">Verify</option>
         <option value="on-track">On Track</option>
     </select>
+    <select id="filter-ab" onchange="applyFilters()">
+        <option value="">All Students</option>
+        <option value="ab">AB Exemption Eligible</option>
+    </select>
 </div>
 
 <!-- Main table -->
@@ -120,12 +139,13 @@
                     <th>Credits</th>
                     <th>a-g</th>
                     <th>Risk</th>
+                    <th>AB Exemption</th>
                     <th>Source</th>
                 </tr>
             </thead>
             <tbody>
                 {% for r in rows %}
-                <tr data-grade="{{ r.student.grade_level or '' }}" data-risk="{{ r.risk }}" data-ag="{{ r.ag_status }}">
+                <tr data-grade="{{ r.student.grade_level or '' }}" data-risk="{{ r.risk }}" data-ag="{{ r.ag_status }}" data-ab="{{ 'ab' if r.student.has_ab_population else '' }}">
                     <td class="student-name">
                         <a href="{{ url_for('graduation.student_detail', student_id=r.student.id) }}">{{ r.student.last_name }}, {{ r.student.first_name }}</a>
                     </td>
@@ -145,6 +165,10 @@
                         {% elif r.total_needed > 0 %}
                         <span style="color:var(--danger);font-size:0.75rem;">({{ r.total_needed|int }} needed)</span>
                         {% endif %}
+                        {% if r.state_min and r.student.uses_state_minimum %}
+                        <br><span style="color:#6D28D9;font-size:0.72rem;">State min: {{ r.total_completed|int }}/{{ state_min_total }}
+                        {% if r.state_min.subj_shortfall > 0 %} ({{ r.state_min.subj_shortfall|int }} needed){% endif %}</span>
+                        {% endif %}
                     </td>
                     <td>
                         <span class="ag-badge ag-{{ r.ag_status }}">
@@ -153,6 +177,25 @@
                     </td>
                     <td>
                         <span class="risk-badge risk-{{ r.risk }}">{{ r.risk|replace('-', ' ') }}</span>
+                        {% if r.state_min and r.student.uses_state_minimum %}
+                        <br><span class="risk-badge risk-{{ r.state_min.risk }}" style="font-size:0.62rem;margin-top:2px;">state: {{ r.state_min.risk|replace('-', ' ') }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:0.75rem;">
+                        {% if r.student.has_ab_population %}
+                            {% for bill in r.student.ab_bills %}
+                            <span class="ab-badge">{{ bill }}</span>
+                            {% endfor %}
+                            {% if r.student.ab_exemption_status == 'accepted' %}
+                            <br><span class="ab-badge ab-exempt-accepted" style="margin-top:2px;">Accepted</span>
+                            {% elif r.student.ab_exemption_status == 'eligible' %}
+                            <br><span class="ab-badge ab-exempt-eligible" style="margin-top:2px;">Pending</span>
+                            {% elif r.student.ab_exemption_status == 'declined' %}
+                            <br><span class="ab-badge ab-exempt-declined" style="margin-top:2px;">Declined</span>
+                            {% endif %}
+                        {% else %}
+                        —
+                        {% endif %}
                     </td>
                     <td style="font-size:0.75rem;color:var(--gray);">
                         {% if r.source == 'transcript' %}Transcript{% elif r.source == 'grades' %}Grades{% else %}—{% endif %}
@@ -160,7 +203,7 @@
                 </tr>
                 {% endfor %}
                 {% if not rows %}
-                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray);font-style:italic;">
+                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray);font-style:italic;">
                     No active students in your caseload. <a href="{{ url_for('caseload.index') }}">Add students</a> first.
                 </td></tr>
                 {% endif %}
@@ -177,12 +220,14 @@ function applyFilters() {
     var grade = document.getElementById('filter-grade').value;
     var risk = document.getElementById('filter-risk').value;
     var ag = document.getElementById('filter-ag').value;
+    var ab = document.getElementById('filter-ab').value;
     var rows = document.querySelectorAll('#grad-table tbody tr');
     rows.forEach(function(row) {
         var show = true;
         if (grade && row.dataset.grade !== grade) show = false;
         if (risk && row.dataset.risk !== risk) show = false;
         if (ag && row.dataset.ag !== ag) show = false;
+        if (ab && row.dataset.ab !== ab) show = false;
         row.style.display = show ? '' : 'none';
     });
 }

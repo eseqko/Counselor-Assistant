@@ -102,6 +102,8 @@ def create_app(config_class=Config):
     from app.routes.search import search_bp
     from app.routes.mail_merge import mail_merge_bp
     from app.routes.academic_plan import academic_plan_bp
+    from app.routes.college_career import college_career_bp
+    from app.routes.ai_tools import ai_tools_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -130,6 +132,8 @@ def create_app(config_class=Config):
     app.register_blueprint(search_bp)
     app.register_blueprint(mail_merge_bp, url_prefix='/mail-merge')
     app.register_blueprint(academic_plan_bp, url_prefix='/academic-plan')
+    app.register_blueprint(college_career_bp, url_prefix='/college-career')
+    app.register_blueprint(ai_tools_bp, url_prefix='/ai-tools')
 
     # First-run setup redirect (cached after first successful check)
     @app.before_request
@@ -157,6 +161,16 @@ def create_app(config_class=Config):
             }
         return {'user_theme': 'light', 'user_reduced_motion': False}
 
+    # Cache-bust static assets by file mtime so browsers refetch on change.
+    @app.context_processor
+    def inject_static_version():
+        def static_v(filename):
+            try:
+                return int(os.path.getmtime(os.path.join(app.static_folder, filename)))
+            except OSError:
+                return 0
+        return {'static_v': static_v}
+
     # Security + cache headers
     @app.after_request
     def set_headers(response):
@@ -167,6 +181,10 @@ def create_app(config_class=Config):
         # Cache static assets so browsers don't re-download CSS/JS every page load
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=43200'
+        # Service worker must be able to control the root scope and always load fresh
+        if request.path == '/static/sw.js':
+            response.headers['Service-Worker-Allowed'] = '/'
+            response.headers['Cache-Control'] = 'no-cache'
         return response
 
     # Return JSON (not HTML) for CSRF errors on API endpoints
@@ -189,7 +207,7 @@ def create_app(config_class=Config):
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
         from app.models import attendance, grade, iep504, availability, meeting_note, import_log
-        from app.models import academic_plan
+        from app.models import academic_plan, college_career, ai_tool_history
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

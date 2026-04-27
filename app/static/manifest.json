@@ -1,0 +1,15 @@
+{
+  "name": "Counselor Assistant",
+  "short_name": "Counselor",
+  "description": "School counselor management tool",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#374151",
+  "orientation": "any",
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/static/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

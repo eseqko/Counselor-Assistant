@@ -24,10 +24,28 @@
             {% endif %}
             {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
             {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+            {% for bill in student.ab_bills %}
+            <span class="badge" style="background:#EDE9FE;color:#6D28D9;">{{ bill }}</span>
+            {% endfor %}
+            {% if student.ab_exemption_status == 'accepted' %}
+            <span class="badge" style="background:#DBEAFE;color:#1D4ED8;">State Min Accepted</span>
+            {% elif student.ab_exemption_status == 'eligible' %}
+            <span class="badge" style="background:#FEF3C7;color:#92400E;">Exemption Pending</span>
+            {% endif %}
         </div>
     </div>
     <div style="margin-left:auto;">
         <div class="btn-group">
+            {% if current_user.synergy_base_url %}
+            <button type="button" class="btn btn-sm btn-outline" id="open-synergy-btn"
+                    data-synergy-url="{{ current_user.synergy_base_url }}"
+                    data-student-id="{{ student.student_id_number }}"
+                    data-student-name="{{ student.display_name }}"
+                    onclick="openInSynergy(this)"
+                    title="Open Synergy in a new tab and copy this student's ID to your clipboard">
+                Open in Synergy
+            </button>
+            {% endif %}
             <a href="{{ url_for('caseload.edit_student', id=student.id) }}" class="btn btn-sm btn-outline">Edit</a>
             <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Note</a>
             <a href="{{ url_for('service_log.add_record', student_id=student.id) }}" class="btn btn-sm btn-success">+ Service</a>
@@ -61,6 +79,15 @@
                 {% if student.date_of_birth %}<tr><td style="font-weight:600;">DOB</td><td>{{ student.date_of_birth.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
                 {% if student.gender %}<tr><td style="font-weight:600;">Gender</td><td>{{ student.gender }}</td></tr>{% endif %}
                 {% if student.ethnicity %}<tr><td style="font-weight:600;">Ethnicity</td><td>{{ student.ethnicity }}</td></tr>{% endif %}
+                {% if student.has_ab_population %}
+                <tr><td style="font-weight:600;">AB Exemption</td><td>
+                    {{ student.ab_bills|join(', ') }}
+                    {% if student.ab_exemption_status != 'none' %}
+                    — <strong>{{ student.ab_exemption_status|capitalize }}</strong>
+                    {% endif %}
+                    {% if student.ab_transfer_date %}<br><span style="font-size:0.82rem;color:var(--gray);">Transfer: {{ student.ab_transfer_date.strftime('%m/%d/%Y') }}</span>{% endif %}
+                </td></tr>
+                {% endif %}
             </table>
             <div style="margin-top:12px;">
                 {% for tag in student.tags %}
@@ -68,6 +95,68 @@
                 {% endfor %}
             </div>
         </div>
+    </div>
+</div>
+
+<!-- College & Career Quick Status -->
+{% set cc_plan = student.college_career_plan %}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header">
+        College & Career
+        <div class="btn-group">
+            {% if cc_plan %}
+            <a href="{{ url_for('college_career.student_plan', student_id=student.id) }}" class="btn btn-sm btn-outline">View Full Plan</a>
+            <a href="{{ url_for('college_career.edit_plan', student_id=student.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            {% else %}
+            <form method="POST" action="{{ url_for('college_career.create_plan', student_id=student.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-primary">Start Plan</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        {% if cc_plan %}
+        <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.88rem;">
+            <div>
+                <span style="color:var(--gray);font-size:0.75rem;text-transform:uppercase;">Pathway</span><br>
+                <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.78rem;font-weight:700;
+                    {% if cc_plan.pathway == '4year' %}background:#DBEAFE;color:#1D4ED8;
+                    {% elif cc_plan.pathway == '2year' %}background:#D1FAE5;color:#065F46;
+                    {% elif cc_plan.pathway == 'cte_trade' %}background:#FEF3C7;color:#92400E;
+                    {% elif cc_plan.pathway == 'military' %}background:#E0E7FF;color:#3730A3;
+                    {% elif cc_plan.pathway == 'workforce' %}background:#F3E8FF;color:#6D28D9;
+                    {% else %}background:var(--light-gray);color:var(--gray);{% endif %}">{{ cc_plan.pathway_label }}</span>
+            </div>
+            {% if cc_plan.gpa_unweighted or cc_plan.gpa_weighted %}
+            <div>
+                <span style="color:var(--gray);font-size:0.75rem;text-transform:uppercase;">GPA</span><br>
+                <strong>{% if cc_plan.gpa_unweighted %}{{ "%.2f"|format(cc_plan.gpa_unweighted) }}{% endif %}{% if cc_plan.gpa_weighted %} / {{ "%.2f"|format(cc_plan.gpa_weighted) }}w{% endif %}</strong>
+            </div>
+            {% endif %}
+            {% if cc_plan.best_test_display %}
+            <div>
+                <span style="color:var(--gray);font-size:0.75rem;text-transform:uppercase;">Tests</span><br>
+                <strong>{{ cc_plan.best_test_display }}</strong>
+            </div>
+            {% endif %}
+            <div>
+                <span style="color:var(--gray);font-size:0.75rem;text-transform:uppercase;">Applications</span><br>
+                {% if cc_plan.committed_college %}<strong style="color:#065F46;">Committed: {{ cc_plan.committed_college }}</strong>
+                {% elif cc_plan.apps_total > 0 %}<strong>{{ cc_plan.apps_submitted }}/{{ cc_plan.apps_total }}</strong> submitted
+                {% else %}<span style="color:var(--gray);">None yet</span>{% endif %}
+            </div>
+            <div>
+                <span style="color:var(--gray);font-size:0.75rem;text-transform:uppercase;">FAFSA</span><br>
+                <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.78rem;font-weight:600;
+                    {% if cc_plan.fafsa_status in ('submitted','verified') %}background:#D1FAE5;color:#065F46;
+                    {% elif cc_plan.fafsa_status == 'in_progress' %}background:#FFF3D6;color:#996300;
+                    {% else %}background:var(--light-gray);color:var(--gray);{% endif %}">{{ cc_plan.fafsa_label }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div style="color:var(--gray);font-size:0.88rem;font-style:italic;">No college & career plan started yet.</div>
+        {% endif %}
     </div>
 </div>
 

@@ -20,6 +20,16 @@ GRAD_REQUIREMENTS = {
 }
 TOTAL_REQUIRED = 225
 
+# California State Minimum (Ed Code 51225.3) — for AB exemption-eligible students
+# 13 year-long courses = 130 credits. No electives required at state level.
+STATE_MIN_REQUIREMENTS = {
+    'English': 30, 'Math': 20,
+    'Life Science': 10, 'Physical Science': 10,
+    'US History': 10, 'World History, CLT': 10, 'Economics': 5, 'Government': 5,
+    'Fine Arts / LOTE': 10, 'Physical Education': 20,
+}
+STATE_MIN_TOTAL = 130
+
 AG_REQUIREMENTS = {
     'a': {'label': 'History/Social Science', 'required': 20},
     'b': {'label': 'English', 'required': 40},
@@ -236,7 +246,7 @@ def _build_student_grad_data(student):
     else:
         pct = round(total_comp / TOTAL_REQUIRED * 100) if TOTAL_REQUIRED else 0
 
-    return {
+    result = {
         'student': student,
         'total_completed': total_comp,
         'total_needed': total_need,
@@ -251,6 +261,36 @@ def _build_student_grad_data(student):
         'ag': ag,
         'source': source,
     }
+
+    # Dual-track: compute state minimum progress for AB-eligible students
+    if student.has_ab_population and credits:
+        sm_shortfall = 0
+        sm_short_count = 0
+        sm_satisfied = 0
+        for subj, req in STATE_MIN_REQUIREMENTS.items():
+            c = credits.get(subj, {})
+            comp = c.get('completed', 0) or 0
+            capped = min(comp, req)
+            sm_satisfied += capped
+            gap = max(0, req - comp)
+            if gap > 0:
+                sm_shortfall += gap
+                sm_short_count += 1
+        sm_total_need = max(max(0, STATE_MIN_TOTAL - total_comp), sm_shortfall)
+        sm_pct = round(sm_satisfied / STATE_MIN_TOTAL * 100) if STATE_MIN_TOTAL else 0
+        sm_risk = _risk_level(total_comp, STATE_MIN_TOTAL, student.grade_level)
+        result['state_min'] = {
+            'total_required': STATE_MIN_TOTAL,
+            'total_needed': sm_total_need,
+            'pct': sm_pct,
+            'subj_shortfall': sm_shortfall,
+            'subj_short_count': sm_short_count,
+            'risk': sm_risk,
+        }
+    else:
+        result['state_min'] = None
+
+    return result
 
 
 @graduation_bp.route('/')
@@ -269,12 +309,17 @@ def index():
     for r in rows:
         risk_counts[r['risk']] += 1
 
+    # Exemption summary
+    exemption_count = sum(1 for r in rows if r.get('state_min'))
+
     return render_template('graduation/index.html',
                            rows=rows,
                            risk_counts=risk_counts,
                            total_required=TOTAL_REQUIRED,
                            grad_requirements=GRAD_REQUIREMENTS,
-                           ag_requirements=AG_REQUIREMENTS)
+                           ag_requirements=AG_REQUIREMENTS,
+                           state_min_total=STATE_MIN_TOTAL,
+                           exemption_count=exemption_count)
 
 
 @graduation_bp.route('/student/<int:student_id>')
@@ -293,4 +338,6 @@ def student_detail(student_id):
                            data=data, grades=grades,
                            grad_requirements=GRAD_REQUIREMENTS,
                            ag_requirements=AG_REQUIREMENTS,
-                           total_required=TOTAL_REQUIRED)
+                           total_required=TOTAL_REQUIRED,
+                           state_min_requirements=STATE_MIN_REQUIREMENTS,
+                           state_min_total=STATE_MIN_TOTAL)

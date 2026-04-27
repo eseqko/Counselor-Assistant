@@ -54,7 +54,16 @@
                     <td>{{ r.topic or '-' }}</td>
                     <td>{{ r.duration_minutes or '-' }} min</td>
                     <td>{% if r.follow_up_required %}<span class="badge badge-warning">Yes</span>{% endif %}</td>
-                    <td><a href="{{ url_for('service_log.edit_record', id=r.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
+                    <td style="white-space:nowrap;">
+                        <a href="{{ url_for('service_log.edit_record', id=r.id) }}" class="btn btn-sm btn-outline">Edit</a>
+                        {% if current_user.synergy_base_url %}
+                        <button type="button" class="btn btn-sm btn-outline"
+                                data-synergy-url="{{ current_user.synergy_base_url }}"
+                                data-student-id="{{ r.student.student_id_number }}"
+                                onclick="openInSynergy(this)"
+                                title="Open Synergy and copy {{ r.student.display_name }}'s ID">Synergy</button>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
                 {% if not records %}
@@ -64,4 +73,5 @@
         </table>
     </div>
 </div>
+
 {% endblock %}

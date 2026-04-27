@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Add Test Score — {{ student.display_name }}{% endblock %}
+{% block page_title %}Add Test Score{% endblock %}
+
+{% block content %}
+
+<div style="margin-bottom:16px;">
+    <a href="{{ url_for('college_career.student_plan', student_id=student.id) }}" style="color:var(--primary);text-decoration:none;font-size:0.85rem;">&larr; Back to {{ student.first_name }}'s Plan</a>
+</div>
+
+<div class="card">
+    <div class="card-header">Add Test Score for {{ student.display_name }}</div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div class="form-group">
+                    <label>Test Type *</label>
+                    <select name="test_type" class="form-control" id="test-type" onchange="toggleTestName()">
+                        {% for val, label in test_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" id="test-name-group">
+                    <label>Subject / Exam Name</label>
+                    <input type="text" name="test_name" class="form-control" placeholder="e.g., AP US History">
+                </div>
+                <div class="form-group">
+                    <label>Test Date</label>
+                    <input type="date" name="test_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Score *</label>
+                    <input type="text" name="score" class="form-control" required placeholder="e.g., 1420, 32, 4">
+                </div>
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label>Score Detail (optional)</label>
+                    <input type="text" name="score_detail" class="form-control" placeholder="e.g., R:720 M:700, or section breakdowns">
+                </div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Add Score</button>
+                <a href="{{ url_for('college_career.student_plan', student_id=student.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleTestName() {
+    var type = document.getElementById('test-type').value;
+    var group = document.getElementById('test-name-group');
+    group.style.display = (type === 'ap' || type === 'ib') ? '' : 'none';
+}
+toggleTestName();
+</script>
+
+{% endblock %}

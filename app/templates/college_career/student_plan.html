@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}College & Career — {{ student.display_name }}{% endblock %}
+{% block page_title %}College & Career{% endblock %}
+
+{% block head %}
+<style>
+.cc-badge {
+    display:inline-block; padding:3px 10px; border-radius:12px;
+    font-size:0.72rem; font-weight:700; letter-spacing:0.3px;
+}
+.pathway-4year      { background:#DBEAFE; color:#1D4ED8; }
+.pathway-2year      { background:#D1FAE5; color:#065F46; }
+.pathway-cte_trade  { background:#FEF3C7; color:#92400E; }
+.pathway-military   { background:#E0E7FF; color:#3730A3; }
+.pathway-workforce  { background:#F3E8FF; color:#6D28D9; }
+.pathway-undecided  { background:var(--light-gray); color:var(--gray); }
+
+.fafsa-not_started  { background:var(--light-gray); color:var(--gray); }
+.fafsa-in_progress  { background:#FFF3D6; color:#996300; }
+.fafsa-submitted    { background:#DBEAFE; color:#1D4ED8; }
+.fafsa-verified     { background:#D1FAE5; color:#065F46; }
+
+.stmt-not_started   { background:var(--light-gray); color:var(--gray); }
+.stmt-drafting      { background:#FFF3D6; color:#996300; }
+.stmt-reviewed      { background:#DBEAFE; color:#1D4ED8; }
+.stmt-final         { background:#D1FAE5; color:#065F46; }
+
+.app-planned        { background:var(--light-gray); color:var(--gray); }
+.app-in_progress    { background:#FFF3D6; color:#996300; }
+.app-submitted      { background:#DBEAFE; color:#1D4ED8; }
+.app-accepted       { background:#D1FAE5; color:#065F46; }
+.app-denied         { background:#FCE8E8; color:var(--danger); }
+.app-waitlisted     { background:#FEF3C7; color:#92400E; }
+.app-committed      { background:#D1FAE5; color:#065F46; font-weight:700; border:2px solid #065F46; }
+
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width:768px) { .detail-grid { grid-template-columns:1fr; } }
+.detail-label { font-size:0.78rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:2px; }
+.detail-value { font-size:0.95rem; font-weight:600; }
+
+.section-card { margin-bottom:20px; }
+.section-card .card-header { display:flex; justify-content:space-between; align-items:center; }
+
+.mini-table { width:100%; font-size:0.85rem; }
+.mini-table th {
+    text-align:left; padding:8px 10px; font-weight:600;
+    border-bottom:2px solid var(--light-gray); font-size:0.75rem;
+    text-transform:uppercase; color:var(--gray);
+}
+.mini-table td { padding:8px 10px; border-bottom:1px solid var(--light-gray); vertical-align:middle; }
+.mini-table tr:hover { background:var(--bg); }
+
+.checklist-item { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--light-gray); }
+.checklist-item:last-child { border-bottom:none; }
+.check-done { color:var(--success); font-size:1.1rem; }
+.check-pending { color:var(--gray); font-size:1.1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div style="margin-bottom:16px;">
+    <a href="{{ url_for('college_career.index') }}" style="color:var(--primary);text-decoration:none;font-size:0.85rem;">&larr; Back to College & Career Hub</a>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <div>
+            <span style="font-size:1.15rem;font-weight:700;">{{ student.display_name }}</span>
+            <span class="grade-badge" style="display:inline-block;padding:1px 7px;border-radius:8px;font-size:0.72rem;font-weight:600;background:var(--light-gray);color:var(--dark);margin-left:8px;">Grade {{ student.grade_level or '?' }}</span>
+            {% if plan %}
+            <span class="cc-badge pathway-{{ plan.pathway }}" style="margin-left:8px;">{{ plan.pathway_label }}</span>
+            {% endif %}
+        </div>
+        <div class="btn-group">
+            {% if plan %}
+            <a href="{{ url_for('college_career.edit_plan', student_id=student.id) }}" class="btn btn-sm btn-primary">Edit Plan</a>
+            {% else %}
+            <form method="POST" action="{{ url_for('college_career.create_plan', student_id=student.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-primary">Start Plan</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('caseload.view_student', id=student.id) }}" class="btn btn-sm btn-outline">Student Profile</a>
+        </div>
+    </div>
+</div>
+
+{% if not plan %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state" style="text-align:center;padding:40px;">
+            <p style="font-size:1.1rem;color:var(--gray);">No college & career plan started for {{ student.first_name }} yet.</p>
+            <form method="POST" action="{{ url_for('college_career.create_plan', student_id=student.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">Start Plan Now</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<!-- Profile + Tests row -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+    <div class="card section-card" style="margin-bottom:0;">
+        <div class="card-header">Post-Secondary Profile</div>
+        <div class="card-body">
+            <div class="detail-grid">
+                <div>
+                    <div class="detail-label">Pathway</div>
+                    <div class="detail-value"><span class="cc-badge pathway-{{ plan.pathway }}">{{ plan.pathway_label }}</span></div>
+                </div>
+                <div>
+                    <div class="detail-label">Intended Major</div>
+                    <div class="detail-value">{{ plan.intended_major or '—' }}</div>
+                </div>
+                <div>
+                    <div class="detail-label">Career Interest</div>
+                    <div class="detail-value">{{ plan.career_interest or '—' }}</div>
+                </div>
+                <div>
+                    <div class="detail-label">GPA</div>
+                    <div class="detail-value">
+                        {% if plan.gpa_unweighted %}{{ "%.2f"|format(plan.gpa_unweighted) }} UW{% endif %}
+                        {% if plan.gpa_weighted %} / {{ "%.2f"|format(plan.gpa_weighted) }} W{% endif %}
+                        {% if not plan.gpa_unweighted and not plan.gpa_weighted %}—{% endif %}
+                    </div>
+                </div>
+                <div>
+                    <div class="detail-label">SAT</div>
+                    <div class="detail-value">
+                        {% if plan.sat_total %}{{ plan.sat_total }}
+                            {% if plan.sat_reading and plan.sat_math %}<span style="font-size:0.78rem;color:var(--gray);"> (R:{{ plan.sat_reading }} M:{{ plan.sat_math }})</span>{% endif %}
+                        {% else %}—{% endif %}
+                    </div>
+                </div>
+                <div>
+                    <div class="detail-label">ACT</div>
+                    <div class="detail-value">{{ plan.act_composite or '—' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card section-card" style="margin-bottom:0;">
+        <div class="card-header">
+            <span>Test Scores</span>
+            <a href="{{ url_for('college_career.add_test', student_id=student.id) }}" class="btn btn-sm btn-outline">+ Add Score</a>
+        </div>
+        <div class="card-body" style="padding:0;">
+            {% if test_scores %}
+            <table class="mini-table">
+                <thead><tr><th>Test</th><th>Date</th><th>Score</th><th></th></tr></thead>
+                <tbody>
+                    {% for t in test_scores %}
+                    <tr>
+                        <td style="font-weight:600;">{{ t.display_name }}</td>
+                        <td>{{ t.test_date.strftime('%m/%d/%Y') if t.test_date else '—' }}</td>
+                        <td style="font-weight:700;">{{ t.score or '—' }}{% if t.score_detail %} <span style="font-size:0.75rem;color:var(--gray);">{{ t.score_detail }}</span>{% endif %}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('college_career.delete_test', test_id=t.id) }}" style="display:inline;" onsubmit="return confirm('Remove this score?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm" style="color:var(--danger);background:none;border:none;padding:2px 6px;cursor:pointer;">&times;</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div style="padding:20px;text-align:center;color:var(--gray);font-style:italic;">No test scores recorded.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Applications -->
+<div class="card section-card">
+    <div class="card-header">
+        <span>College Applications ({{ applications|length }})</span>
+        <a href="{{ url_for('college_career.add_application', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Add Application</a>
+    </div>
+    <div class="card-body" style="padding:0;">
+        {% if applications %}
+        <table class="mini-table">
+            <thead>
+                <tr>
+                    <th>College</th>
+                    <th>Type</th>
+                    <th>App Type</th>
+                    <th>Deadline</th>
+                    <th>Status</th>
+                    <th>Aid Offered</th>
+                    <th>Notes</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in applications %}
+                <tr>
+                    <td style="font-weight:600;">{{ a.college_name }}</td>
+                    <td><span style="font-size:0.78rem;">{{ a.college_type_label }}</span></td>
+                    <td><span style="font-size:0.78rem;">{{ a.app_type_label }}</span></td>
+                    <td style="font-size:0.82rem;">{{ a.deadline.strftime('%m/%d/%Y') if a.deadline else '—' }}</td>
+                    <td><span class="cc-badge app-{{ a.status }}">{{ a.status_label }}</span></td>
+                    <td style="font-size:0.82rem;">{{ "${:,.0f}".format(a.financial_aid_offered) if a.financial_aid_offered else '—' }}</td>
+                    <td style="font-size:0.78rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.notes or '' }}</td>
+                    <td style="white-space:nowrap;">
+                        <a href="{{ url_for('college_career.edit_application', app_id=a.id) }}" class="btn btn-sm btn-outline">Edit</a>
+                        <form method="POST" action="{{ url_for('college_career.delete_application', app_id=a.id) }}" style="display:inline;" onsubmit="return confirm('Remove {{ a.college_name }}?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm" style="color:var(--danger);background:none;border:1px solid var(--danger);padding:2px 8px;cursor:pointer;">Del</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding:30px;text-align:center;color:var(--gray);font-style:italic;">
+            No applications added yet.
+            <br><a href="{{ url_for('college_career.add_application', student_id=student.id) }}" class="btn btn-sm btn-outline" style="margin-top:8px;">Add First Application</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Financial Aid + Materials row -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+    <div class="card section-card" style="margin-bottom:0;">
+        <div class="card-header">Financial Aid</div>
+        <div class="card-body">
+            <div class="checklist-item">
+                <span class="{{ 'check-done' if plan.fafsa_status in ('submitted','verified') else 'check-pending' }}">{{ '&#10003;' if plan.fafsa_status in ('submitted','verified') else '&#9675;' }}</span>
+                <div>
+                    <div style="font-weight:600;">FAFSA</div>
+                    <span class="cc-badge fafsa-{{ plan.fafsa_status }}">{{ plan.fafsa_label }}</span>
+                    {% if plan.fafsa_submitted_date %}<span style="font-size:0.75rem;color:var(--gray);margin-left:6px;">{{ plan.fafsa_submitted_date.strftime('%m/%d/%Y') }}</span>{% endif %}
+                </div>
+            </div>
+            <div class="checklist-item">
+                <span class="{{ 'check-done' if plan.css_profile_status == 'submitted' else 'check-pending' }}">{{ '&#10003;' if plan.css_profile_status == 'submitted' else '&#9675;' }}</span>
+                <div>
+                    <div style="font-weight:600;">CSS Profile</div>
+                    <span style="font-size:0.82rem;color:var(--gray);">{{ dict(plan.AID_STATUSES).get(plan.css_profile_status, 'Not Needed') }}</span>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <span class="{{ 'check-done' if plan.dream_act_status == 'submitted' else 'check-pending' }}">{{ '&#10003;' if plan.dream_act_status == 'submitted' else '&#9675;' }}</span>
+                <div>
+                    <div style="font-weight:600;">CA Dream Act Application</div>
+                    <span style="font-size:0.82rem;color:var(--gray);">{{ dict(plan.AID_STATUSES).get(plan.dream_act_status, 'Not Needed') }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card section-card" style="margin-bottom:0;">
+        <div class="card-header">Application Materials</div>
+        <div class="card-body">
+            <div class="checklist-item">
+                <span class="{{ 'check-done' if plan.personal_statement_status == 'final' else 'check-pending' }}">{{ '&#10003;' if plan.personal_statement_status == 'final' else '&#9675;' }}</span>
+                <div>
+                    <div style="font-weight:600;">Personal Statement</div>
+                    <span class="cc-badge stmt-{{ plan.personal_statement_status }}">{{ plan.statement_label }}</span>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <span class="{{ 'check-done' if plan.letters_of_rec_received >= plan.letters_of_rec_requested and plan.letters_of_rec_requested > 0 else 'check-pending' }}">{{ '&#10003;' if plan.letters_of_rec_received >= plan.letters_of_rec_requested and plan.letters_of_rec_requested > 0 else '&#9675;' }}</span>
+                <div>
+                    <div style="font-weight:600;">Letters of Recommendation</div>
+                    <span style="font-size:0.82rem;">{{ plan.letters_of_rec_received }} received / {{ plan.letters_of_rec_requested }} requested</span>
+                </div>
+            </div>
+            <div class="checklist-item">
+                <span class="{{ 'check-done' if plan.transcript_sent else 'check-pending' }}">{{ '&#10003;' if plan.transcript_sent else '&#9675;' }}</span>
+                <div>
+                    <div style="font-weight:600;">Official Transcript Sent</div>
+                    <span style="font-size:0.82rem;color:var(--gray);">{{ 'Yes' if plan.transcript_sent else 'Not yet' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notes -->
+{% if plan.notes %}
+<div class="card section-card">
+    <div class="card-header">Counselor Notes</div>
+    <div class="card-body">
+        <div style="white-space:pre-wrap;font-size:0.9rem;">{{ plan.notes }}</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Quick links -->
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+    <a href="{{ url_for('graduation.student_detail', student_id=student.id) }}" class="btn btn-sm btn-outline">Graduation Tracker &rarr;</a>
+    <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-outline">+ Counselor Note</a>
+    <a href="{{ url_for('caseload.view_student', id=student.id) }}" class="btn btn-sm btn-outline">Student Profile &rarr;</a>
+</div>
+
+{% endif %}
+
+{% endblock %}

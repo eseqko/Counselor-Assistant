@@ -91,6 +91,7 @@
                 </div>
             </div>
             <div class="no-print" style="display:flex;gap:8px;">
+                <button type="button" onclick="copyForSynergy()" id="copy-synergy-btn" class="btn btn-secondary" style="font-size:.8rem;" title="Copy a formatted version to paste into Synergy's log">Copy for Synergy</button>
                 <button onclick="window.print()" class="btn btn-secondary" style="font-size:.8rem;">Print</button>
                 <a href="{{ url_for('meeting_notes.edit', note_id=note.id) }}" class="btn btn-primary" style="font-size:.8rem;">Edit</a>
             </div>
@@ -120,6 +121,16 @@
             {{ s.first_name }} {{ s.last_name }}
             <span class="s-grade">Gr {{ s.grade_level }}</span>
         </a>
+        {% if current_user.synergy_base_url %}
+        <button type="button" class="student-link no-print"
+                style="background:#fef3c7;color:#92400e;border:none;cursor:pointer;font:inherit;"
+                data-synergy-url="{{ current_user.synergy_base_url }}"
+                data-student-id="{{ s.student_id_number }}"
+                onclick="openInSynergy(this)"
+                title="Open Synergy and copy {{ s.first_name }}'s ID">
+            &#8599; Synergy
+        </button>
+        {% endif %}
         {% endfor %}
     </div>
     {% endif %}
@@ -201,4 +212,48 @@
         <span>Meeting Note #{{ note.id }}</span>
     </div>
 </div>
+<script>
+function copyForSynergy() {
+    var btn = document.getElementById('copy-synergy-btn');
+    var lines = [];
+    lines.push('[' + {{ type_label|tojson }} + ' — ' + {{ note.meeting_date.strftime('%m/%d/%Y')|tojson }} + ']');
+    lines.push('Title: ' + {{ note.title|tojson }});
+    {% if note.duration_minutes %}lines.push('Duration: {{ note.duration_minutes }} min');{% endif %}
+    {% if note.location %}lines.push('Location: ' + {{ note.location|tojson }});{% endif %}
+    {% if note.attendees %}lines.push('Attendees: ' + {{ note.attendees|tojson }});{% endif %}
+    {% if note.students %}
+    lines.push('Students: ' + {{ (note.students | map(attribute='display_name') | join(', '))|tojson }});
+    {% endif %}
+    lines.push('');
+    lines.push({{ (note.content or '')|tojson }});
+    {% if note.action_items %}
+    lines.push('');
+    lines.push('Action Items:');
+    lines.push({{ note.action_items|tojson }});
+    {% endif %}
+    var text = lines.join('\n');
+
+    var done = function() {
+        var original = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.disabled = true;
+        setTimeout(function(){ btn.textContent = original; btn.disabled = false; }, 1600);
+    };
+    var fallback = function() {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch(e) { alert('Copy failed — select and copy manually:\n\n' + text); }
+        document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+        fallback();
+    }
+}
+</script>
 {% endblock %}

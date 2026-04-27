@@ -84,3 +84,42 @@ document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener(evt, resetSessionTimer, { passive: true })
     );
 });
+
+/* Open Synergy in a new tab and copy the student's ID to the clipboard.
+   Buttons opt in via data-synergy-url and data-student-id attributes. */
+window.openInSynergy = function(btn) {
+    var url = btn.dataset.synergyUrl;
+    var studentId = btn.dataset.studentId;
+    if (!url || !studentId) return;
+    var copied = false;
+    var finish = function() {
+        window.open(url, '_blank', 'noopener');
+        showSynergyToast(copied
+            ? ('Synergy ID ' + studentId + ' copied. In Synergy: Ctrl+K → "Student Conference" → Ctrl+F → paste.')
+            : ('Could not copy automatically. Student ID is ' + studentId + '.'));
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(studentId).then(function(){ copied = true; finish(); }, finish);
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = studentId; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { copied = document.execCommand('copy'); } catch(e) {}
+        document.body.removeChild(ta);
+        finish();
+    }
+};
+
+function showSynergyToast(msg) {
+    var existing = document.getElementById('synergy-toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.id = 'synergy-toast';
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;' +
+        'padding:12px 16px;border-radius:8px;font-size:0.86rem;max-width:380px;line-height:1.4;' +
+        'box-shadow:0 8px 30px rgba(0,0,0,0.25);z-index:10000;opacity:0;transition:opacity 0.2s;';
+    document.body.appendChild(toast);
+    requestAnimationFrame(function(){ toast.style.opacity = '1'; });
+    setTimeout(function(){ toast.style.opacity = '0'; setTimeout(function(){ toast.remove(); }, 250); }, 4500);
+}
