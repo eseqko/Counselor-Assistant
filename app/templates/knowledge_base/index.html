@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base{% endblock %}
+{% block page_title %}District Knowledge Base{% endblock %}
+
+{% block content %}
+<div style="max-width:1000px;margin:0 auto;">
+
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+        <div style="flex:1;">
+            <div style="font-size:0.84rem;color:var(--text-muted);line-height:1.5;">
+                Upload district documents (crisis protocols, handbooks, A-G policies, etc.) so AI Tools
+                can reference them when generating. All files stay on your machine — FERPA safe.
+            </div>
+        </div>
+        <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary"
+           style="border-radius:8px;padding:8px 20px;font-size:0.88rem;white-space:nowrap;">
+            &#128194; Upload Document
+        </a>
+    </div>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;">
+        <a href="{{ url_for('knowledge_base.index') }}"
+           class="btn btn-sm {% if not active_category %}btn-primary{% else %}btn-secondary{% endif %}"
+           style="border-radius:999px;padding:6px 14px;font-size:0.82rem;">All</a>
+        {% for cat_id, cat in categories.items() %}
+        <a href="{{ url_for('knowledge_base.index', category=cat_id) }}"
+           class="btn btn-sm {% if active_category == cat_id %}btn-primary{% else %}btn-secondary{% endif %}"
+           style="border-radius:999px;padding:6px 14px;font-size:0.82rem;">
+            <span>{{ cat.icon|safe }}</span> {{ cat.label }}
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if documents %}
+    <div class="card" style="border-radius:12px;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.86rem;">
+            <thead>
+                <tr style="background:var(--bg);border-bottom:2px solid var(--border);">
+                    <th style="padding:10px 14px;text-align:left;">Document</th>
+                    <th style="padding:10px 14px;text-align:left;">Category</th>
+                    <th style="padding:10px 14px;text-align:center;">Pages</th>
+                    <th style="padding:10px 14px;text-align:center;">Chunks</th>
+                    <th style="padding:10px 14px;text-align:left;">Uploaded</th>
+                    <th style="padding:10px 14px;text-align:center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 14px;">
+                        <a href="{{ url_for('knowledge_base.document', doc_id=doc.id) }}"
+                           style="font-weight:600;color:var(--primary-light);text-decoration:none;">
+                            {{ doc.original_filename }}
+                        </a>
+                        {% if doc.description %}
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;
+                                    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px;">
+                            {{ doc.description }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td style="padding:10px 14px;font-size:0.82rem;">
+                        <span>{{ categories[doc.category].icon|safe }}</span>
+                        {{ categories[doc.category].label }}
+                    </td>
+                    <td style="padding:10px 14px;text-align:center;">{{ doc.page_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;">{{ doc.chunk_count }}</td>
+                    <td style="padding:10px 14px;white-space:nowrap;font-size:0.82rem;">
+                        {{ doc.created_at.strftime('%b %d, %Y') }}
+                    </td>
+                    <td style="padding:10px 14px;text-align:center;">
+                        <a href="{{ url_for('knowledge_base.document', doc_id=doc.id) }}"
+                           class="btn btn-sm btn-secondary"
+                           style="border-radius:6px;padding:3px 10px;font-size:0.78rem;">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="margin-top:14px;font-size:0.82rem;color:var(--text-muted);text-align:center;">
+        {{ documents|length }} document{{ 's' if documents|length != 1 else '' }}
+        &middot; {{ documents|sum(attribute='chunk_count') }} total chunks indexed
+    </div>
+
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+        <div style="font-size:2.5rem;margin-bottom:10px;">&#128218;</div>
+        <div style="font-size:1rem;font-weight:600;">No documents uploaded yet</div>
+        <div style="font-size:0.86rem;margin-top:6px;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.5;">
+            Upload your district's crisis protocol, school handbook, A-G policy, or other reference
+            documents. AI Tools will automatically use them for grounded, district-specific responses.
+        </div>
+        <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary"
+           style="margin-top:18px;border-radius:8px;">&#128194; Upload Your First Document</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

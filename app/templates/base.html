@@ -68,6 +68,9 @@
             <a href="{{ url_for('ai_tools.index') }}" class="nav-item {% if request.blueprint == 'ai_tools' %}active{% endif %}">
                 <span class="nav-icon">&#9889;</span> AI Tools
             </a>
+            <a href="{{ url_for('knowledge_base.index') }}" class="nav-item {% if request.blueprint == 'knowledge_base' %}active{% endif %}">
+                <span class="nav-icon">&#128218;</span> Knowledge Base
+            </a>
 
             {% set more_blueprints = ('service_log', 'iep504', 'activity_log', 'meeting_notes', 'meeting_prep', 'email_drafts', 'mail_merge', 'availability', 'data_import', 'reports', 'analytics', 'course_catalog', 'glossary') %}
             {% set more_endpoints = ('reports.index', 'reports.cohort_trends') %}

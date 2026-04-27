@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.original_filename }} — Knowledge Base{% endblock %}
+{% block page_title %}{{ doc.original_filename }}{% endblock %}
+
+{% block content %}
+<div style="max-width:900px;margin:0 auto;">
+
+    <div style="margin-bottom:16px;">
+        <a href="{{ url_for('knowledge_base.index') }}" style="font-size:0.86rem;color:var(--primary-light);">
+            &larr; Back to Knowledge Base
+        </a>
+    </div>
+
+    <div class="card" style="padding:24px;border-radius:12px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div>
+                <h2 style="margin:0 0 6px;font-size:1.1rem;">{{ doc.original_filename }}</h2>
+                {% if doc.description %}
+                <div style="font-size:0.84rem;color:var(--text-muted);margin-bottom:8px;">{{ doc.description }}</div>
+                {% endif %}
+                <div style="display:flex;gap:16px;font-size:0.82rem;color:var(--text-muted);flex-wrap:wrap;">
+                    <span>{{ categories[doc.category].icon|safe }} {{ categories[doc.category].label }}</span>
+                    <span>{{ doc.page_count }} page{{ 's' if doc.page_count != 1 else '' }}</span>
+                    <span>{{ doc.chunk_count }} chunks</span>
+                    <span>{{ (doc.file_size / 1024)|round(1) }} KB</span>
+                    <span>Uploaded {{ doc.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+                </div>
+            </div>
+            <form method="POST" action="{{ url_for('knowledge_base.delete', doc_id=doc.id) }}"
+                  onsubmit="return confirm('Delete this document and all its chunks? This cannot be undone.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm"
+                        style="border-radius:6px;padding:6px 14px;font-size:0.8rem;
+                               background:#c62828;color:#fff;border:none;cursor:pointer;">
+                    &#128465; Delete
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card" style="padding:18px;border-radius:12px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <h3 style="margin:0;font-size:0.94rem;">Search Chunks</h3>
+            <input type="text" id="chunk-search" class="form-control" placeholder="Search within this document..."
+                   style="flex:1;padding:6px 12px;border-radius:8px;font-size:0.84rem;">
+        </div>
+        <div id="search-results" style="display:none;font-size:0.84rem;color:var(--text-muted);margin-bottom:8px;"></div>
+    </div>
+
+    <div class="card" style="padding:18px;border-radius:12px;">
+        <h3 style="margin:0 0 12px;font-size:0.94rem;">Extracted Chunks ({{ chunks|length }})</h3>
+        <div style="font-size:0.84rem;">
+            {% for chunk in chunks %}
+            <div class="chunk-item" style="padding:12px;margin-bottom:8px;background:var(--bg);
+                        border-radius:8px;border:1px solid var(--border);"
+                 data-text="{{ chunk.text|lower }}">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                    <span style="font-weight:600;font-size:0.78rem;color:var(--primary-light);">
+                        Chunk #{{ chunk.chunk_index + 1 }}
+                    </span>
+                    {% if chunk.page_number %}
+                    <span style="font-size:0.76rem;color:var(--text-muted);">Page {{ chunk.page_number }}</span>
+                    {% endif %}
+                </div>
+                <div style="line-height:1.5;white-space:pre-wrap;word-break:break-word;">{{ chunk.text }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var input = document.getElementById('chunk-search');
+    var results = document.getElementById('search-results');
+    var items = document.querySelectorAll('.chunk-item');
+    var timer = null;
+
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        timer = setTimeout(function() {
+            var q = input.value.trim().toLowerCase();
+            if (!q) {
+                results.style.display = 'none';
+                items.forEach(function(el) { el.style.display = ''; });
+                return;
+            }
+            var shown = 0;
+            items.forEach(function(el) {
+                var text = el.getAttribute('data-text');
+                if (text.indexOf(q) !== -1) {
+                    el.style.display = '';
+                    shown++;
+                } else {
+                    el.style.display = 'none';
+                }
+            });
+            results.style.display = 'block';
+            results.textContent = shown + ' chunk' + (shown !== 1 ? 's' : '') + ' matching "' + input.value.trim() + '"';
+        }, 200);
+    });
+})();
+</script>
+{% endblock %}
