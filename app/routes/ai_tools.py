@@ -12,6 +12,8 @@ from app.models.grade import GradeRecord
 from app.utils.ai_tools_registry import AI_TOOLS, CATEGORIES, get_tool, get_tools_by_category, search_tools
 from app.utils import ollama_client
 from app.utils.audit import log_action
+from app.models.knowledge_base import KnowledgeDocument, KnowledgeChunk
+from app.utils.knowledge_base import build_knowledge_context
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -50,11 +52,13 @@ def tool_page(tool_id):
     recent = AIToolHistory.query.filter_by(
         user_id=current_user.id, tool_id=tool_id
     ).order_by(AIToolHistory.created_at.desc()).limit(5).all()
+    kb_doc_count = KnowledgeDocument.query.filter_by(user_id=current_user.id).count()
     return render_template('ai_tools/tool.html',
                            tool=tool,
                            categories=CATEGORIES,
                            students=students,
                            recent_history=recent,
+                           kb_doc_count=kb_doc_count,
                            ai_available=ollama_client.is_available())
 
 
@@ -80,13 +84,33 @@ def generate():
 
     filled_inputs['student_context'] = student_context
 
+    kb_context = ''
+    all_chunks = KnowledgeChunk.query.join(KnowledgeDocument).filter(
+        KnowledgeDocument.user_id == current_user.id
+    ).all()
+    if all_chunks:
+        search_terms = ' '.join(v for v in filled_inputs.values() if v and v != student_context)
+        search_terms += ' ' + tool['title']
+        kb_context = build_knowledge_context(search_terms, all_chunks)
+
+    filled_inputs['knowledge_context'] = kb_context
+
     try:
         prompt = tool['prompt_template'].format(**filled_inputs)
     except KeyError as e:
         return jsonify({'error': f'Missing input: {e}'}), 400
 
+    system_prompt = tool['system_prompt']
+    if kb_context:
+        system_prompt += (
+            '\n\nYou have access to the counselor\'s district knowledge base below. '
+            'Reference specific policies, procedures, or details from these documents when relevant. '
+            'Cite the source document name when you use information from it.'
+            + kb_context
+        )
+
     try:
-        response = ollama_client.generate(prompt, system=tool['system_prompt'])
+        response = ollama_client.generate(prompt, system=system_prompt)
     except requests.Timeout:
         return jsonify({'error': (
             'The local AI model took too long to respond. This often happens on the first generation '

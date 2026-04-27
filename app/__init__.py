@@ -104,6 +104,7 @@ def create_app(config_class=Config):
     from app.routes.academic_plan import academic_plan_bp
     from app.routes.college_career import college_career_bp
     from app.routes.ai_tools import ai_tools_bp
+    from app.routes.knowledge_base import kb_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -134,6 +135,7 @@ def create_app(config_class=Config):
     app.register_blueprint(academic_plan_bp, url_prefix='/academic-plan')
     app.register_blueprint(college_career_bp, url_prefix='/college-career')
     app.register_blueprint(ai_tools_bp, url_prefix='/ai-tools')
+    app.register_blueprint(kb_bp, url_prefix='/knowledge-base')
 
     # First-run setup redirect (cached after first successful check)
     @app.before_request
@@ -208,6 +210,7 @@ def create_app(config_class=Config):
         from app.models import service_record, course, glossary_term, transcript
         from app.models import attendance, grade, iep504, availability, meeting_note, import_log
         from app.models import academic_plan, college_career, ai_tool_history
+        from app.models import knowledge_base
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 
