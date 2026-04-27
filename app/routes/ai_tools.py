@@ -1,5 +1,6 @@
 """AI Tools Hub routes — config-driven AI tool catalog."""
 import json
+import requests
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from app import db
@@ -86,6 +87,16 @@ def generate():
 
     try:
         response = ollama_client.generate(prompt, system=tool['system_prompt'])
+    except requests.Timeout:
+        return jsonify({'error': (
+            'The local AI model took too long to respond. This often happens on the first generation '
+            'while the model loads into memory. Please try again — subsequent generations should be faster. '
+            'If it keeps timing out, try a smaller/faster model in Settings (e.g. llama3.2:3b).'
+        )}), 504
+    except requests.ConnectionError:
+        return jsonify({'error': (
+            'Could not reach Ollama. Make sure the Ollama server is running on your machine.'
+        )}), 503
     except Exception as e:
         return jsonify({'error': f'AI generation failed: {str(e)}'}), 500
 

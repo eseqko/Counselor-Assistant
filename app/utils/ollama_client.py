@@ -63,7 +63,10 @@ def list_models():
         return []
 
 
-def generate(prompt, system=None, temperature=0.7):
+DEFAULT_GENERATE_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '300'))
+
+
+def generate(prompt, system=None, temperature=0.7, timeout=None):
     """Send a prompt to Ollama and return the response text.
 
     Uses the /api/generate endpoint (non-streaming) for simplicity.
@@ -82,7 +85,7 @@ def generate(prompt, system=None, temperature=0.7):
     resp = requests.post(
         f'{get_base_url()}/api/generate',
         json=payload,
-        timeout=120,
+        timeout=timeout if timeout is not None else DEFAULT_GENERATE_TIMEOUT,
     )
     resp.raise_for_status()
     return resp.json().get('response', '').strip()
