@@ -100,7 +100,7 @@
          style="padding:24px;border-radius:12px;margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <h3 style="margin:0;font-size:1rem;">Output</h3>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button onclick="copyOutput()" class="btn btn-sm btn-secondary"
                         style="border-radius:6px;padding:4px 12px;font-size:0.8rem;">
                     &#128203; Copy
@@ -115,6 +115,51 @@
              style="white-space:pre-wrap;font-size:0.88rem;line-height:1.6;
                     padding:16px;background:var(--bg);border-radius:8px;
                     border:1px solid var(--border);max-height:600px;overflow-y:auto;">
+        </div>
+
+        <div id="action-bar" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+            <div style="font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;">
+                &#9889; Actions — send this output to your workflow
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button onclick="showActionModal('note')" class="btn btn-sm btn-secondary"
+                        style="border-radius:6px;padding:5px 12px;font-size:0.8rem;">
+                    &#128220; Save as Note
+                </button>
+                <button onclick="showActionModal('service')" class="btn btn-sm btn-secondary"
+                        style="border-radius:6px;padding:5px 12px;font-size:0.8rem;">
+                    &#128203; Log Service
+                </button>
+                <button onclick="showActionModal('calendar')" class="btn btn-sm btn-secondary"
+                        style="border-radius:6px;padding:5px 12px;font-size:0.8rem;">
+                    &#128197; Add to Calendar
+                </button>
+                <button onclick="showActionModal('followup')" class="btn btn-sm btn-secondary"
+                        style="border-radius:6px;padding:5px 12px;font-size:0.8rem;">
+                    &#128204; Create Follow-up
+                </button>
+                <button onclick="showActionModal('email')" class="btn btn-sm btn-secondary"
+                        style="border-radius:6px;padding:5px 12px;font-size:0.8rem;">
+                    &#9993; Save as Email Draft
+                </button>
+                <button onclick="showActionModal('translate')" class="btn btn-sm btn-secondary"
+                        style="border-radius:6px;padding:5px 12px;font-size:0.8rem;">
+                    &#127760; Translate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="action-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;
+         align-items:center;justify-content:center;padding:20px;">
+        <div style="background:var(--surface);border-radius:12px;max-width:500px;width:100%;
+                    padding:24px;position:relative;">
+            <button onclick="closeActionModal()" style="position:absolute;top:12px;right:16px;background:none;
+                    border:none;font-size:1.4rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+            <h3 id="action-modal-title" style="margin:0 0 16px;font-size:1rem;"></h3>
+            <div id="action-modal-body"></div>
+            <div id="action-modal-status" style="display:none;margin-top:12px;font-size:0.84rem;
+                 padding:10px;border-radius:8px;"></div>
         </div>
     </div>
 
@@ -218,6 +263,236 @@ function loadHistory(entryId) {
             document.getElementById('output-panel').style.display = 'block';
             document.getElementById('output-panel').scrollIntoView({behavior: 'smooth'});
         });
+}
+
+/* --- Action modals --- */
+function getStudentId() {
+    var el = document.getElementById('student-select');
+    return el ? el.value : '';
+}
+
+function getOutputText() {
+    return document.getElementById('output-content').textContent;
+}
+
+function showActionModal(action) {
+    var modal = document.getElementById('action-modal');
+    var title = document.getElementById('action-modal-title');
+    var body = document.getElementById('action-modal-body');
+    var status = document.getElementById('action-modal-status');
+    status.style.display = 'none';
+
+    var studentId = getStudentId();
+    var needsStudent = (action === 'note' || action === 'service');
+    if (needsStudent && !studentId) {
+        status.textContent = 'Please link a student above before using this action.';
+        status.style.display = 'block';
+        status.style.background = '#fff3cd';
+        status.style.color = '#856404';
+        title.textContent = 'Student Required';
+        body.innerHTML = '';
+        modal.style.display = 'flex';
+        return;
+    }
+
+    var today = new Date().toISOString().split('T')[0];
+    var nextWeek = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
+
+    if (action === 'note') {
+        title.textContent = '\u{1F4DC} Save as Counseling Note';
+        body.innerHTML =
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Note Type</label>' +
+            '<select id="action-note-type" class="form-control" style="width:100%;">' +
+            '<option value="observation">Observation</option>' +
+            '<option value="individual">Individual Counseling</option>' +
+            '<option value="crisis">Crisis Intervention</option>' +
+            '<option value="parent_contact">Parent Contact</option>' +
+            '<option value="teacher_consult">Teacher Consultation</option>' +
+            '<option value="college_career">College &amp; Career</option>' +
+            '<option value="referral">Referral</option>' +
+            '</select></div>' +
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Title</label>' +
+            '<input type="text" id="action-note-title" class="form-control" value="' + '{{ tool.title }}' + '" style="width:100%;"></div>' +
+            '<button onclick="submitAction(\'note\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
+            '\u{1F4DC} Save Note</button>';
+    } else if (action === 'service') {
+        title.textContent = '\u{1F4CB} Log Service Record';
+        body.innerHTML =
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Service Type</label>' +
+            '<select id="action-service-type" class="form-control" style="width:100%;">' +
+            '<option value="individual_counseling">Individual Counseling</option>' +
+            '<option value="group_counseling">Group Counseling</option>' +
+            '<option value="crisis_intervention">Crisis Intervention</option>' +
+            '<option value="consultation">Consultation</option>' +
+            '<option value="parent_conference">Parent Conference</option>' +
+            '<option value="college_career">College &amp; Career</option>' +
+            '</select></div>' +
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Duration (minutes)</label>' +
+            '<input type="number" id="action-duration" class="form-control" value="30" style="width:100%;"></div>' +
+            '<button onclick="submitAction(\'service\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
+            '\u{1F4CB} Log Service</button>';
+    } else if (action === 'calendar') {
+        title.textContent = '\u{1F4C5} Add to Calendar';
+        body.innerHTML =
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Event Title</label>' +
+            '<input type="text" id="action-cal-title" class="form-control" value="Follow-up: ' + '{{ tool.title }}' + '" style="width:100%;"></div>' +
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Date</label>' +
+            '<input type="date" id="action-cal-date" class="form-control" value="' + today + '" style="width:100%;"></div>' +
+            '<button onclick="submitAction(\'calendar\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
+            '\u{1F4C5} Create Event</button>';
+    } else if (action === 'followup') {
+        title.textContent = '\u{1F4CC} Create Follow-up';
+        body.innerHTML =
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Due Date</label>' +
+            '<input type="date" id="action-followup-date" class="form-control" value="' + nextWeek + '" style="width:100%;"></div>' +
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Type</label>' +
+            '<select id="action-followup-type" class="form-control" style="width:100%;">' +
+            '<option value="check-in">Check-in</option>' +
+            '<option value="referral">Referral</option>' +
+            '<option value="attendance-grades">Attendance/Grades</option>' +
+            '</select></div>' +
+            '<button onclick="submitAction(\'followup\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
+            '\u{1F4CC} Create Follow-up</button>';
+    } else if (action === 'email') {
+        title.textContent = '✉ Save as Email Draft';
+        body.innerHTML =
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Template Name</label>' +
+            '<input type="text" id="action-email-name" class="form-control" value="' + '{{ tool.title }}' + '" style="width:100%;"></div>' +
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Subject Line</label>' +
+            '<input type="text" id="action-email-subject" class="form-control" placeholder="Optional subject line" style="width:100%;"></div>' +
+            '<button onclick="submitAction(\'email\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
+            '✉ Save Draft</button>';
+    } else if (action === 'translate') {
+        title.textContent = '\u{1F310} Translate Output';
+        body.innerHTML =
+            '<div style="margin-bottom:12px;">' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Target Language</label>' +
+            '<select id="action-translate-lang" class="form-control" style="width:100%;">' +
+            '<option value="Spanish">Spanish</option>' +
+            '<option value="Vietnamese">Vietnamese</option>' +
+            '<option value="Mandarin Chinese">Mandarin Chinese</option>' +
+            '<option value="Korean">Korean</option>' +
+            '<option value="Tagalog">Tagalog</option>' +
+            '<option value="Arabic">Arabic</option>' +
+            '<option value="French">French</option>' +
+            '<option value="Portuguese">Portuguese</option>' +
+            '</select></div>' +
+            '<button onclick="submitAction(\'translate\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
+            '\u{1F310} Translate</button>';
+    }
+    modal.style.display = 'flex';
+}
+
+function closeActionModal() {
+    document.getElementById('action-modal').style.display = 'none';
+}
+
+document.getElementById('action-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeActionModal();
+});
+
+function submitAction(action) {
+    var output = getOutputText();
+    var studentId = getStudentId();
+    var url, payload;
+
+    if (action === 'note') {
+        url = '{{ url_for("ai_tools.action_save_note") }}';
+        payload = {
+            content: output,
+            student_id: studentId,
+            note_type: document.getElementById('action-note-type').value,
+            title: document.getElementById('action-note-title').value,
+        };
+    } else if (action === 'service') {
+        url = '{{ url_for("ai_tools.action_log_service") }}';
+        payload = {
+            content: output,
+            student_id: studentId,
+            service_type: document.getElementById('action-service-type').value,
+            duration: parseInt(document.getElementById('action-duration').value) || 30,
+            title: '{{ tool.title }}',
+        };
+    } else if (action === 'calendar') {
+        url = '{{ url_for("ai_tools.action_add_calendar") }}';
+        payload = {
+            content: output,
+            student_id: studentId || null,
+            title: document.getElementById('action-cal-title').value,
+            date: document.getElementById('action-cal-date').value,
+        };
+    } else if (action === 'followup') {
+        url = '{{ url_for("ai_tools.action_create_followup") }}';
+        payload = {
+            content: output,
+            student_id: studentId || null,
+            due_date: document.getElementById('action-followup-date').value,
+            followup_type: document.getElementById('action-followup-type').value,
+            title: '{{ tool.title }}',
+        };
+    } else if (action === 'email') {
+        url = '{{ url_for("ai_tools.action_save_email_draft") }}';
+        payload = {
+            content: output,
+            title: document.getElementById('action-email-name').value,
+            subject: document.getElementById('action-email-subject').value,
+        };
+    } else if (action === 'translate') {
+        url = '{{ url_for("ai_tools.action_translate") }}';
+        payload = {
+            content: output,
+            language: document.getElementById('action-translate-lang').value,
+        };
+    }
+
+    var status = document.getElementById('action-modal-status');
+    var btn = document.querySelector('#action-modal-body button');
+    if (btn) { btn.disabled = true; btn.textContent = 'Working...'; }
+
+    fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            status.style.background = '#d4edda';
+            status.style.color = '#155724';
+            status.textContent = data.message || 'Done!';
+            status.style.display = 'block';
+            if (action === 'translate' && data.translated) {
+                document.getElementById('output-content').textContent = data.translated;
+                status.textContent = 'Translated to ' + data.language + '. Output updated above.';
+            }
+            setTimeout(function() {
+                if (action !== 'translate') closeActionModal();
+            }, 1500);
+        } else {
+            status.style.background = '#f8d7da';
+            status.style.color = '#721c24';
+            status.textContent = data.error || 'Something went wrong.';
+            status.style.display = 'block';
+            if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+        }
+    })
+    .catch(function(err) {
+        status.style.background = '#f8d7da';
+        status.style.color = '#721c24';
+        status.textContent = 'Request failed: ' + err.message;
+        status.style.display = 'block';
+        if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+    });
 }
 </script>
 {% endblock %}

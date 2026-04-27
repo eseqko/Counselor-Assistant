@@ -1,6 +1,7 @@
-"""AI Tools Hub routes — config-driven AI tool catalog."""
+"""AI Tools Hub routes — config-driven AI tool catalog with workflow actions."""
 import json
 import requests
+from datetime import date, datetime, timedelta
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from app import db
@@ -9,13 +10,14 @@ from app.models.student import Student
 from app.models.note import Note
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
+from app.models.service_record import ServiceRecord
+from app.models.calendar_event import CalendarEvent
 from app.utils.ai_tools_registry import AI_TOOLS, CATEGORIES, get_tool, get_tools_by_category, search_tools
 from app.utils import ollama_client
 from app.utils.audit import log_action
 from app.models.knowledge_base import KnowledgeDocument, KnowledgeChunk
 from app.utils.knowledge_base import build_knowledge_context
 from collections import defaultdict
-from datetime import date, timedelta
 
 ai_tools_bp = Blueprint('ai_tools', __name__, template_folder='../templates/ai_tools')
 
@@ -231,3 +233,194 @@ def _build_student_context(student_id):
 
     lines.append('--- END STUDENT CONTEXT ---\n')
     return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Workflow action endpoints — wire AI output into counseling workflow
+# ---------------------------------------------------------------------------
+
+@ai_tools_bp.route('/actions/save-note', methods=['POST'])
+@login_required
+def action_save_note():
+    data = request.get_json()
+    content = data.get('content', '').strip()
+    if not content:
+        return jsonify({'ok': False, 'error': 'No content provided'}), 400
+
+    student_id = data.get('student_id')
+    if not student_id:
+        return jsonify({'ok': False, 'error': 'A student must be linked to save a note'}), 400
+
+    note = Note(
+        student_id=int(student_id),
+        author_id=current_user.id,
+        note_type=data.get('note_type', 'observation'),
+        title=data.get('title', 'AI-Generated Note'),
+        content=content,
+        session_date=date.today(),
+        delivery_method='in_person',
+    )
+    db.session.add(note)
+    db.session.commit()
+    log_action('note_create', 'note', note.id, f'Created from AI Tools: {note.title}')
+    return jsonify({'ok': True, 'note_id': note.id, 'message': 'Note saved successfully.'})
+
+
+@ai_tools_bp.route('/actions/log-service', methods=['POST'])
+@login_required
+def action_log_service():
+    data = request.get_json()
+    description = data.get('content', '').strip()
+    if not description:
+        return jsonify({'ok': False, 'error': 'No content provided'}), 400
+
+    student_id = data.get('student_id')
+    if not student_id:
+        return jsonify({'ok': False, 'error': 'A student must be linked to log a service'}), 400
+
+    record = ServiceRecord(
+        student_id=int(student_id),
+        counselor_id=current_user.id,
+        date=date.today(),
+        service_type=data.get('service_type', 'individual_counseling'),
+        topic=data.get('title', 'AI-Assisted Session'),
+        description=description,
+        duration_minutes=data.get('duration', 30),
+        asca_domain=data.get('asca_domain', ''),
+    )
+    db.session.add(record)
+    db.session.commit()
+    log_action('service_create', 'service_record', record.id, f'Created from AI Tools: {record.topic}')
+    return jsonify({'ok': True, 'record_id': record.id, 'message': 'Service record logged.'})
+
+
+@ai_tools_bp.route('/actions/add-calendar', methods=['POST'])
+@login_required
+def action_add_calendar():
+    data = request.get_json()
+    title = data.get('title', '').strip()
+    if not title:
+        return jsonify({'ok': False, 'error': 'Title is required'}), 400
+
+    event_date = data.get('date')
+    if event_date:
+        start = datetime.strptime(event_date, '%Y-%m-%d').replace(hour=9, minute=0)
+    else:
+        tomorrow = date.today() + timedelta(days=1)
+        start = datetime.combine(tomorrow, datetime.min.time()).replace(hour=9, minute=0)
+
+    event = CalendarEvent(
+        owner_id=current_user.id,
+        title=title,
+        description=data.get('content', ''),
+        start_datetime=start,
+        end_datetime=start + timedelta(hours=1),
+        event_type=data.get('event_type', 'follow_up'),
+        student_id=int(data['student_id']) if data.get('student_id') else None,
+    )
+    db.session.add(event)
+    db.session.commit()
+    log_action('calendar_create', 'calendar_event', event.id, f'Created from AI Tools: {event.title}')
+    return jsonify({'ok': True, 'event_id': event.id, 'message': f'Calendar event created for {start.strftime("%b %d")}.'})
+
+
+@ai_tools_bp.route('/actions/create-followup', methods=['POST'])
+@login_required
+def action_create_followup():
+    data = request.get_json()
+    notes_text = data.get('content', '').strip()
+    student_id = data.get('student_id')
+    student_name = ''
+    if student_id:
+        s = Student.query.get(int(student_id))
+        if s:
+            student_name = s.display_name
+
+    due_date = data.get('due_date')
+    if not due_date:
+        due_date = (date.today() + timedelta(days=7)).isoformat()
+
+    import os
+    followups_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        'data', 'followups.json'
+    )
+    followups = []
+    if os.path.exists(followups_path):
+        with open(followups_path, 'r') as f:
+            followups = json.load(f)
+
+    import uuid
+    entry = {
+        'id': str(uuid.uuid4()),
+        'student_name': student_name or data.get('title', 'Follow-up'),
+        'student_id': str(student_id) if student_id else '',
+        'grade': '',
+        'type': data.get('followup_type', 'check-in'),
+        'due_date': due_date,
+        'notes': notes_text[:500],
+        'completed': False,
+        'created_at': datetime.utcnow().isoformat(),
+    }
+    followups.append(entry)
+    with open(followups_path, 'w') as f:
+        json.dump(followups, f, indent=2)
+
+    return jsonify({'ok': True, 'followup_id': entry['id'], 'message': f'Follow-up created for {due_date}.'})
+
+
+@ai_tools_bp.route('/actions/save-email-draft', methods=['POST'])
+@login_required
+def action_save_email_draft():
+    data = request.get_json()
+    body = data.get('content', '').strip()
+    if not body:
+        return jsonify({'ok': False, 'error': 'No content provided'}), 400
+
+    import os
+    templates_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        'data', 'email_custom_templates.json'
+    )
+    templates = []
+    if os.path.exists(templates_path):
+        with open(templates_path, 'r') as f:
+            templates = json.load(f)
+
+    import uuid
+    template = {
+        'id': str(uuid.uuid4()),
+        'name': data.get('title', 'AI-Generated Draft'),
+        'section': 'email',
+        'category': 'ai_generated',
+        'subject': data.get('subject', ''),
+        'body': body,
+    }
+    templates.append(template)
+    with open(templates_path, 'w') as f:
+        json.dump(templates, f, indent=2)
+
+    return jsonify({'ok': True, 'template_id': template['id'], 'message': 'Email draft saved to templates.'})
+
+
+@ai_tools_bp.route('/actions/translate', methods=['POST'])
+@login_required
+def action_translate():
+    data = request.get_json()
+    text = data.get('content', '').strip()
+    if not text:
+        return jsonify({'ok': False, 'error': 'No text to translate'}), 400
+
+    language = data.get('language', 'Spanish')
+    system = (
+        f'You are a professional translator. Translate the following text to {language}. '
+        f'Preserve the formatting, tone, and meaning. Output only the translation.'
+    )
+    try:
+        translated = ollama_client.generate(text, system=system, temperature=0.3)
+    except requests.Timeout:
+        return jsonify({'ok': False, 'error': 'Translation timed out. Try again.'}), 504
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'Translation failed: {str(e)}'}), 500
+
+    return jsonify({'ok': True, 'translated': translated, 'language': language})
