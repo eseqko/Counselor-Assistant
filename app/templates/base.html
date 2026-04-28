@@ -53,6 +53,21 @@
             <a href="{{ url_for('followups.index') }}" class="nav-item {% if request.blueprint == 'followups' %}active{% endif %}">
                 <span class="nav-icon">&#128204;</span> Follow-Ups
             </a>
+            <a href="{{ url_for('referrals.index') }}" class="nav-item {% if request.blueprint == 'referrals' %}active{% endif %}">
+                <span class="nav-icon">&#128231;</span> Referrals
+            </a>
+            <a href="{{ url_for('goals.index') }}" class="nav-item {% if request.blueprint == 'goals' %}active{% endif %}">
+                <span class="nav-icon">&#127919;</span> Goals
+            </a>
+            <a href="{{ url_for('communications.index') }}" class="nav-item {% if request.blueprint == 'communications' %}active{% endif %}">
+                <span class="nav-icon">&#128241;</span> Comm Log
+            </a>
+            <a href="{{ url_for('interventions.index') }}" class="nav-item {% if request.blueprint == 'interventions' %}active{% endif %}">
+                <span class="nav-icon">&#128202;</span> MTSS / RTI
+            </a>
+            <a href="{{ url_for('groups.index') }}" class="nav-item {% if request.blueprint == 'groups' %}active{% endif %}">
+                <span class="nav-icon">&#128101;</span> Groups
+            </a>
             <a href="{{ url_for('graduation.index') }}" class="nav-item {% if request.blueprint == 'graduation' %}active{% endif %}">
                 <span class="nav-icon">&#127891;</span> Graduation
             </a>
@@ -77,7 +92,7 @@
             </a>
             {% endif %}
 
-            {% set more_blueprints = ('service_log', 'iep504', 'activity_log', 'meeting_notes', 'meeting_prep', 'email_drafts', 'mail_merge', 'availability', 'data_import', 'reports', 'analytics', 'course_catalog', 'glossary') %}
+            {% set more_blueprints = ('service_log', 'iep504', 'activity_log', 'meeting_notes', 'meeting_prep', 'email_drafts', 'mail_merge', 'availability', 'data_import', 'reports', 'analytics', 'course_catalog', 'glossary', 'consents', 'screenings', 'documents', 'post_grad') %}
             {% set more_endpoints = ('reports.index', 'reports.cohort_trends') %}
             <div class="nav-group" data-section="more">
                 <button type="button" class="nav-section nav-section-toggle">
@@ -123,6 +138,18 @@
                     </a>
                     <a href="{{ url_for('glossary.index') }}" class="nav-item {% if request.blueprint == 'glossary' %}active{% endif %}">
                         <span class="nav-icon">&#128214;</span> Glossary
+                    </a>
+                    <a href="{{ url_for('consents.index') }}" class="nav-item {% if request.blueprint == 'consents' %}active{% endif %}">
+                        <span class="nav-icon">&#128221;</span> Consents
+                    </a>
+                    <a href="{{ url_for('screenings.index') }}" class="nav-item {% if request.blueprint == 'screenings' %}active{% endif %}">
+                        <span class="nav-icon">&#129504;</span> Screeners
+                    </a>
+                    <a href="{{ url_for('documents.index') }}" class="nav-item {% if request.blueprint == 'documents' %}active{% endif %}">
+                        <span class="nav-icon">&#128193;</span> Documents
+                    </a>
+                    <a href="{{ url_for('post_grad.index') }}" class="nav-item {% if request.blueprint == 'post_grad' %}active{% endif %}">
+                        <span class="nav-icon">&#127891;</span> Post-Grad
                     </a>
                 </div>
             </div>

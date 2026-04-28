@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Referral Detail{% endblock %}
+{% block page_title %}Referral Detail{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">
+    &#128274; Referrals are FERPA-protected. Access is logged.
+</div>
+
+<div class="card">
+    <div class="card-header">
+        {{ referral.type_label }} — {{ referral.referred_to }}
+        <div class="btn-group">
+            <a href="{{ url_for('referrals.edit', id=referral.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            <form method="POST" action="{{ url_for('referrals.delete', id=referral.id) }}"
+                  style="display:inline;" onsubmit="return confirm('Delete this referral?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="grid-2">
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Student</td>
+                    <td><a href="{{ url_for('caseload.view_student', id=referral.student.id) }}">{{ referral.student.display_name }}</a></td></tr>
+                <tr><td style="font-weight:600;">Referral Date</td><td>{{ referral.referral_date.strftime('%m/%d/%Y') }}</td></tr>
+                <tr><td style="font-weight:600;">Type</td><td>{{ referral.type_label }}</td></tr>
+                <tr><td style="font-weight:600;">Urgency</td>
+                    <td>
+                        {% if referral.urgency == 'emergency' %}<span class="badge badge-danger">{{ referral.urgency_label }}</span>
+                        {% elif referral.urgency == 'urgent' %}<span class="badge badge-warning">{{ referral.urgency_label }}</span>
+                        {% else %}<span class="badge badge-gray">{{ referral.urgency_label }}</span>{% endif %}
+                    </td></tr>
+                <tr><td style="font-weight:600;">Consent</td>
+                    <td>{% if referral.consent_obtained %}<span class="badge badge-success">Obtained</span>{% else %}<span class="badge badge-warning">Not on file</span>{% endif %}</td></tr>
+            </table>
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Referred To</td><td>{{ referral.referred_to }}</td></tr>
+                {% if referral.contact_info %}<tr><td style="font-weight:600;">Contact</td><td>{{ referral.contact_info }}</td></tr>{% endif %}
+                {% if referral.contacted_date %}<tr><td style="font-weight:600;">Contacted</td><td>{{ referral.contacted_date.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
+                {% if referral.accepted_date %}<tr><td style="font-weight:600;">Accepted</td><td>{{ referral.accepted_date.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
+                {% if referral.completed_date %}<tr><td style="font-weight:600;">Completed</td><td>{{ referral.completed_date.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
+                {% if referral.follow_up_date %}<tr><td style="font-weight:600;">Follow-Up Due</td><td>{{ referral.follow_up_date.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
+            </table>
+        </div>
+
+        <h3 style="margin-top:20px;">Reason for Referral</h3>
+        <p style="white-space:pre-wrap;">{{ referral.reason }}</p>
+
+        {% if referral.outcome %}
+        <h3 style="margin-top:20px;">Outcome</h3>
+        <p style="white-space:pre-wrap;">{{ referral.outcome }}</p>
+        {% endif %}
+
+        {% if referral.follow_up_notes %}
+        <h3 style="margin-top:20px;">Follow-Up Notes</h3>
+        <p style="white-space:pre-wrap;">{{ referral.follow_up_notes }}</p>
+        {% endif %}
+
+        {% if referral.notes %}
+        <h3 style="margin-top:20px;">Additional Notes</h3>
+        <p style="white-space:pre-wrap;">{{ referral.notes }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Status: <span id="current-status">{{ referral.status_label }}</span></div>
+    <div class="card-body">
+        <p style="font-size:0.86rem;color:var(--gray);">Update referral status to track progress through the workflow.</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            {% for val, label in statuses %}
+            <form method="POST" action="{{ url_for('referrals.update_status', id=referral.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="{{ val }}">
+                <button type="submit" class="btn btn-sm {% if val == referral.status %}btn-primary{% else %}btn-outline{% endif %}">{{ label }}</button>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}

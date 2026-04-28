@@ -458,6 +458,133 @@ function switchTranscriptTab(tab, btn) {
 }
 </script>
 
+<!-- Counseling Workflow Cards -->
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            Goals ({{ student.goals.count() }})
+            <a href="{{ url_for('goals.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Goal</a>
+        </div>
+        <div class="card-body">
+            {% set goals = student.goals.limit(5).all() %}
+            {% if goals %}
+            <ul style="margin:0;padding-left:18px;">
+                {% for g in goals %}
+                <li style="margin-bottom:6px;">
+                    <a href="{{ url_for('goals.view', id=g.id) }}">{{ g.title }}</a>
+                    <span class="badge badge-info" style="margin-left:6px;">{{ g.status_label }}</span>
+                    {% if g.target_date %}<span style="color:var(--gray);font-size:0.78rem;"> · due {{ g.target_date.strftime('%m/%d') }}</span>{% endif %}
+                    {% if g.progress_percent %}<span style="color:var(--gray);font-size:0.78rem;"> · {{ g.progress_percent }}%</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>No goals yet.</p></div>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Referrals ({{ student.referrals.count() }})
+            <a href="{{ url_for('referrals.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Referral</a>
+        </div>
+        <div class="card-body">
+            {% set refs = student.referrals.limit(5).all() %}
+            {% if refs %}
+            <ul style="margin:0;padding-left:18px;">
+                {% for r in refs %}
+                <li style="margin-bottom:6px;">
+                    <a href="{{ url_for('referrals.view', id=r.id) }}">{{ r.referred_to }}</a>
+                    <span class="badge badge-info" style="margin-left:6px;">{{ r.status_label }}</span>
+                    <span style="color:var(--gray);font-size:0.78rem;"> · {{ r.referral_date.strftime('%m/%d/%Y') }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>No referrals.</p></div>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Communications ({{ student.communications.count() }})
+            <a href="{{ url_for('communications.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Log</a>
+        </div>
+        <div class="card-body">
+            {% set comms = student.communications.limit(5).all() %}
+            {% if comms %}
+            <ul style="margin:0;padding-left:18px;">
+                {% for c in comms %}
+                <li style="margin-bottom:6px;">
+                    <a href="{{ url_for('communications.view', id=c.id) }}">{{ c.type_label }}: {{ c.contact_person }}</a>
+                    <span style="color:var(--gray);font-size:0.78rem;"> · {{ c.contact_date.strftime('%m/%d') }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>No communications.</p></div>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Interventions ({{ student.interventions.count() }})
+            <a href="{{ url_for('interventions.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Plan</a>
+        </div>
+        <div class="card-body">
+            {% set plans = student.interventions.limit(5).all() %}
+            {% if plans %}
+            <ul style="margin:0;padding-left:18px;">
+                {% for p in plans %}
+                <li style="margin-bottom:6px;">
+                    <a href="{{ url_for('interventions.view', id=p.id) }}">Tier {{ p.tier }}: {{ p.concern_area|replace('_', ' ')|title }}</a>
+                    <span class="badge badge-info" style="margin-left:6px;">{{ p.status|title }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>No intervention plans.</p></div>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Consents ({{ student.consents.count() }})
+            <a href="{{ url_for('consents.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Consent</a>
+        </div>
+        <div class="card-body">
+            {% set cons = student.consents.limit(5).all() %}
+            {% if cons %}
+            <ul style="margin:0;padding-left:18px;">
+                {% for c in cons %}
+                <li style="margin-bottom:6px;">
+                    <a href="{{ url_for('consents.view', id=c.id) }}">{{ c.consent_type_label }}</a>
+                    <span class="badge badge-info" style="margin-left:6px;">{{ c.status_label }}</span>
+                    {% if c.expiration_date %}<span style="color:var(--gray);font-size:0.78rem;"> · expires {{ c.expiration_date.strftime('%m/%d/%Y') }}</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>No consents on file.</p></div>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Documents ({{ student.documents.count() }})
+            <a href="{{ url_for('documents.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Upload</a>
+        </div>
+        <div class="card-body">
+            {% set docs = student.documents.limit(5).all() %}
+            {% if docs %}
+            <ul style="margin:0;padding-left:18px;">
+                {% for d in docs %}
+                <li style="margin-bottom:6px;">
+                    <a href="{{ url_for('documents.download', id=d.id) }}">{{ d.title }}</a>
+                    <span class="badge badge-info" style="margin-left:6px;">{{ d.type_label }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>No documents.</p></div>{% endif %}
+        </div>
+    </div>
+</div>
+
 <!-- Recent Notes -->
 <div class="card">
     <div class="card-header">

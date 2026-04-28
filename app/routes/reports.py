@@ -541,3 +541,271 @@ def cohort_trends():
         note_by_month=dict(note_by_month),
         risk_counts=dict(risk_counts),
         ag_counts=dict(ag_counts))
+
+
+# ── ASCA Results Reports ──────────────────────────────────────────
+
+@reports_bp.route('/asca-results')
+@login_required
+def asca_results():
+    """List of ASCA Results / Closing-the-Gap programs."""
+    from app.models.asca_program import ASCAProgram
+    program_type = request.args.get('type', '')
+    query = ASCAProgram.query.filter_by(counselor_id=current_user.id)
+    if program_type:
+        query = query.filter_by(program_type=program_type)
+    programs = query.order_by(ASCAProgram.created_at.desc()).all()
+    log_action('view', 'report', details='ASCA Results Reports')
+    return render_template('reports/asca_results.html',
+        programs=programs, program_type=program_type,
+        program_types=ASCAProgram.PROGRAM_TYPES)
+
+
+@reports_bp.route('/asca-results/add', methods=['GET', 'POST'])
+@login_required
+def asca_results_add():
+    from app.models.asca_program import ASCAProgram
+    if request.method == 'POST':
+        prog = ASCAProgram(
+            counselor_id=current_user.id,
+            name=request.form['name'].strip(),
+            school_year=request.form.get('school_year', '').strip(),
+            asca_domain=request.form.get('asca_domain', ''),
+            program_type=request.form.get('program_type', 'results'),
+            target_group=request.form.get('target_group', '').strip(),
+            target_size=int(request.form['target_size']) if request.form.get('target_size') else None,
+            goal_statement=request.form.get('goal_statement', '').strip(),
+            asca_standard=request.form.get('asca_standard', '').strip(),
+            baseline=request.form.get('baseline', '').strip(),
+            intervention=request.form.get('intervention', '').strip(),
+            process_data=request.form.get('process_data', '').strip(),
+            perception_data=request.form.get('perception_data', '').strip(),
+            results_data=request.form.get('results_data', '').strip(),
+            outcome_data=request.form.get('outcome_data', '').strip(),
+            implications=request.form.get('implications', '').strip(),
+            start_date=parse_date(request.form.get('start_date')),
+            end_date=parse_date(request.form.get('end_date')),
+            status=request.form.get('status', 'active'),
+        )
+        db.session.add(prog)
+        db.session.commit()
+        log_action('create', 'asca_program', prog.id, f'Created ASCA program: {prog.name}')
+        return redirect(url_for('reports.asca_results_view', id=prog.id))
+
+    return render_template('reports/asca_results_form.html',
+        program=None,
+        program_types=ASCAProgram.PROGRAM_TYPES,
+        statuses=ASCAProgram.STATUSES)
+
+
+@reports_bp.route('/asca-results/<int:id>')
+@login_required
+def asca_results_view(id):
+    from app.models.asca_program import ASCAProgram
+    prog = ASCAProgram.query.get_or_404(id)
+    log_action('view', 'asca_program', prog.id)
+    return render_template('reports/asca_results_view.html', program=prog)
+
+
+@reports_bp.route('/asca-results/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def asca_results_edit(id):
+    from app.models.asca_program import ASCAProgram
+    prog = ASCAProgram.query.get_or_404(id)
+    if request.method == 'POST':
+        prog.name = request.form['name'].strip()
+        prog.school_year = request.form.get('school_year', '').strip()
+        prog.asca_domain = request.form.get('asca_domain', '')
+        prog.program_type = request.form.get('program_type', prog.program_type)
+        prog.target_group = request.form.get('target_group', '').strip()
+        prog.target_size = int(request.form['target_size']) if request.form.get('target_size') else None
+        prog.goal_statement = request.form.get('goal_statement', '').strip()
+        prog.asca_standard = request.form.get('asca_standard', '').strip()
+        prog.baseline = request.form.get('baseline', '').strip()
+        prog.intervention = request.form.get('intervention', '').strip()
+        prog.process_data = request.form.get('process_data', '').strip()
+        prog.perception_data = request.form.get('perception_data', '').strip()
+        prog.results_data = request.form.get('results_data', '').strip()
+        prog.outcome_data = request.form.get('outcome_data', '').strip()
+        prog.implications = request.form.get('implications', '').strip()
+        prog.start_date = parse_date(request.form.get('start_date'))
+        prog.end_date = parse_date(request.form.get('end_date'))
+        prog.status = request.form.get('status', prog.status)
+        db.session.commit()
+        log_action('update', 'asca_program', prog.id)
+        return redirect(url_for('reports.asca_results_view', id=prog.id))
+
+    return render_template('reports/asca_results_form.html',
+        program=prog,
+        program_types=ASCAProgram.PROGRAM_TYPES,
+        statuses=ASCAProgram.STATUSES)
+
+
+@reports_bp.route('/asca-results/<int:id>/delete', methods=['POST'])
+@login_required
+def asca_results_delete(id):
+    from app.models.asca_program import ASCAProgram
+    prog = ASCAProgram.query.get_or_404(id)
+    log_action('delete', 'asca_program', prog.id)
+    db.session.delete(prog)
+    db.session.commit()
+    return redirect(url_for('reports.asca_results'))
+
+
+@reports_bp.route('/closing-the-gap')
+@login_required
+def closing_the_gap():
+    """Aggregate Closing-the-Gap data: services + activities by demographics."""
+    student_ids_q = db.session.query(Student.id).filter_by(
+        assigned_counselor_id=current_user.id
+    )
+    student_ids = [s[0] for s in student_ids_q.all()]
+
+    # Service distribution by demographic dimensions
+    students = Student.query.filter(Student.id.in_(student_ids)).all() if student_ids else []
+    by_grade = defaultdict(lambda: {'students': 0, 'services': 0})
+    by_ethnicity = defaultdict(lambda: {'students': 0, 'services': 0})
+    by_el = defaultdict(lambda: {'students': 0, 'services': 0})
+    by_iep = defaultdict(lambda: {'students': 0, 'services': 0})
+
+    service_counts_per_student = dict(
+        db.session.query(
+            ServiceRecord.student_id,
+            func.count(ServiceRecord.id)
+        ).filter(ServiceRecord.student_id.in_(student_ids)).group_by(ServiceRecord.student_id).all()
+    ) if student_ids else {}
+
+    for s in students:
+        sc = service_counts_per_student.get(s.id, 0)
+        by_grade[s.grade_level or 0]['students'] += 1
+        by_grade[s.grade_level or 0]['services'] += sc
+        by_ethnicity[s.ethnicity or 'Unspecified']['students'] += 1
+        by_ethnicity[s.ethnicity or 'Unspecified']['services'] += sc
+        by_el[s.el_status or 'EO']['students'] += 1
+        by_el[s.el_status or 'EO']['services'] += sc
+        iep_label = 'IEP' if s.iep_status else ('504' if s.section_504 else 'No Plan')
+        by_iep[iep_label]['students'] += 1
+        by_iep[iep_label]['services'] += sc
+
+    log_action('view', 'report', details='Closing-the-Gap Report')
+
+    return render_template('reports/closing_the_gap.html',
+        by_grade=dict(by_grade),
+        by_ethnicity=dict(by_ethnicity),
+        by_el=dict(by_el),
+        by_iep=dict(by_iep),
+        total_students=len(students))
+
+
+@reports_bp.route('/equity')
+@login_required
+def equity():
+    """Equity/access audit — disaggregated service delivery analysis."""
+    from app.models.referral import Referral
+    from app.models.goal import Goal
+    from app.models.intervention import InterventionPlan
+
+    students = Student.query.filter_by(assigned_counselor_id=current_user.id).all()
+    sids = [s.id for s in students]
+
+    if not sids:
+        return render_template('reports/equity.html', has_data=False, sections=[])
+
+    # Aggregate per dimension
+    def by_dim(get_dim):
+        buckets = defaultdict(lambda: {
+            'students': 0, 'services': 0, 'notes': 0,
+            'referrals': 0, 'goals': 0, 'interventions': 0,
+        })
+        # Index counts by student_id
+        svc_counts = dict(db.session.query(ServiceRecord.student_id, func.count(ServiceRecord.id))
+                          .filter(ServiceRecord.student_id.in_(sids))
+                          .group_by(ServiceRecord.student_id).all())
+        note_counts = dict(db.session.query(Note.student_id, func.count(Note.id))
+                           .filter(Note.student_id.in_(sids))
+                           .group_by(Note.student_id).all())
+        ref_counts = dict(db.session.query(Referral.student_id, func.count(Referral.id))
+                          .filter(Referral.student_id.in_(sids))
+                          .group_by(Referral.student_id).all())
+        goal_counts = dict(db.session.query(Goal.student_id, func.count(Goal.id))
+                           .filter(Goal.student_id.in_(sids))
+                           .group_by(Goal.student_id).all())
+        int_counts = dict(db.session.query(InterventionPlan.student_id, func.count(InterventionPlan.id))
+                          .filter(InterventionPlan.student_id.in_(sids))
+                          .group_by(InterventionPlan.student_id).all())
+        for s in students:
+            key = get_dim(s)
+            b = buckets[key]
+            b['students'] += 1
+            b['services'] += svc_counts.get(s.id, 0)
+            b['notes'] += note_counts.get(s.id, 0)
+            b['referrals'] += ref_counts.get(s.id, 0)
+            b['goals'] += goal_counts.get(s.id, 0)
+            b['interventions'] += int_counts.get(s.id, 0)
+        return dict(buckets)
+
+    sections = [
+        ('Grade Level', by_dim(lambda s: f'Grade {s.grade_level}' if s.grade_level else 'Unspecified')),
+        ('Ethnicity', by_dim(lambda s: s.ethnicity or 'Unspecified')),
+        ('Gender', by_dim(lambda s: s.gender or 'Unspecified')),
+        ('EL Status', by_dim(lambda s: s.el_status or 'EO')),
+        ('Special Education', by_dim(lambda s: 'IEP' if s.iep_status else ('504' if s.section_504 else 'No Plan'))),
+        ('AB Population', by_dim(lambda s: 'AB-Eligible' if s.has_ab_population else 'Not AB')),
+    ]
+
+    log_action('view', 'report', details='Equity / Access Audit')
+    return render_template('reports/equity.html', sections=sections, has_data=True,
+                           total_students=len(students))
+
+
+@reports_bp.route('/program-evaluation')
+@login_required
+def program_evaluation():
+    """Annual program evaluation: aggregate counts of services, groups, goals, referrals."""
+    from app.models.goal import Goal
+    from app.models.referral import Referral
+    from app.models.group import CounselingGroup, GroupMember, GroupSession
+    from app.models.communication import CommunicationLog
+
+    school_year = request.args.get('school_year', '')
+    # Default to current school year (Aug 1 - July 31)
+    today = date.today()
+    if today.month >= 8:
+        year_start = date(today.year, 8, 1)
+        year_end = date(today.year + 1, 7, 31)
+    else:
+        year_start = date(today.year - 1, 8, 1)
+        year_end = date(today.year, 7, 31)
+
+    sid_query = db.session.query(Student.id).filter_by(assigned_counselor_id=current_user.id)
+    student_ids = [s[0] for s in sid_query.all()]
+
+    counts = {
+        'students': len(student_ids),
+        'services': ServiceRecord.query.filter(
+            ServiceRecord.counselor_id == current_user.id,
+            ServiceRecord.date >= year_start, ServiceRecord.date <= year_end
+        ).count(),
+        'notes': Note.query.filter(
+            Note.author_id == current_user.id,
+            Note.session_date >= year_start, Note.session_date <= year_end
+        ).count(),
+        'goals_total': Goal.query.filter_by(counselor_id=current_user.id).count(),
+        'goals_achieved': Goal.query.filter_by(counselor_id=current_user.id, status='achieved').count(),
+        'referrals_total': Referral.query.filter_by(counselor_id=current_user.id).count(),
+        'referrals_completed': Referral.query.filter_by(counselor_id=current_user.id, status='completed').count(),
+        'groups_total': CounselingGroup.query.filter_by(counselor_id=current_user.id).count(),
+        'groups_active': CounselingGroup.query.filter_by(counselor_id=current_user.id, status='active').count(),
+        'group_sessions': db.session.query(GroupSession).join(CounselingGroup).filter(
+            CounselingGroup.counselor_id == current_user.id
+        ).count(),
+        'group_members_total': db.session.query(GroupMember).join(CounselingGroup).filter(
+            CounselingGroup.counselor_id == current_user.id
+        ).count(),
+        'communications': CommunicationLog.query.filter_by(counselor_id=current_user.id).count(),
+    }
+
+    log_action('view', 'report', details='Program Evaluation')
+
+    return render_template('reports/program_evaluation.html',
+        counts=counts, year_start=year_start, year_end=year_end)

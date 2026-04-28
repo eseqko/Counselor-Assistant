@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ goal.title }}{% endblock %}
+{% block page_title %}Goal Detail{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        {{ goal.title }}
+        <div class="btn-group">
+            <a href="{{ url_for('goals.edit', id=goal.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            <form method="POST" action="{{ url_for('goals.delete', id=goal.id) }}"
+                  style="display:inline;" onsubmit="return confirm('Delete this goal?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="grid-2">
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Student</td><td><a href="{{ url_for('caseload.view_student', id=goal.student.id) }}">{{ goal.student.display_name }}</a></td></tr>
+                <tr><td style="font-weight:600;">ASCA Domain</td><td>{{ goal.domain_label or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Mindset / Standard</td><td>{{ goal.asca_mindset or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Status</td><td><span class="badge badge-info">{{ goal.status_label }}</span></td></tr>
+            </table>
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Start Date</td><td>{{ goal.start_date.strftime('%m/%d/%Y') if goal.start_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Target Date</td><td>{{ goal.target_date.strftime('%m/%d/%Y') if goal.target_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Completed</td><td>{{ goal.completed_date.strftime('%m/%d/%Y') if goal.completed_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Progress</td>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div style="flex:1;height:10px;background:var(--border);border-radius:5px;overflow:hidden;max-width:160px;">
+                                <div style="width:{{ goal.progress_percent or 0 }}%;height:100%;background:var(--primary);"></div>
+                            </div>
+                            <strong>{{ goal.progress_percent or 0 }}%</strong>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        {% if goal.description %}
+        <h3 style="margin-top:20px;">Description</h3>
+        <p style="white-space:pre-wrap;">{{ goal.description }}</p>
+        {% endif %}
+
+        <div class="grid-2" style="margin-top:16px;">
+            {% if goal.baseline %}<div><strong>Baseline:</strong><div style="white-space:pre-wrap;">{{ goal.baseline }}</div></div>{% endif %}
+            {% if goal.target %}<div><strong>Target:</strong><div style="white-space:pre-wrap;">{{ goal.target }}</div></div>{% endif %}
+        </div>
+        {% if goal.measurement_method %}
+        <p style="margin-top:12px;"><strong>Measurement:</strong> {{ goal.measurement_method }}</p>
+        {% endif %}
+        {% if goal.strategy %}
+        <h3 style="margin-top:16px;">Strategy</h3>
+        <p style="white-space:pre-wrap;">{{ goal.strategy }}</p>
+        {% endif %}
+        {% if goal.outcome %}
+        <h3 style="margin-top:16px;">Outcome</h3>
+        <p style="white-space:pre-wrap;">{{ goal.outcome }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Add Progress Entry</div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('goals.add_progress', id=goal.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="entry_date" class="form-control" value="{{ ''|string }}">
+                </div>
+                <div class="form-group">
+                    <label>Progress %</label>
+                    <input type="number" name="progress_percent" class="form-control" min="0" max="100">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Metric Value</label>
+                <input type="text" name="metric_value" class="form-control" placeholder="e.g. 2 absences this week">
+            </div>
+            <div class="form-group">
+                <label>Note</label>
+                <textarea name="note" class="form-control" rows="2"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Add Entry</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Progress History ({{ goal.progress_entries|length }})</div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Metric</th><th>Progress</th><th>Note</th></tr></thead>
+            <tbody>
+                {% for p in goal.progress_entries %}
+                <tr>
+                    <td>{{ p.entry_date.strftime('%m/%d/%Y') }}</td>
+                    <td>{{ p.metric_value or '-' }}</td>
+                    <td>{{ p.progress_percent if p.progress_percent is not none else '-' }}{% if p.progress_percent is not none %}%{% endif %}</td>
+                    <td>{{ p.note or '-' }}</td>
+                </tr>
+                {% endfor %}
+                {% if not goal.progress_entries %}
+                <tr><td colspan="4"><div class="empty-state"><p>No progress entries yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    (function(){
+        var d = document.querySelector('input[name="entry_date"]');
+        if (d && !d.value) {
+            var t = new Date();
+            d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+    })();
+</script>
+{% endblock %}

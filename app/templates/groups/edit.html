@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Edit Group{% endblock %}
+{% block page_title %}Edit Group{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" name="name" class="form-control" value="{{ group.name }}" required>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="group_type" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in group_types %}
+                        <option value="{{ val }}" {{ 'selected' if val == group.group_type }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <input type="text" name="asca_domain" class="form-control" value="{{ group.asca_domain or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3">{{ group.description or '' }}</textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Schedule</label>
+                    <input type="text" name="schedule" class="form-control" value="{{ group.schedule or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" name="location" class="form-control" value="{{ group.location or '' }}">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Start</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ group.start_date.strftime('%Y-%m-%d') if group.start_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>End</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ group.end_date.strftime('%Y-%m-%d') if group.end_date else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" class="form-control">
+                    {% for val, label in statuses %}
+                    <option value="{{ val }}" {{ 'selected' if val == group.status }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Pre-Assessment</label>
+                <textarea name="pre_assessment" class="form-control" rows="2">{{ group.pre_assessment or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Post-Assessment</label>
+                <textarea name="post_assessment" class="form-control" rows="2">{{ group.post_assessment or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Outcome Summary</label>
+                <textarea name="outcome_summary" class="form-control" rows="3">{{ group.outcome_summary or '' }}</textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('groups.view', id=group.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

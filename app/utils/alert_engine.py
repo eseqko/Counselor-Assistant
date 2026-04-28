@@ -7,6 +7,41 @@ import json
 from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.orm import joinedload
 from app import db
+
+
+# ── Configurable thresholds ───────────────────────────────────────
+DEFAULT_THRESHOLDS = {
+    'no_contact_days': 30,
+    'iep_review_warn_days': 30,
+    'iep_review_critical_days': 14,
+    'absence_watch': 3,
+    'absence_concern': 5,
+    'absence_chronic': 7,
+    'absence_window_days': 30,
+    'failing_alert_count': 1,
+    'failing_high_count': 3,
+    'referral_pending_days': 7,
+    'goal_warn_days': 7,
+    'consent_warn_days': 30,
+    'intervention_review_warn_days': 7,
+    'new_student_window_days': 7,
+}
+
+
+def get_thresholds(user):
+    """Load this user's alert thresholds, merged with defaults."""
+    raw = getattr(user, 'alert_settings_json', '') or ''
+    if not raw:
+        return dict(DEFAULT_THRESHOLDS)
+    try:
+        custom = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return dict(DEFAULT_THRESHOLDS)
+    merged = dict(DEFAULT_THRESHOLDS)
+    for k, v in custom.items():
+        if k in merged and isinstance(v, (int, float)):
+            merged[k] = int(v)
+    return merged
 from app.models.student import Student
 from app.models.note import Note
 from app.models.iep504 import IEP504Record
@@ -14,6 +49,10 @@ from app.models.grade import GradeRecord
 from app.models.attendance import AttendanceRecord
 from app.models.availability import Booking
 from app.models.calendar_event import CalendarEvent
+from app.models.referral import Referral
+from app.models.goal import Goal
+from app.models.consent import ConsentRecord
+from app.models.intervention import InterventionPlan
 
 
 class AlertCache(db.Model):
@@ -118,6 +157,7 @@ def _generate_alerts(user):
     """Run all alert checks and return sorted list of alerts."""
     alerts = []
     today = date.today()
+    thresholds = get_thresholds(user)
 
     # Load counselor's active students once
     students = Student.query.filter_by(
@@ -127,16 +167,20 @@ def _generate_alerts(user):
     student_map = {s.id: s for s in students}
 
     if student_ids:
-        alerts += _check_iep504_reviews(user, student_ids, student_map, today)
+        alerts += _check_iep504_reviews(user, student_ids, student_map, today, thresholds)
         alerts += _check_overdue_followups(user, today)
-        alerts += _check_no_contact_students(user, students, today)
-        alerts += _check_failing_grades(user, student_ids, student_map)
-        alerts += _check_attendance_alerts(user, student_ids, student_map, today)
+        alerts += _check_no_contact_students(user, students, today, thresholds)
+        alerts += _check_failing_grades(user, student_ids, student_map, thresholds)
+        alerts += _check_attendance_alerts(user, student_ids, student_map, today, thresholds)
 
     alerts += _check_upcoming_bookings(user, today)
     alerts += _check_post_meeting_followups(user, today)
     alerts += _check_semester_tasks(user, today)
-    alerts += _check_new_students(user, students, today)
+    alerts += _check_new_students(user, students, today, thresholds)
+    alerts += _check_referrals(user, today, student_map, thresholds)
+    alerts += _check_goals(user, today, student_map, thresholds)
+    alerts += _check_consents(user, today, student_map, thresholds)
+    alerts += _check_intervention_reviews(user, today, student_map, thresholds)
 
     # Sort by priority, then category
     alerts.sort(key=lambda a: (a['priority'], a['category']))
@@ -161,8 +205,11 @@ def _alert(priority, category, title, detail='', student_id=None,
 
 # ── Individual checks ─────────────────────────────────────────────
 
-def _check_iep504_reviews(user, student_ids, student_map, today):
-    """IEP/504 reviews due within 30 days or overdue."""
+def _check_iep504_reviews(user, student_ids, student_map, today, thresholds=None):
+    """IEP/504 reviews due within configured days or overdue."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    warn_days = t['iep_review_warn_days']
+    critical_days = t['iep_review_critical_days']
     alerts = []
     records = IEP504Record.query.filter(
         IEP504Record.student_id.in_(student_ids),
@@ -184,7 +231,7 @@ def _check_iep504_reviews(user, student_ids, student_map, today):
                 student_id=rec.student_id, student_name=name,
                 action_url=f'/iep504', action_label='View IEP/504',
             ))
-        elif days_until <= 14:
+        elif days_until <= critical_days:
             alerts.append(_alert(
                 PRIORITY_HIGH, CATEGORY_COMPLIANCE,
                 f'{rec.plan_type.upper()} review in {days_until} days',
@@ -192,7 +239,7 @@ def _check_iep504_reviews(user, student_ids, student_map, today):
                 student_id=rec.student_id, student_name=name,
                 action_url=f'/iep504', action_label='View IEP/504',
             ))
-        elif days_until <= 30:
+        elif days_until <= warn_days:
             alerts.append(_alert(
                 PRIORITY_MEDIUM, CATEGORY_COMPLIANCE,
                 f'{rec.plan_type.upper()} review in {days_until} days',
@@ -232,10 +279,12 @@ def _check_overdue_followups(user, today):
     return alerts
 
 
-def _check_no_contact_students(user, students, today):
-    """Students not contacted in 30+ days."""
+def _check_no_contact_students(user, students, today, thresholds=None):
+    """Students not contacted in N+ days (configurable)."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    days = t['no_contact_days']
     alerts = []
-    threshold = today - timedelta(days=30)
+    threshold = today - timedelta(days=days)
     student_ids = [s.id for s in students]
 
     # Single bulk query: last note date per student
@@ -272,8 +321,10 @@ def _check_no_contact_students(user, students, today):
     return alerts
 
 
-def _check_failing_grades(user, student_ids, student_map):
+def _check_failing_grades(user, student_ids, student_map, thresholds=None):
     """Students with D or F grades in current grading period."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    high_count = t['failing_high_count']
     alerts = []
     # Get the most recent grades per student
     failing_grades = GradeRecord.query.filter(
@@ -297,7 +348,7 @@ def _check_failing_grades(user, student_ids, student_map):
             continue
         name = student.first_name + ' ' + student.last_name
         count = len(courses)
-        priority = PRIORITY_HIGH if count >= 3 else PRIORITY_MEDIUM
+        priority = PRIORITY_HIGH if count >= high_count else PRIORITY_MEDIUM
 
         alerts.append(_alert(
             priority, CATEGORY_ACADEMIC,
@@ -310,10 +361,15 @@ def _check_failing_grades(user, student_ids, student_map):
     return alerts
 
 
-def _check_attendance_alerts(user, student_ids, student_map, today):
-    """Students with high absence rates in the last 30 days."""
+def _check_attendance_alerts(user, student_ids, student_map, today, thresholds=None):
+    """Students with high absence rates in the configured window."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    window = t['absence_window_days']
+    watch = t['absence_watch']
+    concern = t['absence_concern']
+    chronic = t['absence_chronic']
     alerts = []
-    cutoff = today - timedelta(days=30)
+    cutoff = today - timedelta(days=window)
 
     # Single bulk query: absence count per student
     absence_counts = dict(
@@ -329,7 +385,7 @@ def _check_attendance_alerts(user, student_ids, student_map, today):
     )
 
     for sid, absent_count in absence_counts.items():
-        if absent_count < 3:
+        if absent_count < watch:
             continue
 
         student = student_map.get(sid)
@@ -337,10 +393,10 @@ def _check_attendance_alerts(user, student_ids, student_map, today):
             continue
         name = student.first_name + ' ' + student.last_name
 
-        if absent_count >= 7:
+        if absent_count >= chronic:
             priority = PRIORITY_HIGH
             label = 'Chronic absence alert'
-        elif absent_count >= 5:
+        elif absent_count >= concern:
             priority = PRIORITY_MEDIUM
             label = 'Attendance concern'
         else:
@@ -473,10 +529,11 @@ def _check_semester_tasks(user, today):
     return alerts
 
 
-def _check_new_students(user, students, today):
+def _check_new_students(user, students, today, thresholds=None):
     """Recently added students that might need welcome workflow."""
+    t = thresholds or DEFAULT_THRESHOLDS
     alerts = []
-    recent_cutoff = today - timedelta(days=7)
+    recent_cutoff = today - timedelta(days=t['new_student_window_days'])
 
     # Filter to recent students first
     recent = [s for s in students
@@ -507,5 +564,160 @@ def _check_new_students(user, students, today):
             action_url=f'/notes/add?student_id={student.id}',
             action_label='Add Note',
         ))
+
+    return alerts
+
+
+def _check_referrals(user, today, student_map, thresholds=None):
+    """Pending referrals not contacted in N+ days, plus overdue follow-ups."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    pending_threshold = t['referral_pending_days']
+    alerts = []
+    refs = Referral.query.filter(
+        Referral.counselor_id == user.id,
+        Referral.status.in_(['pending', 'contacted', 'in_progress']),
+    ).all()
+
+    for r in refs:
+        student = student_map.get(r.student_id)
+        if not student:
+            continue
+        name = student.first_name + ' ' + student.last_name
+        days_open = (today - r.referral_date).days
+
+        if r.status == 'pending' and days_open >= pending_threshold:
+            alerts.append(_alert(
+                PRIORITY_HIGH if days_open > pending_threshold * 2 else PRIORITY_MEDIUM,
+                CATEGORY_FOLLOWUP,
+                f'Referral pending {days_open}d',
+                f'{name} — {r.referred_to} not yet contacted',
+                student_id=student.id, student_name=name,
+                action_url=f'/referrals/{r.id}', action_label='View Referral',
+            ))
+
+        if r.follow_up_date and r.follow_up_date <= today and r.status != 'completed':
+            days_overdue = (today - r.follow_up_date).days
+            alerts.append(_alert(
+                PRIORITY_HIGH if days_overdue > 3 else PRIORITY_MEDIUM,
+                CATEGORY_FOLLOWUP,
+                f'Referral follow-up due',
+                f'{name} — {r.referred_to}',
+                student_id=student.id, student_name=name,
+                action_url=f'/referrals/{r.id}', action_label='View Referral',
+            ))
+
+    return alerts
+
+
+def _check_goals(user, today, student_map, thresholds=None):
+    """SMART goals approaching or past their target date."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    warn_days = t['goal_warn_days']
+    alerts = []
+    goals = Goal.query.filter(
+        Goal.counselor_id == user.id,
+        Goal.status.in_(['active', 'in_progress']),
+        Goal.target_date.isnot(None),
+    ).all()
+
+    for g in goals:
+        student = student_map.get(g.student_id)
+        if not student:
+            continue
+        name = student.first_name + ' ' + student.last_name
+        days_until = (g.target_date - today).days
+
+        if days_until < 0:
+            alerts.append(_alert(
+                PRIORITY_HIGH, CATEGORY_FOLLOWUP,
+                f'Goal overdue ({abs(days_until)}d)',
+                f'{name} — "{g.title}"',
+                student_id=student.id, student_name=name,
+                action_url=f'/goals/{g.id}', action_label='View Goal',
+            ))
+        elif days_until <= warn_days:
+            alerts.append(_alert(
+                PRIORITY_MEDIUM, CATEGORY_FOLLOWUP,
+                f'Goal due in {days_until}d',
+                f'{name} — "{g.title}"',
+                student_id=student.id, student_name=name,
+                action_url=f'/goals/{g.id}', action_label='View Goal',
+            ))
+
+    return alerts
+
+
+def _check_consents(user, today, student_map, thresholds=None):
+    """Consents that are expired or expiring within configured window."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    warn_days = t['consent_warn_days']
+    alerts = []
+    consents = ConsentRecord.query.filter(
+        ConsentRecord.counselor_id == user.id,
+        ConsentRecord.expiration_date.isnot(None),
+        ConsentRecord.status.in_(['received', 'requested']),
+    ).all()
+
+    for c in consents:
+        student = student_map.get(c.student_id)
+        if not student:
+            continue
+        name = student.first_name + ' ' + student.last_name
+        days_until = (c.expiration_date - today).days
+
+        if days_until < 0:
+            alerts.append(_alert(
+                PRIORITY_HIGH, CATEGORY_COMPLIANCE,
+                f'Consent expired',
+                f'{name} — {c.consent_type_label} ({abs(days_until)}d ago)',
+                student_id=student.id, student_name=name,
+                action_url=f'/consents/{c.id}', action_label='View Consent',
+            ))
+        elif days_until <= warn_days:
+            alerts.append(_alert(
+                PRIORITY_MEDIUM, CATEGORY_COMPLIANCE,
+                f'Consent expires in {days_until}d',
+                f'{name} — {c.consent_type_label}',
+                student_id=student.id, student_name=name,
+                action_url=f'/consents/{c.id}', action_label='View Consent',
+            ))
+
+    return alerts
+
+
+def _check_intervention_reviews(user, today, student_map, thresholds=None):
+    """Intervention plans due for tier review."""
+    t = thresholds or DEFAULT_THRESHOLDS
+    warn_days = t['intervention_review_warn_days']
+    alerts = []
+    plans = InterventionPlan.query.filter(
+        InterventionPlan.counselor_id == user.id,
+        InterventionPlan.status == 'active',
+        InterventionPlan.review_date.isnot(None),
+    ).all()
+
+    for p in plans:
+        student = student_map.get(p.student_id)
+        if not student:
+            continue
+        name = student.first_name + ' ' + student.last_name
+        days_until = (p.review_date - today).days
+
+        if days_until < 0:
+            alerts.append(_alert(
+                PRIORITY_HIGH, CATEGORY_COMPLIANCE,
+                f'Tier {p.tier} review overdue',
+                f'{name} — {p.concern_area}',
+                student_id=student.id, student_name=name,
+                action_url=f'/interventions/{p.id}', action_label='View Plan',
+            ))
+        elif days_until <= warn_days:
+            alerts.append(_alert(
+                PRIORITY_MEDIUM, CATEGORY_COMPLIANCE,
+                f'Tier {p.tier} review in {days_until}d',
+                f'{name} — {p.concern_area}',
+                student_id=student.id, student_name=name,
+                action_url=f'/interventions/{p.id}', action_label='View Plan',
+            ))
 
     return alerts

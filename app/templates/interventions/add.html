@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}New Intervention{% endblock %}
+{% block page_title %}New Intervention Plan{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">--</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tier *</label>
+                    <select name="tier" class="form-control" required>
+                        {% for v, l in tiers %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Concern Area *</label>
+                <select name="concern_area" class="form-control" required>
+                    {% for v, l in concern_areas %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Concern Details</label>
+                <textarea name="concern_details" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Intervention Strategy *</label>
+                <textarea name="strategy" class="form-control" rows="3" required></textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Frequency</label>
+                    <input type="text" name="frequency" class="form-control" placeholder="e.g. 2x/week">
+                </div>
+                <div class="form-group">
+                    <label>Duration / Length</label>
+                    <input type="text" name="duration" class="form-control" placeholder="e.g. 30 min sessions">
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" name="location" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Interventionist</label>
+                    <input type="text" name="interventionist" class="form-control" placeholder="Who delivers?">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Baseline Data</label>
+                <textarea name="baseline_data" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Success Criteria</label>
+                <textarea name="success_criteria" class="form-control" rows="2"
+                          placeholder="What does success look like? When will you exit/escalate?"></textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Review Date</label>
+                    <input type="date" name="review_date" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" class="form-control">
+                    {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if v == 'active' }}>{{ l }}</option>{% endfor %}
+                </select>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Create Plan</button>
+                <a href="{{ url_for('interventions.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function(){
+        var d = document.querySelector('input[name="start_date"]');
+        if (d && !d.value) {
+            var t = new Date();
+            d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+    })();
+</script>
+{% endblock %}

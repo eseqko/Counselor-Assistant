@@ -39,6 +39,26 @@
         <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Topic Delivery Log</div>
         <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Topic coverage frequency</div>
     </a>
+    <a href="{{ url_for('reports.asca_results') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid #6366f1;">
+        <div class="stat-value" style="font-size:1.5rem;">&#127919;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">ASCA Results Reports</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Document programs & outcomes</div>
+    </a>
+    <a href="{{ url_for('reports.closing_the_gap') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid #14b8a6;">
+        <div class="stat-value" style="font-size:1.5rem;">&#9878;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Closing-the-Gap</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Service distribution by demographics</div>
+    </a>
+    <a href="{{ url_for('reports.program_evaluation') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid #8b5cf6;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128221;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Program Evaluation</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Annual program summary</div>
+    </a>
+    <a href="{{ url_for('reports.equity') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid #f59e0b;">
+        <div class="stat-value" style="font-size:1.5rem;">&#9878;&#65039;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Equity / Access Audit</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Disaggregated service access</div>
+    </a>
 </div>
 
 {% endblock %}

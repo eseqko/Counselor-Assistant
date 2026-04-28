@@ -107,6 +107,15 @@ def create_app(config_class=Config):
     from app.routes.knowledge_base import kb_bp
     from app.routes.admin import admin_bp
     from app.routes.student_portal import student_portal_bp
+    from app.routes.referrals import referrals_bp
+    from app.routes.goals import goals_bp
+    from app.routes.communications import communications_bp
+    from app.routes.groups import groups_bp
+    from app.routes.consents import consents_bp
+    from app.routes.interventions import interventions_bp
+    from app.routes.screenings import screenings_bp
+    from app.routes.documents import documents_bp
+    from app.routes.post_grad import post_grad_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -140,6 +149,15 @@ def create_app(config_class=Config):
     app.register_blueprint(kb_bp, url_prefix='/knowledge-base')
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(student_portal_bp, url_prefix='/student-portal')
+    app.register_blueprint(referrals_bp, url_prefix='/referrals')
+    app.register_blueprint(goals_bp, url_prefix='/goals')
+    app.register_blueprint(communications_bp, url_prefix='/communications')
+    app.register_blueprint(groups_bp, url_prefix='/groups')
+    app.register_blueprint(consents_bp, url_prefix='/consents')
+    app.register_blueprint(interventions_bp, url_prefix='/interventions')
+    app.register_blueprint(screenings_bp, url_prefix='/screenings')
+    app.register_blueprint(documents_bp, url_prefix='/documents')
+    app.register_blueprint(post_grad_bp, url_prefix='/post-grad')
 
     # First-run setup redirect (cached after first successful check)
     @app.before_request
@@ -215,6 +233,9 @@ def create_app(config_class=Config):
         from app.models import attendance, grade, iep504, availability, meeting_note, import_log
         from app.models import academic_plan, college_career, ai_tool_history
         from app.models import knowledge_base
+        from app.models import referral, goal, communication, group, consent
+        from app.models import intervention, screening, document, post_grad
+        from app.models import asca_program
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Consent Detail{% endblock %}
+{% block page_title %}Consent Detail{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        {{ consent.consent_type_label }} — {{ consent.student.display_name }}
+        <div class="btn-group">
+            <a href="{{ url_for('consents.edit', id=consent.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            {% if consent.document_filename %}
+            <a href="{{ url_for('consents.download_document', id=consent.id) }}" class="btn btn-sm btn-outline">Download Doc</a>
+            {% endif %}
+            <form method="POST" action="{{ url_for('consents.delete', id=consent.id) }}"
+                  style="display:inline;" onsubmit="return confirm('Delete?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="grid-2">
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Student</td><td><a href="{{ url_for('caseload.view_student', id=consent.student.id) }}">{{ consent.student.display_name }}</a></td></tr>
+                <tr><td style="font-weight:600;">Type</td><td>{{ consent.consent_type_label }}</td></tr>
+                <tr><td style="font-weight:600;">Status</td><td><span class="badge badge-info">{{ consent.status_label }}</span></td></tr>
+                <tr><td style="font-weight:600;">Method</td><td>{{ consent.method or '-' }}</td></tr>
+            </table>
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Guardian</td><td>{{ consent.guardian_name or '-' }}{% if consent.guardian_relationship %} ({{ consent.guardian_relationship }}){% endif %}</td></tr>
+                {% if consent.guardian_phone %}<tr><td style="font-weight:600;">Phone</td><td>{{ consent.guardian_phone }}</td></tr>{% endif %}
+                {% if consent.guardian_email %}<tr><td style="font-weight:600;">Email</td><td>{{ consent.guardian_email }}</td></tr>{% endif %}
+                <tr><td style="font-weight:600;">Requested</td><td>{{ consent.request_date.strftime('%m/%d/%Y') if consent.request_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Received</td><td>{{ consent.received_date.strftime('%m/%d/%Y') if consent.received_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Expires</td><td>{{ consent.expiration_date.strftime('%m/%d/%Y') if consent.expiration_date else '-' }}</td></tr>
+            </table>
+        </div>
+        {% if consent.description %}<h3 style="margin-top:16px;">Description</h3><p style="white-space:pre-wrap;">{{ consent.description }}</p>{% endif %}
+        {% if consent.notes %}<h3 style="margin-top:16px;">Notes</h3><p style="white-space:pre-wrap;">{{ consent.notes }}</p>{% endif %}
+    </div>
+</div>
+{% endblock %}

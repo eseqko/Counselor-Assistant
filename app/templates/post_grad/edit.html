@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Edit Outcome{% endblock %}
+{% block page_title %}Edit Post-Grad Outcome{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <p><strong>{{ outcome.student.display_name }}</strong></p>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Pathway *</label>
+                    <select name="primary_pathway" class="form-control" required>
+                        {% for v, l in pathways %}<option value="{{ v }}" {{ 'selected' if v == outcome.primary_pathway }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Graduation Year</label>
+                    <input type="number" name="graduation_year" class="form-control" value="{{ outcome.graduation_year or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Graduation Date</label>
+                    <input type="date" name="graduation_date" class="form-control" value="{{ outcome.graduation_date.strftime('%Y-%m-%d') if outcome.graduation_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Last Follow-Up</label>
+                    <input type="date" name="last_followup_date" class="form-control" value="{{ outcome.last_followup_date.strftime('%Y-%m-%d') if outcome.last_followup_date else '' }}">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Institution</label>
+                    <input type="text" name="institution_name" class="form-control" value="{{ outcome.institution_name or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Major / Program</label>
+                    <input type="text" name="program_major" class="form-control" value="{{ outcome.program_major or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Job Title</label>
+                    <input type="text" name="job_title" class="form-control" value="{{ outcome.job_title or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Employer</label>
+                    <input type="text" name="employer" class="form-control" value="{{ outcome.employer or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Military Branch</label>
+                <input type="text" name="military_branch" class="form-control" value="{{ outcome.military_branch or '' }}">
+            </div>
+
+            <h3>Follow-Up Status</h3>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>6 Months</label>
+                    <select name="status_at_6mo" class="form-control">
+                        <option value="">--</option>
+                        {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if v == outcome.status_at_6mo }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>1 Year</label>
+                    <select name="status_at_1yr" class="form-control">
+                        <option value="">--</option>
+                        {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if v == outcome.status_at_1yr }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>2 Years</label>
+                    <select name="status_at_2yr" class="form-control">
+                        <option value="">--</option>
+                        {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if v == outcome.status_at_2yr }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label><input type="checkbox" name="enrollment_verified" {{ 'checked' if outcome.enrollment_verified }}> Enrollment verified</label>
+                <label style="margin-left:20px;"><input type="checkbox" name="completed_credential" {{ 'checked' if outcome.completed_credential }}> Completed credential</label>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="contact_email" class="form-control" value="{{ outcome.contact_email or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="text" name="contact_phone" class="form-control" value="{{ outcome.contact_phone or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" class="form-control" rows="3">{{ outcome.notes or '' }}</textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('post_grad.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

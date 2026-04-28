@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Alert Settings{% endblock %}
+{% block page_title %}Alert Threshold Settings{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">Configure Alert Thresholds</div>
+    <div class="card-body">
+        <p style="color:var(--gray);font-size:0.86rem;margin-bottom:16px;">
+            Customize when alerts fire. Leave a field blank to use the default value.
+        </p>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            {% macro field(name, label, hint='') %}
+            <div class="form-group">
+                <label>{{ label }} <span style="color:var(--gray);font-size:0.78rem;">(default: {{ defaults[name] }})</span></label>
+                <input type="number" name="{{ name }}" class="form-control"
+                       value="{{ thresholds[name] }}" min="0">
+                {% if hint %}<div style="font-size:0.78rem;color:var(--gray);margin-top:4px;">{{ hint }}</div>{% endif %}
+            </div>
+            {% endmacro %}
+
+            <h3>Student Contact</h3>
+            {{ field('no_contact_days', 'Days without contact before "check-in needed" alert',
+                     'Recommends a check-in if no notes have been logged in this many days.') }}
+
+            <h3>IEP / 504 Reviews</h3>
+            <div class="grid-2">
+                {{ field('iep_review_warn_days', 'Warning window (days)') }}
+                {{ field('iep_review_critical_days', 'Critical window (days)') }}
+            </div>
+
+            <h3>Attendance</h3>
+            <div class="grid-2">
+                {{ field('absence_window_days', 'Look-back window (days)') }}
+                {{ field('absence_watch', 'Absences for "watch" alert') }}
+                {{ field('absence_concern', 'Absences for "concern" alert') }}
+                {{ field('absence_chronic', 'Absences for "chronic" alert') }}
+            </div>
+
+            <h3>Failing Grades</h3>
+            <div class="grid-2">
+                {{ field('failing_alert_count', 'Min failing courses to trigger alert') }}
+                {{ field('failing_high_count', 'Failing courses for HIGH priority') }}
+            </div>
+
+            <h3>Referrals & Goals</h3>
+            <div class="grid-2">
+                {{ field('referral_pending_days', 'Days before pending referral alert') }}
+                {{ field('goal_warn_days', 'Days before goal target date alert') }}
+            </div>
+
+            <h3>Compliance</h3>
+            <div class="grid-2">
+                {{ field('consent_warn_days', 'Days before consent expiration alert') }}
+                {{ field('intervention_review_warn_days', 'Days before intervention review alert') }}
+            </div>
+
+            <h3>New Students</h3>
+            {{ field('new_student_window_days', 'Days a student is "new" without intro') }}
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save Thresholds</button>
+                <a href="{{ url_for('settings.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -675,3 +675,32 @@ def cleanup_duplicates():
     else:
         flash('No duplicate notes found.', 'info')
     return redirect(url_for('settings.index'))
+
+
+@settings_bp.route('/alerts', methods=['GET', 'POST'])
+@login_required
+def alerts():
+    """Configure alert thresholds for this counselor."""
+    from app.utils.alert_engine import DEFAULT_THRESHOLDS, get_thresholds, refresh_alerts
+
+    current = get_thresholds(current_user)
+
+    if request.method == 'POST':
+        new_settings = {}
+        for key in DEFAULT_THRESHOLDS.keys():
+            val = request.form.get(key, '').strip()
+            if val:
+                try:
+                    new_settings[key] = max(0, int(val))
+                except ValueError:
+                    pass
+        current_user.alert_settings_json = json.dumps(new_settings) if new_settings else ''
+        db.session.commit()
+        # Refresh today's alerts to reflect the new thresholds
+        refresh_alerts(current_user)
+        log_action('update', 'alert_settings', details='Updated alert thresholds')
+        flash('Alert thresholds updated.', 'success')
+        return redirect(url_for('settings.alerts'))
+
+    return render_template('settings/alerts.html',
+        thresholds=current, defaults=DEFAULT_THRESHOLDS)

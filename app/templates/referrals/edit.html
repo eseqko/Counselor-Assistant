@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Edit Referral{% endblock %}
+{% block page_title %}Edit Referral{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student</label>
+                    <input type="text" class="form-control" value="{{ referral.student.display_name }}" disabled>
+                </div>
+                <div class="form-group">
+                    <label>Referral Date</label>
+                    <input type="date" name="referral_date" class="form-control"
+                           value="{{ referral.referral_date.strftime('%Y-%m-%d') }}">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Type *</label>
+                    <select name="referral_type" class="form-control" required>
+                        {% for val, label in referral_types %}
+                        <option value="{{ val }}" {{ 'selected' if val == referral.referral_type }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Urgency</label>
+                    <select name="urgency" class="form-control">
+                        {% for val, label in urgency_levels %}
+                        <option value="{{ val }}" {{ 'selected' if val == referral.urgency }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Referred To *</label>
+                <input type="text" name="referred_to" class="form-control"
+                       value="{{ referral.referred_to }}" required>
+            </div>
+
+            <div class="form-group">
+                <label>Contact Info</label>
+                <input type="text" name="contact_info" class="form-control"
+                       value="{{ referral.contact_info or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label>Reason *</label>
+                <textarea name="reason" class="form-control" rows="3" required>{{ referral.reason }}</textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" class="form-control">
+                        {% for val, label in statuses %}
+                        <option value="{{ val }}" {{ 'selected' if val == referral.status }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control"
+                           value="{{ referral.follow_up_date.strftime('%Y-%m-%d') if referral.follow_up_date else '' }}">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Contacted Date</label>
+                    <input type="date" name="contacted_date" class="form-control"
+                           value="{{ referral.contacted_date.strftime('%Y-%m-%d') if referral.contacted_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Accepted Date</label>
+                    <input type="date" name="accepted_date" class="form-control"
+                           value="{{ referral.accepted_date.strftime('%Y-%m-%d') if referral.accepted_date else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Completed Date</label>
+                <input type="date" name="completed_date" class="form-control"
+                       value="{{ referral.completed_date.strftime('%Y-%m-%d') if referral.completed_date else '' }}">
+            </div>
+
+            <div class="form-group">
+                <label>Outcome</label>
+                <textarea name="outcome" class="form-control" rows="3">{{ referral.outcome or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Follow-Up Notes</label>
+                <textarea name="follow_up_notes" class="form-control" rows="2">{{ referral.follow_up_notes or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="consent_obtained" {{ 'checked' if referral.consent_obtained }}>
+                    Parent/guardian consent obtained
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" class="form-control" rows="2">{{ referral.notes or '' }}</textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('referrals.view', id=referral.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

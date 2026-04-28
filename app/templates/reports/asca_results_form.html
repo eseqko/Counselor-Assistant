@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if program else 'New' }} ASCA Program{% endblock %}
+{% block page_title %}{{ 'Edit' if program else 'New' }} ASCA Program{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label>Program Name *</label>
+                <input type="text" name="name" class="form-control" required value="{{ program.name if program else '' }}">
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="program_type" class="form-control">
+                        {% for val, label in program_types %}
+                        <option value="{{ val }}" {{ 'selected' if program and val == program.program_type }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>School Year</label>
+                    <input type="text" name="school_year" class="form-control" placeholder="2025-2026" value="{{ program.school_year if program else '' }}">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">--</option>
+                        <option value="academic" {{ 'selected' if program and program.asca_domain == 'academic' }}>Academic</option>
+                        <option value="career" {{ 'selected' if program and program.asca_domain == 'career' }}>Career</option>
+                        <option value="social_emotional" {{ 'selected' if program and program.asca_domain == 'social_emotional' }}>Social/Emotional</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ASCA Standard</label>
+                    <input type="text" name="asca_standard" class="form-control" value="{{ program.asca_standard if program else '' }}">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Target Group</label>
+                    <input type="text" name="target_group" class="form-control" placeholder="e.g. 9th graders failing 2+ classes" value="{{ program.target_group if program else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Target Group Size</label>
+                    <input type="number" name="target_size" class="form-control" value="{{ program.target_size if program and program.target_size else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Goal Statement</label>
+                <textarea name="goal_statement" class="form-control" rows="2" placeholder="What is the SMART goal for this program?">{{ program.goal_statement if program else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Baseline Data</label>
+                <textarea name="baseline" class="form-control" rows="2" placeholder="What was the starting data point?">{{ program.baseline if program else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Intervention / Strategy</label>
+                <textarea name="intervention" class="form-control" rows="3" placeholder="What did you do?">{{ program.intervention if program else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Process Data (who/what/when)</label>
+                <textarea name="process_data" class="form-control" rows="2">{{ program.process_data if program else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Perception Data (attitudes, knowledge, skills)</label>
+                <textarea name="perception_data" class="form-control" rows="2">{{ program.perception_data if program else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Results Data (achievement, attendance, behavior)</label>
+                <textarea name="results_data" class="form-control" rows="2">{{ program.results_data if program else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Outcome Data Summary</label>
+                <textarea name="outcome_data" class="form-control" rows="3">{{ program.outcome_data if program else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Implications / Next Steps</label>
+                <textarea name="implications" class="form-control" rows="3">{{ program.implications if program else '' }}</textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ program.start_date.strftime('%Y-%m-%d') if program and program.start_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ program.end_date.strftime('%Y-%m-%d') if program and program.end_date else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" class="form-control">
+                    {% for val, label in statuses %}
+                    <option value="{{ val }}" {{ 'selected' if program and val == program.status }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('reports.asca_results') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

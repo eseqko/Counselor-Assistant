@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Equity / Access Audit{% endblock %}
+{% block page_title %}Equity / Access Audit{% endblock %}
+{% block content %}
+
+{% if not has_data %}
+<div class="card"><div class="card-body"><div class="empty-state"><p>No students on caseload yet.</p></div></div></div>
+{% else %}
+
+<p style="color:var(--gray);font-size:0.86rem;">Service distribution across {{ total_students }} students. Look for groups with disproportionately low (or high) access — these may indicate equity gaps.</p>
+
+{% for label, data in sections %}
+<div class="card">
+    <div class="card-header">{{ label }}</div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ label }}</th>
+                    <th>Students</th>
+                    <th>Services</th>
+                    <th>Notes</th>
+                    <th>Referrals</th>
+                    <th>Goals</th>
+                    <th>Interventions</th>
+                    <th>Avg Services / Student</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, vals in data.items() %}
+                <tr>
+                    <td>{{ key }}</td>
+                    <td>{{ vals.students }}</td>
+                    <td>{{ vals.services }}</td>
+                    <td>{{ vals.notes }}</td>
+                    <td>{{ vals.referrals }}</td>
+                    <td>{{ vals.goals }}</td>
+                    <td>{{ vals.interventions }}</td>
+                    <td>{{ '%.1f'|format(vals.services / vals.students) if vals.students else '0' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+<div class="card no-print">
+    <div class="card-body"><button class="btn btn-outline" onclick="window.print()">Print Report</button></div>
+</div>
+
+{% endif %}
+{% endblock %}

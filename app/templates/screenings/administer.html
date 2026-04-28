@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Administer {{ template.short_name }}{% endblock %}
+{% block page_title %}Administer {{ template.short_name or template.name }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <h2>{{ template.name }}</h2>
+        {% if template.description %}<p style="color:var(--gray);">{{ template.description }}</p>{% endif %}
+        {% if template.instructions %}<p style="font-style:italic;">{{ template.instructions }}</p>{% endif %}
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">--</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="administered_date" class="form-control">
+                </div>
+            </div>
+
+            <div style="margin:20px 0;">
+                {% for q in template.questions %}
+                <div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;">
+                    <div style="font-weight:600;margin-bottom:8px;">{{ loop.index }}. {{ q.text }}</div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                        {% for opt in q.options %}
+                        <label style="cursor:pointer;display:flex;align-items:center;gap:4px;">
+                            <input type="radio" name="{{ q.id }}" value="{{ opt.value }}" required>
+                            {{ opt.label }} <span style="color:var(--gray);font-size:0.78rem;">({{ opt.value }})</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Submit & Score</button>
+                <a href="{{ url_for('screenings.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function(){
+        var d = document.querySelector('input[name="administered_date"]');
+        if (d && !d.value) {
+            var t = new Date();
+            d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+    })();
+</script>
+{% endblock %}

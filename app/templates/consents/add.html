@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}New Consent{% endblock %}
+{% block page_title %}New Consent Record{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">--</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Consent Type *</label>
+                    <select name="consent_type" class="form-control" required>
+                        <option value="">--</option>
+                        {% for v, l in consent_types %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="2"></textarea>
+            </div>
+
+            <h3>Guardian</h3>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="guardian_name" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Relationship</label>
+                    <select name="guardian_relationship" class="form-control">
+                        <option value="">--</option>
+                        {% for v, l in relationships %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="text" name="guardian_phone" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="guardian_email" class="form-control">
+                </div>
+            </div>
+
+            <h3>Dates & Status</h3>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Request Date</label>
+                    <input type="date" name="request_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Received Date</label>
+                    <input type="date" name="received_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Expiration Date</label>
+                    <input type="date" name="expiration_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" class="form-control">
+                        {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if v == 'requested' }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Method</label>
+                    <select name="method" class="form-control">
+                        <option value="">--</option>
+                        {% for v, l in methods %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Upload Signed Document</label>
+                    <input type="file" name="document" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('consents.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function(){
+        var d = document.querySelector('input[name="request_date"]');
+        if (d && !d.value) {
+            var t = new Date();
+            d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+    })();
+</script>
+{% endblock %}

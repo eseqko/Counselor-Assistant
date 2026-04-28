@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Student Goals{% endblock %}
+{% block page_title %}Student Goals{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Student</label>
+            <select name="student_id" class="form-control">
+                <option value="">All Students</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <select name="status" class="form-control">
+                <option value="">All</option>
+                <option value="open" {{ 'selected' if status == 'open' }}>Open</option>
+                {% for val, label in statuses %}
+                <option value="{{ val }}" {{ 'selected' if status == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>ASCA Domain</label>
+            <select name="domain" class="form-control">
+                <option value="">All</option>
+                {% for val, label in domains %}
+                <option value="{{ val }}" {{ 'selected' if domain == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Goals ({{ goals|length }})
+        <a href="{{ url_for('goals.add') }}" class="btn btn-sm btn-primary">+ New Goal</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Student</th><th>Goal</th><th>Domain</th><th>Target Date</th><th>Progress</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                {% for g in goals %}
+                <tr>
+                    <td><a href="{{ url_for('caseload.view_student', id=g.student.id) }}">{{ g.student.display_name }}</a></td>
+                    <td><a href="{{ url_for('goals.view', id=g.id) }}">{{ g.title }}</a></td>
+                    <td>{% if g.asca_domain %}<span class="badge badge-info">{{ g.domain_label }}</span>{% endif %}</td>
+                    <td>{{ g.target_date.strftime('%m/%d/%Y') if g.target_date else '-' }}</td>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+                                <div style="width:{{ g.progress_percent or 0 }}%;height:100%;background:var(--primary);"></div>
+                            </div>
+                            <span style="font-size:0.78rem;font-weight:600;">{{ g.progress_percent or 0 }}%</span>
+                        </div>
+                    </td>
+                    <td>
+                        {% if g.status == 'achieved' %}<span class="badge badge-success">{{ g.status_label }}</span>
+                        {% elif g.status == 'not_met' %}<span class="badge badge-danger">{{ g.status_label }}</span>
+                        {% elif g.status == 'cancelled' %}<span class="badge badge-gray">{{ g.status_label }}</span>
+                        {% else %}<span class="badge badge-info">{{ g.status_label }}</span>{% endif %}
+                    </td>
+                    <td><a href="{{ url_for('goals.view', id=g.id) }}" class="btn btn-sm btn-outline">Open</a></td>
+                </tr>
+                {% endfor %}
+                {% if not goals %}
+                <tr><td colspan="7"><div class="empty-state"><p>No goals yet. Click "+ New Goal" to start tracking student goals.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

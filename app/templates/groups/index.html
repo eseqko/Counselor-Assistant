@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Counseling Groups{% endblock %}
+{% block page_title %}Counseling Groups{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Status</label>
+            <select name="status" class="form-control">
+                <option value="">All</option>
+                {% for val, label in statuses %}
+                <option value="{{ val }}" {{ 'selected' if status == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Groups ({{ groups|length }})
+        <a href="{{ url_for('groups.add') }}" class="btn btn-sm btn-primary">+ New Group</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Members</th><th>Sessions</th><th>Schedule</th><th>Dates</th><th>Status</th></tr></thead>
+            <tbody>
+                {% for g in groups %}
+                <tr>
+                    <td><a href="{{ url_for('groups.view', id=g.id) }}">{{ g.name }}</a></td>
+                    <td>{{ g.group_type|replace('_', ' ')|title }}</td>
+                    <td>{{ g.members|length }}</td>
+                    <td>{{ g.sessions|length }}</td>
+                    <td>{{ g.schedule or '-' }}</td>
+                    <td>
+                        {% if g.start_date %}{{ g.start_date.strftime('%m/%d') }}{% endif %}
+                        {% if g.end_date %} - {{ g.end_date.strftime('%m/%d') }}{% endif %}
+                    </td>
+                    <td>
+                        {% if g.status == 'active' %}<span class="badge badge-success">{{ g.status|title }}</span>
+                        {% elif g.status == 'completed' %}<span class="badge badge-info">{{ g.status|title }}</span>
+                        {% elif g.status == 'planning' %}<span class="badge badge-warning">{{ g.status|title }}</span>
+                        {% else %}<span class="badge badge-gray">{{ g.status|title }}</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not groups %}
+                <tr><td colspan="7"><div class="empty-state"><p>No groups yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

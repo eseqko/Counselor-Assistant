@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}New Group{% endblock %}
+{% block page_title %}New Counseling Group{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label>Group Name *</label>
+                <input type="text" name="name" class="form-control" required
+                       placeholder="e.g. Coping Skills (8th grade), Spring Anxiety Group">
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="group_type" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in group_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in asca_domains %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Schedule</label>
+                    <input type="text" name="schedule" class="form-control"
+                           placeholder="e.g. Tuesdays 12:00-12:30">
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" name="location" class="form-control">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" name="end_date" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" class="form-control">
+                    {% for val, label in statuses %}
+                    <option value="{{ val }}" {{ 'selected' if val == 'planning' }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Pre-Assessment (description)</label>
+                <textarea name="pre_assessment" class="form-control" rows="2"
+                          placeholder="What measure are you using before the group?"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Post-Assessment (description)</label>
+                <textarea name="post_assessment" class="form-control" rows="2"
+                          placeholder="What measure are you using after the group?"></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Create Group</button>
+                <a href="{{ url_for('groups.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

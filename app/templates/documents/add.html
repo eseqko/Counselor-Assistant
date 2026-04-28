@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Upload Document{% endblock %}
+{% block page_title %}Upload Student Document{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">--</option>
+                        {% for s in students %}<option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Type *</label>
+                    <select name="document_type" class="form-control" required>
+                        {% for v, l in document_types %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Title *</label>
+                <input type="text" name="title" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Document Date</label>
+                    <input type="date" name="document_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Expires</label>
+                    <input type="date" name="expiration_date" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Tags (comma-separated)</label>
+                <input type="text" name="tags" class="form-control" placeholder="urgent, IEP, scanned">
+            </div>
+
+            <div class="form-group">
+                <label>File *</label>
+                <input type="file" name="file" class="form-control" required accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt,.xlsx,.xls">
+                <div style="font-size:0.78rem;color:var(--gray);margin-top:4px;">PDF, image, DOC, DOCX, TXT, XLSX</div>
+            </div>
+
+            <div class="form-group">
+                <label><input type="checkbox" name="is_confidential" checked> Mark as confidential</label>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Upload</button>
+                <a href="{{ url_for('documents.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

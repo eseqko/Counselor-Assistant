@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Record Outcome{% endblock %}
+{% block page_title %}Record Post-Grad Outcome{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">--</option>
+                        {% for s in grads %}<option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Pathway *</label>
+                    <select name="primary_pathway" class="form-control" required>
+                        <option value="">--</option>
+                        {% for v, l in pathways %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Graduation Year</label>
+                    <input type="number" name="graduation_year" class="form-control" min="2000" max="2100">
+                </div>
+                <div class="form-group">
+                    <label>Graduation Date</label>
+                    <input type="date" name="graduation_date" class="form-control">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Institution Name</label>
+                    <input type="text" name="institution_name" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Major / Program</label>
+                    <input type="text" name="program_major" class="form-control">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Job Title</label>
+                    <input type="text" name="job_title" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Employer</label>
+                    <input type="text" name="employer" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Military Branch</label>
+                <input type="text" name="military_branch" class="form-control">
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Contact Email</label>
+                    <input type="email" name="contact_email" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Contact Phone</label>
+                    <input type="text" name="contact_phone" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('post_grad.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
