@@ -3,21 +3,86 @@
 {% block page_title %}Screening Tools{% endblock %}
 {% block content %}
 
+{% set clinical_templates = [] %}
+{% set career_templates = [] %}
+{% set custom_templates = [] %}
+{% for t in templates %}
+    {% set scoring = t.scoring %}
+    {% set stype = scoring.get('type', 'sum') if scoring else 'sum' %}
+    {% if not t.is_built_in %}
+        {% if custom_templates.append(t) %}{% endif %}
+    {% elif stype in ('dimensions', 'personality') %}
+        {% if career_templates.append(t) %}{% endif %}
+    {% else %}
+        {% if clinical_templates.append(t) %}{% endif %}
+    {% endif %}
+{% endfor %}
+
 <div class="card">
     <div class="card-header">
-        Available Screening Templates
+        Clinical Screeners
+    </div>
+    <div class="card-body">
+        {% if clinical_templates %}
+        <div class="grid-2">
+            {% for t in clinical_templates %}
+            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
+                <div>
+                    <strong>{{ t.short_name or t.name }}</strong>
+                    <span class="badge badge-info">Built-in</span>
+                    <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
+                </div>
+                {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
+                <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
+                <div style="margin-top:8px;">
+                    <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}<div class="empty-state"><p>No clinical screeners available.</p></div>{% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Career & Personality Assessments
+    </div>
+    <div class="card-body">
+        {% if career_templates %}
+        <div class="grid-2">
+            {% for t in career_templates %}
+            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
+                <div>
+                    <strong>{{ t.short_name or t.name }}</strong>
+                    <span class="badge" style="background:#10b98120;color:#10b981;">Career</span>
+                    <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
+                </div>
+                {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
+                <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
+                <div style="margin-top:8px;">
+                    <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}<div class="empty-state"><p>No career assessments available.</p></div>{% endif %}
+    </div>
+</div>
+
+{% if custom_templates %}
+<div class="card">
+    <div class="card-header">
+        Custom Templates
         <a href="{{ url_for('screenings.add_template') }}" class="btn btn-sm btn-outline">+ Custom Template</a>
     </div>
     <div class="card-body">
         <div class="grid-2">
-            {% for t in templates %}
+            {% for t in custom_templates %}
             <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                    <div>
-                        <strong>{{ t.short_name or t.name }}</strong>
-                        {% if t.is_built_in %}<span class="badge badge-info">Built-in</span>{% endif %}
-                        <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
-                    </div>
+                <div>
+                    <strong>{{ t.short_name or t.name }}</strong>
+                    <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
                 </div>
                 {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
                 <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
@@ -29,6 +94,11 @@
         </div>
     </div>
 </div>
+{% else %}
+<div style="text-align:center;margin:16px 0;">
+    <a href="{{ url_for('screenings.add_template') }}" class="btn btn-outline">+ Create Custom Template</a>
+</div>
+{% endif %}
 
 <div class="card">
     <div class="card-header">Recent Results ({{ results|length }})</div>
@@ -46,20 +116,28 @@
     </div>
     <div class="table-responsive">
         <table>
-            <thead><tr><th>Date</th><th>Student</th><th>Screener</th><th>Score</th><th>Severity</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Student</th><th>Screener</th><th>Score / Code</th><th>Result</th><th></th></tr></thead>
             <tbody>
                 {% for r in results %}
+                {% set r_scoring = r.template.scoring %}
+                {% set r_type = r_scoring.get('type', 'sum') if r_scoring else 'sum' %}
                 <tr>
                     <td>{{ r.administered_date.strftime('%m/%d/%Y') }}</td>
                     <td><a href="{{ url_for('caseload.view_student', id=r.student.id) }}">{{ r.student.display_name }}</a></td>
                     <td>{{ r.template.short_name or r.template.name }}</td>
-                    <td>{{ r.total_score }}</td>
+                    <td>{% if r_type == 'sum' %}{{ r.total_score }}{% else %}<strong style="letter-spacing:1px;">{{ r.severity }}</strong>{% endif %}</td>
                     <td>
+                        {% if r_type == 'sum' %}
                         {% set sev_lower = (r.severity or '')|lower %}
                         {% if sev_lower in ('severe', 'high', 'moderately severe') %}<span class="badge badge-danger">{{ r.severity }}</span>
                         {% elif sev_lower == 'moderate' %}<span class="badge badge-warning">{{ r.severity }}</span>
                         {% elif sev_lower == 'mild' %}<span class="badge badge-info">{{ r.severity }}</span>
                         {% else %}<span class="badge badge-success">{{ r.severity }}</span>{% endif %}
+                        {% elif r_type == 'personality' %}
+                        <span class="badge" style="background:#8b5cf620;color:#8b5cf6;">{{ r.severity }}</span>
+                        {% else %}
+                        <span class="badge" style="background:#10b98120;color:#10b981;">Top: {{ r.severity }}</span>
+                        {% endif %}
                     </td>
                     <td><a href="{{ url_for('screenings.view_result', id=r.id) }}" class="btn btn-sm btn-outline">View</a></td>
                 </tr>

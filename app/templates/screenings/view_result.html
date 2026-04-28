@@ -18,6 +18,9 @@
         </div>
     </div>
     <div class="card-body">
+        {% set scoring = result.template.scoring %}
+        {% set scoring_type = scoring.get('type', 'sum') if scoring else 'sum' %}
+
         <div class="grid-2">
             <table>
                 <tr><td style="font-weight:600;width:40%;">Student</td><td><a href="{{ url_for('caseload.view_student', id=result.student.id) }}">{{ result.student.display_name }}</a></td></tr>
@@ -25,6 +28,7 @@
                 <tr><td style="font-weight:600;">Screener</td><td>{{ result.template.name }}</td></tr>
             </table>
             <table>
+                {% if scoring_type == 'sum' %}
                 <tr><td style="font-weight:600;width:40%;">Total Score</td><td><strong style="font-size:1.4rem;">{{ result.total_score }}</strong></td></tr>
                 <tr><td style="font-weight:600;">Severity</td><td>
                     {% set sev_lower = (result.severity or '')|lower %}
@@ -33,17 +37,96 @@
                     {% elif sev_lower == 'mild' %}<span class="badge badge-info">{{ result.severity }}</span>
                     {% else %}<span class="badge badge-success">{{ result.severity }}</span>{% endif %}
                 </td></tr>
+                {% elif scoring_type == 'personality' %}
+                <tr><td style="font-weight:600;width:40%;">Type Code</td><td><strong style="font-size:1.6rem;letter-spacing:2px;">{{ result.severity }}</strong></td></tr>
+                {% else %}
+                <tr><td style="font-weight:600;width:40%;">Profile Code</td><td><strong style="font-size:1.4rem;letter-spacing:1px;">{{ result.severity }}</strong></td></tr>
+                {% endif %}
             </table>
         </div>
 
-        {% if result.interpretation %}
+        {% if scoring_type == 'sum' and result.interpretation %}
         <div style="margin-top:14px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
             <strong>Interpretation:</strong> {{ result.interpretation }}
         </div>
         {% endif %}
 
-        <h3 style="margin-top:18px;">Responses</h3>
-        <div class="table-responsive">
+        {% if scoring_type == 'personality' %}
+        <h3 style="margin-top:18px;">Personality Preferences</h3>
+        {% set axes = scoring.get('axes', []) %}
+        {% for axis in axes %}
+        {% set dim_scores = {} %}
+        {% for q in questions %}
+            {% if q.get('dimension') == axis.id %}
+                {% set val = responses.get(q.id, '0')|int %}
+                {% if dim_scores.update({axis.id: dim_scores.get(axis.id, 0) + val}) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+        {% set q_count = questions|selectattr('dimension', 'equalto', axis.id)|list|length %}
+        {% set b_score = dim_scores.get(axis.id, 0) %}
+        {% set a_score = q_count - b_score %}
+        {% set pct_a = (a_score * 100 / q_count) if q_count else 50 %}
+        {% set winner = axis.pole_a if a_score >= b_score else axis.pole_b %}
+        {% set winner_label = axis.label_a if a_score >= b_score else axis.label_b %}
+        {% set winner_desc = axis.get('desc_a', '') if a_score >= b_score else axis.get('desc_b', '') %}
+        <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-weight:600;">{{ axis.label_a }} ({{ axis.pole_a }})</span>
+                <span style="font-weight:600;">{{ axis.label_b }} ({{ axis.pole_b }})</span>
+            </div>
+            <div style="display:flex;height:24px;border-radius:4px;overflow:hidden;background:var(--light-gray);">
+                <div style="width:{{ pct_a }}%;background:var(--primary);transition:width 0.3s;"></div>
+                <div style="width:{{ 100 - pct_a }}%;background:var(--accent);transition:width 0.3s;"></div>
+            </div>
+            <div style="margin-top:4px;font-size:0.82rem;color:var(--gray);">
+                Preference: <strong>{{ winner_label }} ({{ winner }})</strong> — {{ winner_desc }}
+            </div>
+        </div>
+        {% endfor %}
+
+        {% elif scoring_type == 'dimensions' %}
+        <h3 style="margin-top:18px;">Score Breakdown</h3>
+        {% set dim_labels = scoring.get('dimension_labels', {}) %}
+        {% set dim_descs = scoring.get('dimension_descriptions', {}) %}
+        {% set dim_list = scoring.get('dimensions', []) %}
+        {% set dim_scores = {} %}
+        {% for q in questions %}
+            {% set d = q.get('dimension', 'general') %}
+            {% set val = responses.get(q.id, '0')|int %}
+            {% if dim_scores.update({d: dim_scores.get(d, 0) + val}) %}{% endif %}
+        {% endfor %}
+        {% set max_possible = {} %}
+        {% for q in questions %}
+            {% set d = q.get('dimension', 'general') %}
+            {% set max_val = q.options|map(attribute='value')|max if q.options else 3 %}
+            {% if max_possible.update({d: max_possible.get(d, 0) + max_val}) %}{% endif %}
+        {% endfor %}
+        {% set sorted_dims = dim_list|sort(attribute=none, reverse=true) %}
+        {% for d in dim_list|sort(reverse=true, attribute=none) %}{% endfor %}
+        {% set scored_dims = [] %}
+        {% for d in dim_list %}
+            {% if scored_dims.append((dim_scores.get(d, 0), d)) %}{% endif %}
+        {% endfor %}
+        {% for score, d in scored_dims|sort(reverse=true) %}
+        {% set pct = (score * 100 / max_possible.get(d, 1))|int if max_possible.get(d) else 0 %}
+        <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:3px;">
+                <span style="font-weight:600;">{{ dim_labels.get(d, d) }}</span>
+                <span>{{ score }} / {{ max_possible.get(d, '?') }}</span>
+            </div>
+            <div style="height:20px;border-radius:4px;overflow:hidden;background:var(--light-gray);">
+                <div style="height:100%;width:{{ pct }}%;background:{% if loop.index <= 3 %}var(--primary){% else %}var(--gray){% endif %};border-radius:4px;transition:width 0.3s;"></div>
+            </div>
+            {% if dim_descs.get(d) and loop.index <= 3 %}
+            <div style="font-size:0.78rem;color:var(--gray);margin-top:2px;">{{ dim_descs[d] }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <details style="margin-top:18px;">
+            <summary style="font-weight:600;cursor:pointer;">All Responses ({{ questions|length }})</summary>
+        <div class="table-responsive" style="margin-top:8px;">
             <table>
                 <thead><tr><th>#</th><th>Question</th><th>Response</th></tr></thead>
                 <tbody>
@@ -53,14 +136,15 @@
                         <td>{{ q.text }}</td>
                         <td>
                             {% set val = responses.get(q.id) %}
-                            {% set option = (q.options|selectattr('value', 'equalto', val|int)|list|first) if val is not none else None %}
-                            {{ option.label if option else val }} <span style="color:var(--gray);">({{ val }})</span>
+                            {% set option = (q.options|selectattr('value', 'equalto', val|int)|list|first) if val is not none and q.options else None %}
+                            {{ option.label if option else val }}
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        </details>
 
         {% if result.notes %}<h3 style="margin-top:18px;">Notes</h3><p style="white-space:pre-wrap;">{{ result.notes }}</p>{% endif %}
         {% if result.action_taken %}<h3 style="margin-top:18px;">Action Taken</h3><p style="white-space:pre-wrap;">{{ result.action_taken }}</p>{% endif %}

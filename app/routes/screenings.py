@@ -19,12 +19,12 @@ def _ensure_builtin_templates():
         ).first()
         if existing:
             continue
-        # Build full questions with options inline
-        opts = defn.get('options', [])
+        shared_opts = defn.get('options', [])
         questions = []
         for q in defn['questions']:
             qcopy = dict(q)
-            qcopy['options'] = opts
+            if 'options' not in qcopy:
+                qcopy['options'] = shared_opts
             questions.append(qcopy)
         tpl = ScreeningTemplate(
             counselor_id=current_user.id,
@@ -41,7 +41,20 @@ def _ensure_builtin_templates():
 
 
 def _calc_score(template, responses):
-    """Compute score, severity, and interpretation."""
+    """Compute score, severity, and interpretation.
+
+    Supports two scoring types:
+    - 'sum' (default): sum all responses → match to severity range
+    - 'dimensions': group responses by question dimension, rank dimensions
+    """
+    scoring = template.scoring or {}
+    scoring_type = scoring.get('type', 'sum')
+
+    if scoring_type == 'dimensions':
+        return _calc_dimension_score(template, responses, scoring)
+    if scoring_type == 'personality':
+        return _calc_personality_score(template, responses, scoring)
+
     total = 0
     for v in responses.values():
         try:
@@ -51,7 +64,6 @@ def _calc_score(template, responses):
 
     severity = ''
     interpretation = ''
-    scoring = template.scoring or {}
     for r in scoring.get('ranges', []):
         if r['min'] <= total <= r['max']:
             severity = r['label']
@@ -69,6 +81,73 @@ def _calc_score(template, responses):
             interpretation = (interpretation + ' [SAFETY FLAG: critical item endorsed.]').strip()
 
     return total, severity, interpretation
+
+
+def _calc_dimension_score(template, responses, scoring):
+    """Score a multi-dimension assessment (e.g. RIASEC)."""
+    questions = template.questions
+    dim_scores = {}
+    for q in questions:
+        dim = q.get('dimension', 'general')
+        val = responses.get(q['id'], 0)
+        try:
+            val = int(val)
+        except (ValueError, TypeError):
+            val = 0
+        dim_scores[dim] = dim_scores.get(dim, 0) + val
+
+    dim_order = scoring.get('dimensions', sorted(dim_scores.keys()))
+    ranked = sorted(dim_order, key=lambda d: dim_scores.get(d, 0), reverse=True)
+
+    profile_code = ''.join(
+        scoring.get('dimension_codes', {}).get(d, d[0].upper()) for d in ranked[:3]
+    )
+
+    top_score = dim_scores.get(ranked[0], 0) if ranked else 0
+
+    lines = []
+    dim_labels = scoring.get('dimension_labels', {})
+    for d in ranked:
+        label = dim_labels.get(d, d)
+        lines.append(f'{label}: {dim_scores.get(d, 0)}')
+    interpretation = ' | '.join(lines)
+
+    return top_score, profile_code, interpretation
+
+
+def _calc_personality_score(template, responses, scoring):
+    """Score a personality type assessment (e.g. Jungian E/I, S/N, T/F, J/P)."""
+    axes = scoring.get('axes', [])
+    questions = template.questions
+
+    axis_sums = {}
+    axis_counts = {}
+    for q in questions:
+        dim = q.get('dimension', '')
+        val = responses.get(q['id'], 0)
+        try:
+            val = int(val)
+        except (ValueError, TypeError):
+            val = 0
+        axis_sums[dim] = axis_sums.get(dim, 0) + val
+        axis_counts[dim] = axis_counts.get(dim, 0) + 1
+
+    type_code = ''
+    parts = []
+    for axis in axes:
+        aid = axis['id']
+        total = axis_sums.get(aid, 0)
+        count = axis_counts.get(aid, 1)
+        threshold = count / 2
+        if total >= threshold:
+            type_code += axis['pole_b']
+            parts.append(f"{axis['label_b']} ({axis['pole_b']})")
+        else:
+            type_code += axis['pole_a']
+            parts.append(f"{axis['label_a']} ({axis['pole_a']})")
+
+    interpretation = ', '.join(parts)
+    return 0, type_code, interpretation
 
 
 @screenings_bp.route('/')
