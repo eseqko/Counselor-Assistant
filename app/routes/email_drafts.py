@@ -572,8 +572,8 @@ def api_ai_draft():
         )
 
     system = (
-        "You are a school counselor writing professional communications. "
-        "Write clearly, warmly, and concisely. Use merge fields in double curly braces."
+        "Write professional school counselor communications. "
+        "Be clear, warm, and concise. Use merge fields in double curly braces."
     )
 
     try:
@@ -581,6 +581,54 @@ def api_ai_draft():
         return jsonify({'ok': True, 'body': result})
     except Exception:
         return jsonify({'error': 'AI processing failed. Please try again.'}), 500
+
+
+@email_drafts_bp.route('/api/ai-draft-stream', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_ai_draft_stream():
+    from app.utils import ollama_client
+    from app.utils.stream_helpers import stream_sse
+    data = request.get_json(silent=True) or {}
+    context = data.get('context', '')
+    current_body = data.get('current_body', '')
+    action = data.get('action', 'draft')
+    section = data.get('section', 'email')
+
+    if not ollama_client.is_available():
+        return jsonify({'error': 'AI is not available. Make sure Ollama is running.'}), 503
+
+    section_context = {
+        'email': 'a professional email',
+        'classroom': 'a Google Classroom post for students',
+        'newsletter': 'a parent/family newsletter',
+        'quick': 'a brief text-style message (under 50 words)',
+    }
+    tone = section_context.get(section, 'a professional message')
+
+    if action == 'improve' and current_body:
+        prompt = (
+            f"Improve this {tone} from a school counselor. Keep the same intent "
+            f"and any merge fields (like {{{{student_first_name}}}}).\n\n"
+            f"Context: {context}\n\nOriginal:\n{current_body}"
+        )
+    else:
+        length = '30 words' if section == 'quick' else '150 words'
+        prompt = (
+            f"Write {tone} from a school counselor.\n"
+            f"Context: {context}\n"
+            f"Use merge fields where appropriate: "
+            f"{{{{student_first_name}}}}, {{{{parent_name}}}}, {{{{counselor_name}}}}, "
+            f"{{{{grade_level}}}}, {{{{date}}}}.\n"
+            f"Keep it warm but concise (under {length})."
+        )
+
+    system = (
+        "Write professional school counselor communications. "
+        "Be clear, warm, and concise. Use merge fields in double curly braces."
+    )
+
+    return stream_sse(prompt, system=system, temperature=0.7)
 
 
 @email_drafts_bp.route('/api/templates', methods=['POST'])

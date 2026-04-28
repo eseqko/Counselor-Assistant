@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Intervention Plan{% endblock %}
+{% block page_title %}Intervention Plan{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        Tier {{ plan.tier }} — {{ plan.concern_area|replace('_', ' ')|title }}
+        <div class="btn-group">
+            <a href="{{ url_for('interventions.edit', id=plan.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            <form method="POST" action="{{ url_for('interventions.delete', id=plan.id) }}"
+                  style="display:inline;" onsubmit="return confirm('Delete plan?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="grid-2">
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Student</td><td><a href="{{ url_for('caseload.view_student', id=plan.student.id) }}">{{ plan.student.display_name }}</a></td></tr>
+                <tr><td style="font-weight:600;">Tier</td><td>{{ plan.tier_label }}</td></tr>
+                <tr><td style="font-weight:600;">Status</td><td>{{ plan.status|title }}</td></tr>
+                <tr><td style="font-weight:600;">Frequency</td><td>{{ plan.frequency or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Duration</td><td>{{ plan.duration or '-' }}</td></tr>
+            </table>
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Location</td><td>{{ plan.location or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Interventionist</td><td>{{ plan.interventionist or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Start</td><td>{{ plan.start_date.strftime('%m/%d/%Y') if plan.start_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Review</td><td>{{ plan.review_date.strftime('%m/%d/%Y') if plan.review_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">End</td><td>{{ plan.end_date.strftime('%m/%d/%Y') if plan.end_date else '-' }}</td></tr>
+            </table>
+        </div>
+
+        <h3 style="margin-top:16px;">Concern</h3>
+        <p style="white-space:pre-wrap;">{{ plan.concern_details or '-' }}</p>
+
+        <h3 style="margin-top:16px;">Strategy</h3>
+        <p style="white-space:pre-wrap;">{{ plan.strategy }}</p>
+
+        {% if plan.baseline_data %}<h3 style="margin-top:16px;">Baseline Data</h3><p style="white-space:pre-wrap;">{{ plan.baseline_data }}</p>{% endif %}
+        {% if plan.success_criteria %}<h3 style="margin-top:16px;">Success Criteria</h3><p style="white-space:pre-wrap;">{{ plan.success_criteria }}</p>{% endif %}
+        {% if plan.outcome %}<h3 style="margin-top:16px;">Outcome</h3><p style="white-space:pre-wrap;">{{ plan.outcome }}</p>{% endif %}
+        {% if plan.next_steps %}<h3 style="margin-top:16px;">Next Steps</h3><p style="white-space:pre-wrap;">{{ plan.next_steps }}</p>{% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Add Progress Entry</div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('interventions.add_progress', id=plan.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="entry_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Data Source</label>
+                    <select name="data_source" class="form-control">
+                        <option value="">--</option>
+                        {% for v, l in data_sources %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Metric Value</label>
+                <input type="text" name="metric_value" class="form-control" placeholder="Numerical or qualitative measure">
+            </div>
+            <div class="form-group">
+                <label>Note</label>
+                <textarea name="note" class="form-control" rows="2"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Add Entry</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Progress Log ({{ plan.progress_entries|length }})</div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Source</th><th>Metric</th><th>Note</th></tr></thead>
+            <tbody>
+                {% for p in plan.progress_entries %}
+                <tr>
+                    <td>{{ p.entry_date.strftime('%m/%d/%Y') }}</td>
+                    <td>{{ p.data_source|replace('_', ' ')|title or '-' }}</td>
+                    <td>{{ p.metric_value or '-' }}</td>
+                    <td>{{ p.note or '-' }}</td>
+                </tr>
+                {% endfor %}
+                {% if not plan.progress_entries %}
+                <tr><td colspan="4"><div class="empty-state"><p>No progress entries.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+    (function(){
+        var d = document.querySelector('input[name="entry_date"]');
+        if (d && !d.value) {
+            var t = new Date();
+            d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+    })();
+</script>
+{% endblock %}

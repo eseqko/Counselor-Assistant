@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Post-Grad Outcomes{% endblock %}
+{% block page_title %}Post-Graduation Outcomes{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">Pathway Distribution</div>
+    <div class="card-body">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            {% for v, l in pathways %}
+            {% set count = pathway_counts.get(v, 0) %}
+            {% if count %}
+            <a href="?pathway={{ v }}" class="badge {% if pathway == v %}badge-primary{% else %}badge-info{% endif %}" style="text-decoration:none;padding:8px 14px;font-size:0.86rem;">
+                {{ l }}: {{ count }}
+            </a>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Graduation Year</label>
+            <select name="grad_year" class="form-control">
+                <option value="">All</option>
+                {% for y in years %}<option value="{{ y }}" {{ 'selected' if grad_year == y|string }}>{{ y }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Pathway</label>
+            <select name="pathway" class="form-control">
+                <option value="">All</option>
+                {% for v, l in pathways %}<option value="{{ v }}" {{ 'selected' if pathway == v }}>{{ l }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Outcomes ({{ outcomes|length }})
+        <a href="{{ url_for('post_grad.add') }}" class="btn btn-sm btn-primary">+ Record Outcome</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Student</th><th>Year</th><th>Pathway</th><th>Institution</th><th>Status (1yr)</th><th>Verified</th><th></th></tr></thead>
+            <tbody>
+                {% for o in outcomes %}
+                <tr>
+                    <td>{{ o.student.display_name }}</td>
+                    <td>{{ o.graduation_year or '-' }}</td>
+                    <td><span class="badge badge-info">{{ o.pathway_label }}</span></td>
+                    <td>{{ o.institution_name or o.employer or o.military_branch or '-' }}</td>
+                    <td>{{ o.status_at_1yr|replace('_', ' ')|title or '-' }}</td>
+                    <td>{% if o.enrollment_verified %}<span class="badge badge-success">Yes</span>{% else %}-{% endif %}</td>
+                    <td><a href="{{ url_for('post_grad.edit', id=o.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
+                </tr>
+                {% endfor %}
+                {% if not outcomes %}
+                <tr><td colspan="7"><div class="empty-state"><p>No outcomes recorded yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if grads_without %}
+<div class="card">
+    <div class="card-header">Graduates Without Outcomes ({{ grads_without|length }})</div>
+    <div class="card-body">
+        <p style="font-size:0.86rem;color:var(--gray);">These students have graduated but don't have outcomes recorded yet.</p>
+        <ul style="margin:0;padding-left:20px;">
+            {% for s in grads_without %}
+            <li><a href="{{ url_for('post_grad.add', student_id=s.id) }}">{{ s.display_name }}</a> ({{ s.exit_date.strftime('%m/%d/%Y') if s.exit_date else 'no date' }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Screening Result{% endblock %}
+{% block page_title %}Screening Result{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; Screening results are FERPA-protected. Access is logged.</div>
+
+<div class="card">
+    <div class="card-header">
+        {{ result.template.short_name or result.template.name }} — {{ result.student.display_name }}
+        <div class="btn-group">
+            <a href="{{ url_for('screenings.edit_result', id=result.id) }}" class="btn btn-sm btn-outline">Edit Notes</a>
+            <form method="POST" action="{{ url_for('screenings.delete_result', id=result.id) }}"
+                  style="display:inline;" onsubmit="return confirm('Delete?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="grid-2">
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Student</td><td><a href="{{ url_for('caseload.view_student', id=result.student.id) }}">{{ result.student.display_name }}</a></td></tr>
+                <tr><td style="font-weight:600;">Date</td><td>{{ result.administered_date.strftime('%m/%d/%Y') }}</td></tr>
+                <tr><td style="font-weight:600;">Screener</td><td>{{ result.template.name }}</td></tr>
+            </table>
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Total Score</td><td><strong style="font-size:1.4rem;">{{ result.total_score }}</strong></td></tr>
+                <tr><td style="font-weight:600;">Severity</td><td>
+                    {% set sev_lower = (result.severity or '')|lower %}
+                    {% if sev_lower in ('severe', 'high', 'moderately severe') %}<span class="badge badge-danger">{{ result.severity }}</span>
+                    {% elif sev_lower == 'moderate' %}<span class="badge badge-warning">{{ result.severity }}</span>
+                    {% elif sev_lower == 'mild' %}<span class="badge badge-info">{{ result.severity }}</span>
+                    {% else %}<span class="badge badge-success">{{ result.severity }}</span>{% endif %}
+                </td></tr>
+            </table>
+        </div>
+
+        {% if result.interpretation %}
+        <div style="margin-top:14px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
+            <strong>Interpretation:</strong> {{ result.interpretation }}
+        </div>
+        {% endif %}
+
+        <h3 style="margin-top:18px;">Responses</h3>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>#</th><th>Question</th><th>Response</th></tr></thead>
+                <tbody>
+                    {% for q in questions %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ q.text }}</td>
+                        <td>
+                            {% set val = responses.get(q.id) %}
+                            {% set option = (q.options|selectattr('value', 'equalto', val|int)|list|first) if val is not none else None %}
+                            {{ option.label if option else val }} <span style="color:var(--gray);">({{ val }})</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if result.notes %}<h3 style="margin-top:18px;">Notes</h3><p style="white-space:pre-wrap;">{{ result.notes }}</p>{% endif %}
+        {% if result.action_taken %}<h3 style="margin-top:18px;">Action Taken</h3><p style="white-space:pre-wrap;">{{ result.action_taken }}</p>{% endif %}
+    </div>
+</div>
+
+{% endblock %}

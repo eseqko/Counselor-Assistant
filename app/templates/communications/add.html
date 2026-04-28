@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Log Communication{% endblock %}
+{% block page_title %}Log Communication{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student (optional)</label>
+                    <select name="student_id" class="form-control">
+                        <option value="">-- No specific student --</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date *</label>
+                    <input type="date" name="contact_date" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Contact Type *</label>
+                    <select name="contact_type" class="form-control" required>
+                        {% for val, label in contact_types %}
+                        <option value="{{ val }}" {{ 'selected' if val == prefill.contact_type }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Direction</label>
+                    <select name="direction" class="form-control">
+                        {% for val, label in directions %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Contact Person *</label>
+                    <input type="text" name="contact_person" class="form-control"
+                           value="{{ prefill.contact_person }}" required
+                           placeholder="Name of person you contacted">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select name="contact_role" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in contact_roles %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="contact_email" class="form-control" value="{{ prefill.contact_email }}">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="text" name="contact_phone" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Subject</label>
+                <input type="text" name="subject" class="form-control" value="{{ prefill.subject }}">
+            </div>
+
+            <div class="form-group">
+                <label>Summary</label>
+                <textarea name="summary" class="form-control" rows="4">{{ prefill.summary }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Duration (minutes)</label>
+                <input type="number" name="duration_minutes" class="form-control" min="0">
+            </div>
+
+            <div class="form-group">
+                <label><input type="checkbox" name="follow_up_needed"> Follow-up needed</label>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Follow-Up Notes</label>
+                    <input type="text" name="follow_up_notes" class="form-control">
+                </div>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('communications.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function(){
+        var d = document.querySelector('input[name="contact_date"]');
+        if (d && !d.value) {
+            var t = new Date();
+            d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+    })();
+</script>
+{% endblock %}

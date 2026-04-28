@@ -29,6 +29,7 @@ class User(UserMixin, db.Model):
     theme_preference = db.Column(db.String(20), default='light')  # light, dark, school, focus, auto
     reduced_motion = db.Column(db.Boolean, default=False)
     synergy_base_url = db.Column(db.String(500), default='')  # e.g. https://ca-juhsd.edupoint.com/
+    alert_settings_json = db.Column(db.Text, default='')  # JSON: configurable alert thresholds
 
     # Relationships
     notes = db.relationship('Note', backref='author', lazy='dynamic')

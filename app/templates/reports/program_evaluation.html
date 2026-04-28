@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Program Evaluation{% endblock %}
+{% block page_title %}Annual Program Evaluation{% endblock %}
+{% block content %}
+
+<p style="color:var(--gray);font-size:0.86rem;">
+    School Year: {{ year_start.strftime('%m/%d/%Y') }} - {{ year_end.strftime('%m/%d/%Y') }}
+</p>
+
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">{{ counts.students }}</div><div class="stat-label">Students Served</div></div>
+    <div class="stat-card"><div class="stat-value">{{ counts.services }}</div><div class="stat-label">Service Records</div></div>
+    <div class="stat-card"><div class="stat-value">{{ counts.notes }}</div><div class="stat-label">Counseling Notes</div></div>
+    <div class="stat-card"><div class="stat-value">{{ counts.communications }}</div><div class="stat-label">Communications</div></div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">SMART Goals</div>
+        <div class="card-body">
+            <p><strong>Total:</strong> {{ counts.goals_total }}</p>
+            <p><strong>Achieved:</strong> {{ counts.goals_achieved }}
+                {% if counts.goals_total %}
+                <span style="color:var(--gray);">({{ '%.0f'|format(counts.goals_achieved / counts.goals_total * 100) }}% achievement rate)</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Referrals</div>
+        <div class="card-body">
+            <p><strong>Total:</strong> {{ counts.referrals_total }}</p>
+            <p><strong>Completed:</strong> {{ counts.referrals_completed }}
+                {% if counts.referrals_total %}
+                <span style="color:var(--gray);">({{ '%.0f'|format(counts.referrals_completed / counts.referrals_total * 100) }}% completion)</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Counseling Groups</div>
+        <div class="card-body">
+            <p><strong>Total Groups:</strong> {{ counts.groups_total }}</p>
+            <p><strong>Active:</strong> {{ counts.groups_active }}</p>
+            <p><strong>Total Sessions:</strong> {{ counts.group_sessions }}</p>
+            <p><strong>Member Enrollments:</strong> {{ counts.group_members_total }}</p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Direct Service Hours</div>
+        <div class="card-body">
+            <p>See <a href="{{ url_for('reports.use_of_time') }}">Use of Time</a> for ASCA-aligned breakdowns.</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Print / Export</div>
+    <div class="card-body">
+        <button class="btn btn-outline" onclick="window.print()">Print Report</button>
+    </div>
+</div>
+
+{% endblock %}

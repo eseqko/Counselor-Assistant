@@ -5,7 +5,7 @@ import os
 
 # Defaults — can be overridden via environment or settings
 OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
-OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma4:e4b')
 
 
 def _get_settings():
@@ -63,20 +63,19 @@ def list_models():
         return []
 
 
-DEFAULT_GENERATE_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '300'))
+DEFAULT_GENERATE_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '180'))
+DEFAULT_NUM_CTX = int(os.environ.get('OLLAMA_NUM_CTX', '4096'))
 
 
-def generate(prompt, system=None, temperature=0.7, timeout=None):
-    """Send a prompt to Ollama and return the response text.
-
-    Uses the /api/generate endpoint (non-streaming) for simplicity.
-    """
+def generate(prompt, system=None, temperature=0.7, timeout=None, num_ctx=None):
+    """Send a prompt to Ollama and return the response text."""
     payload = {
         'model': get_model(),
         'prompt': prompt,
         'stream': False,
         'options': {
             'temperature': temperature,
+            'num_ctx': num_ctx or DEFAULT_NUM_CTX,
         },
     }
     if system:
@@ -89,3 +88,34 @@ def generate(prompt, system=None, temperature=0.7, timeout=None):
     )
     resp.raise_for_status()
     return resp.json().get('response', '').strip()
+
+
+def generate_stream(prompt, system=None, temperature=0.7, timeout=None, num_ctx=None):
+    """Yield (token, done) tuples from Ollama's streaming NDJSON endpoint."""
+    payload = {
+        'model': get_model(),
+        'prompt': prompt,
+        'stream': True,
+        'options': {
+            'temperature': temperature,
+            'num_ctx': num_ctx or DEFAULT_NUM_CTX,
+        },
+    }
+    if system:
+        payload['system'] = system
+
+    resp = requests.post(
+        f'{get_base_url()}/api/generate',
+        json=payload,
+        timeout=timeout if timeout is not None else DEFAULT_GENERATE_TIMEOUT,
+        stream=True,
+    )
+    resp.raise_for_status()
+    for line in resp.iter_lines():
+        if line:
+            data = json.loads(line)
+            token = data.get('response', '')
+            done = data.get('done', False)
+            yield token, done
+            if done:
+                break

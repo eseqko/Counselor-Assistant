@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ program.name }}{% endblock %}
+{% block page_title %}{{ program.name }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        {{ program.type_label }}
+        <div class="btn-group">
+            <a href="{{ url_for('reports.asca_results_edit', id=program.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            <button type="button" class="btn btn-sm btn-outline" onclick="window.print()">Print</button>
+            <form method="POST" action="{{ url_for('reports.asca_results_delete', id=program.id) }}"
+                  style="display:inline;" onsubmit="return confirm('Delete?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="grid-2">
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Type</td><td>{{ program.type_label }}</td></tr>
+                <tr><td style="font-weight:600;">School Year</td><td>{{ program.school_year or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">ASCA Domain</td><td>{{ program.asca_domain|replace('_', ' ')|title or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">ASCA Standard</td><td>{{ program.asca_standard or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Status</td><td>{{ program.status|title }}</td></tr>
+            </table>
+            <table>
+                <tr><td style="font-weight:600;width:40%;">Target Group</td><td>{{ program.target_group or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Group Size</td><td>{{ program.target_size or '-' }}</td></tr>
+                <tr><td style="font-weight:600;">Start</td><td>{{ program.start_date.strftime('%m/%d/%Y') if program.start_date else '-' }}</td></tr>
+                <tr><td style="font-weight:600;">End</td><td>{{ program.end_date.strftime('%m/%d/%Y') if program.end_date else '-' }}</td></tr>
+            </table>
+        </div>
+
+        {% macro section(title, body) %}
+            {% if body %}
+            <h3 style="margin-top:18px;">{{ title }}</h3>
+            <p style="white-space:pre-wrap;">{{ body }}</p>
+            {% endif %}
+        {% endmacro %}
+
+        {{ section('Goal Statement', program.goal_statement) }}
+        {{ section('Baseline', program.baseline) }}
+        {{ section('Intervention / Strategy', program.intervention) }}
+        {{ section('Process Data', program.process_data) }}
+        {{ section('Perception Data', program.perception_data) }}
+        {{ section('Results Data', program.results_data) }}
+        {{ section('Outcome Data', program.outcome_data) }}
+        {{ section('Implications / Next Steps', program.implications) }}
+    </div>
+</div>
+
+{% endblock %}

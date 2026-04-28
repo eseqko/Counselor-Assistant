@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Consents{% endblock %}
+{% block page_title %}Consent Records{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Student</label>
+            <select name="student_id" class="form-control">
+                <option value="">All</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Type</label>
+            <select name="consent_type" class="form-control">
+                <option value="">All</option>
+                {% for v, l in consent_types %}<option value="{{ v }}" {{ 'selected' if consent_type == v }}>{{ l }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <select name="status" class="form-control">
+                <option value="">All</option>
+                {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if status == v }}>{{ l }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Consents ({{ consents|length }})
+        <a href="{{ url_for('consents.add') }}" class="btn btn-sm btn-primary">+ New Consent</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Student</th><th>Type</th><th>Guardian</th><th>Requested</th><th>Received</th><th>Expires</th><th>Status</th><th>Doc</th></tr></thead>
+            <tbody>
+                {% for c in consents %}
+                <tr>
+                    <td><a href="{{ url_for('caseload.view_student', id=c.student.id) }}">{{ c.student.display_name }}</a></td>
+                    <td><a href="{{ url_for('consents.view', id=c.id) }}">{{ c.consent_type_label }}</a></td>
+                    <td>{{ c.guardian_name or '-' }}</td>
+                    <td>{{ c.request_date.strftime('%m/%d/%Y') if c.request_date else '-' }}</td>
+                    <td>{{ c.received_date.strftime('%m/%d/%Y') if c.received_date else '-' }}</td>
+                    <td>{{ c.expiration_date.strftime('%m/%d/%Y') if c.expiration_date else '-' }}</td>
+                    <td>
+                        {% if c.status == 'received' %}<span class="badge badge-success">{{ c.status_label }}</span>
+                        {% elif c.status == 'declined' %}<span class="badge badge-danger">{{ c.status_label }}</span>
+                        {% elif c.status == 'expired' %}<span class="badge badge-warning">{{ c.status_label }}</span>
+                        {% else %}<span class="badge badge-info">{{ c.status_label }}</span>{% endif %}
+                    </td>
+                    <td>{% if c.document_filename %}<a href="{{ url_for('consents.download_document', id=c.id) }}">PDF</a>{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+                {% if not consents %}
+                <tr><td colspan="8"><div class="empty-state"><p>No consents on file.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Screenings{% endblock %}
+{% block page_title %}Screening Tools{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        Available Screening Templates
+        <a href="{{ url_for('screenings.add_template') }}" class="btn btn-sm btn-outline">+ Custom Template</a>
+    </div>
+    <div class="card-body">
+        <div class="grid-2">
+            {% for t in templates %}
+            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div>
+                        <strong>{{ t.short_name or t.name }}</strong>
+                        {% if t.is_built_in %}<span class="badge badge-info">Built-in</span>{% endif %}
+                        <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
+                    </div>
+                </div>
+                {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
+                <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
+                <div style="margin-top:8px;">
+                    <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Recent Results ({{ results|length }})</div>
+    <div class="filter-bar">
+        <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="form-group">
+                <label>Student</label>
+                <select name="student_id" class="form-control">
+                    <option value="">All</option>
+                    {% for s in students %}<option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </form>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Student</th><th>Screener</th><th>Score</th><th>Severity</th><th></th></tr></thead>
+            <tbody>
+                {% for r in results %}
+                <tr>
+                    <td>{{ r.administered_date.strftime('%m/%d/%Y') }}</td>
+                    <td><a href="{{ url_for('caseload.view_student', id=r.student.id) }}">{{ r.student.display_name }}</a></td>
+                    <td>{{ r.template.short_name or r.template.name }}</td>
+                    <td>{{ r.total_score }}</td>
+                    <td>
+                        {% set sev_lower = (r.severity or '')|lower %}
+                        {% if sev_lower in ('severe', 'high', 'moderately severe') %}<span class="badge badge-danger">{{ r.severity }}</span>
+                        {% elif sev_lower == 'moderate' %}<span class="badge badge-warning">{{ r.severity }}</span>
+                        {% elif sev_lower == 'mild' %}<span class="badge badge-info">{{ r.severity }}</span>
+                        {% else %}<span class="badge badge-success">{{ r.severity }}</span>{% endif %}
+                    </td>
+                    <td><a href="{{ url_for('screenings.view_result', id=r.id) }}" class="btn btn-sm btn-outline">View</a></td>
+                </tr>
+                {% endfor %}
+                {% if not results %}
+                <tr><td colspan="6"><div class="empty-state"><p>No screenings yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

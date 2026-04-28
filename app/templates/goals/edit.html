@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Edit Goal{% endblock %}
+{% block page_title %}Edit Goal{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" name="title" class="form-control" value="{{ goal.title }}" required>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">-- None --</option>
+                        {% for val, label in domains %}
+                        <option value="{{ val }}" {{ 'selected' if val == goal.asca_domain }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ASCA Mindset / Standard</label>
+                    <input type="text" name="asca_mindset" class="form-control" value="{{ goal.asca_mindset or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="2">{{ goal.description or '' }}</textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Baseline</label>
+                    <input type="text" name="baseline" class="form-control" value="{{ goal.baseline or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Target</label>
+                    <input type="text" name="target" class="form-control" value="{{ goal.target or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Measurement Method</label>
+                <input type="text" name="measurement_method" class="form-control" value="{{ goal.measurement_method or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label>Strategy</label>
+                <textarea name="strategy" class="form-control" rows="3">{{ goal.strategy or '' }}</textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ goal.start_date.strftime('%Y-%m-%d') if goal.start_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Target Date</label>
+                    <input type="date" name="target_date" class="form-control" value="{{ goal.target_date.strftime('%Y-%m-%d') if goal.target_date else '' }}">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" class="form-control">
+                        {% for val, label in statuses %}
+                        <option value="{{ val }}" {{ 'selected' if val == goal.status }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Progress %</label>
+                    <input type="number" name="progress_percent" class="form-control" min="0" max="100" value="{{ goal.progress_percent or 0 }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Outcome</label>
+                <textarea name="outcome" class="form-control" rows="3">{{ goal.outcome or '' }}</textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('goals.view', id=goal.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

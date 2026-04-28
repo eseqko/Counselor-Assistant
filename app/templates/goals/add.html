@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}New Goal{% endblock %}
+{% block page_title %}New SMART Goal{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">-- Select student --</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>ASCA Domain</label>
+                    <select name="asca_domain" class="form-control">
+                        <option value="">-- Optional --</option>
+                        {% for val, label in domains %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Goal Title *</label>
+                <input type="text" name="title" class="form-control"
+                       placeholder="Brief, specific goal statement" required>
+            </div>
+
+            <div class="form-group">
+                <label>ASCA Mindset & Behavior Standard</label>
+                <input type="text" name="asca_mindset" class="form-control"
+                       placeholder="e.g. M 1, B-LS 3, B-SS 6">
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" class="form-control" rows="2"
+                          placeholder="Why this goal matters for this student"></textarea>
+            </div>
+
+            <h3 style="margin-top:16px;">SMART Components</h3>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Baseline (current state)</label>
+                    <input type="text" name="baseline" class="form-control"
+                           placeholder="e.g. Currently 4 absences/month">
+                </div>
+                <div class="form-group">
+                    <label>Target (desired state)</label>
+                    <input type="text" name="target" class="form-control"
+                           placeholder="e.g. 1 or fewer absences/month">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Measurement Method</label>
+                <input type="text" name="measurement_method" class="form-control"
+                       placeholder="How will you measure progress?">
+            </div>
+
+            <div class="form-group">
+                <label>Strategy / Action Plan</label>
+                <textarea name="strategy" class="form-control" rows="3"
+                          placeholder="How will the student work toward this goal?"></textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Target Date</label>
+                    <input type="date" name="target_date" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status" class="form-control">
+                    {% for val, label in statuses %}
+                    <option value="{{ val }}" {{ 'selected' if val == 'active' }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Create Goal</button>
+                <a href="{{ url_for('goals.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function(){
+        var d = document.querySelector('input[name="start_date"]');
+        if (d && !d.value) {
+            var t = new Date();
+            d.value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+        }
+    })();
+</script>
+{% endblock %}

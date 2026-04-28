@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}New Referral{% endblock %}
+{% block page_title %}New Referral{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if service_record_id %}
+                <input type="hidden" name="service_record_id" value="{{ service_record_id }}">
+            {% endif %}
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select name="student_id" class="form-control" required>
+                        <option value="">-- Select student --</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {{ 'selected' if preselected_student == s.id|string }}>{{ s.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Referral Date *</label>
+                    <input type="date" name="referral_date" class="form-control" value="{{ ''|string }}{{ now if now }}" required>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Referral Type *</label>
+                    <select name="referral_type" class="form-control" required>
+                        <option value="">-- Select type --</option>
+                        {% for val, label in referral_types %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Urgency</label>
+                    <select name="urgency" class="form-control">
+                        {% for val, label in urgency_levels %}
+                        <option value="{{ val }}" {{ 'selected' if val == 'routine' }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Referred To (Provider/Agency) *</label>
+                <input type="text" name="referred_to" class="form-control"
+                       value="{{ referred_to_prefill or '' }}"
+                       placeholder="e.g. Dr. Sarah Lee, Community Mental Health, John Doe LCSW" required>
+            </div>
+
+            <div class="form-group">
+                <label>Contact Info</label>
+                <input type="text" name="contact_info" class="form-control"
+                       placeholder="Phone, email, address, or website">
+            </div>
+
+            <div class="form-group">
+                <label>Reason for Referral *</label>
+                <textarea name="reason" class="form-control" rows="3" required
+                          placeholder="Why is this referral being made? What concerns, behaviors, or needs prompted it?"></textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Initial Status</label>
+                    <select name="status" class="form-control">
+                        {% for val, label in statuses %}
+                        <option value="{{ val }}" {{ 'selected' if val == 'pending' }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="consent_obtained">
+                    Parent/guardian consent obtained
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>Additional Notes</label>
+                <textarea name="notes" class="form-control" rows="2"
+                          placeholder="Any other relevant context"></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Create Referral</button>
+                <a href="{{ url_for('referrals.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Default referral_date to today
+    (function(){
+        var d = document.querySelector('input[name="referral_date"]');
+        if (d && !d.value) {
+            var today = new Date();
+            var iso = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+            d.value = iso;
+        }
+    })();
+</script>
+
+{% endblock %}

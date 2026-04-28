@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Documents{% endblock %}
+{% block page_title %}Student Documents{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; Student documents are FERPA-protected. All access is logged.</div>
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Student</label>
+            <select name="student_id" class="form-control">
+                <option value="">All</option>
+                {% for s in students %}<option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Type</label>
+            <select name="document_type" class="form-control">
+                <option value="">All</option>
+                {% for v, l in document_types %}<option value="{{ v }}" {{ 'selected' if document_type == v }}>{{ l }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Documents ({{ documents|length }})
+        <a href="{{ url_for('documents.add') }}" class="btn btn-sm btn-primary">+ Upload Document</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Title</th><th>Student</th><th>Type</th><th>Date</th><th>Uploaded</th><th>Size</th><th></th></tr></thead>
+            <tbody>
+                {% for d in documents %}
+                <tr>
+                    <td>{{ d.title }}{% if d.is_confidential %} <span class="badge badge-warning">Conf</span>{% endif %}</td>
+                    <td><a href="{{ url_for('caseload.view_student', id=d.student.id) }}">{{ d.student.display_name }}</a></td>
+                    <td><span class="badge badge-info">{{ d.type_label }}</span></td>
+                    <td>{{ d.document_date.strftime('%m/%d/%Y') if d.document_date else '-' }}</td>
+                    <td>{{ d.uploaded_at.strftime('%m/%d/%Y') }}</td>
+                    <td>{% if d.file_size %}{{ (d.file_size / 1024)|round|int }} KB{% else %}-{% endif %}</td>
+                    <td style="white-space:nowrap;">
+                        <a href="{{ url_for('documents.download', id=d.id) }}" class="btn btn-sm btn-outline">Download</a>
+                        <form method="POST" action="{{ url_for('documents.delete', id=d.id) }}" style="display:inline;" onsubmit="return confirm('Delete?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger">Del</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not documents %}
+                <tr><td colspan="7"><div class="empty-state"><p>No documents uploaded yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

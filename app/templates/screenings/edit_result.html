@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Edit Result Notes{% endblock %}
+{% block page_title %}Edit Result Notes{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <p><strong>{{ result.template.short_name or result.template.name }}</strong> — {{ result.student.display_name }}, {{ result.administered_date.strftime('%m/%d/%Y') }}</p>
+        <p>Score: {{ result.total_score }} ({{ result.severity }})</p>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea name="notes" class="form-control" rows="3">{{ result.notes or '' }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Action Taken</label>
+                <textarea name="action_taken" class="form-control" rows="3">{{ result.action_taken or '' }}</textarea>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('screenings.view_result', id=result.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

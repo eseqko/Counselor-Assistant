@@ -351,9 +351,8 @@ Format the summary as:
 
 Keep it concise and professional. Use #action and #followup tags inline."""
 
-            system = ("You are a school counselor's assistant. Summarize meeting transcripts into "
-                      "clean, organized notes. Be concise and professional. Preserve important details "
-                      "and names mentioned. Use the tag format requested.")
+            system = ("Summarize meeting transcripts into clean, organized notes. "
+                      "Be concise. Preserve important details and names. Use the tag format requested.")
             try:
                 summary = ollama_client.generate(prompt, system=system, temperature=0.3)
             except Exception:
@@ -369,8 +368,104 @@ Keep it concise and professional. Use #action and #followup tags inline."""
         current_app.logger.error(f'Audio processing error: {e}')
         return jsonify({'error': f'Audio processing failed: {str(e)}'}), 500
     finally:
-        # Always delete the audio file
         try:
             os.remove(tmp_path)
         except OSError:
             pass
+
+
+@meeting_notes_bp.route('/api/transcribe-stream', methods=['POST'])
+@csrf.exempt
+@login_required
+def transcribe_audio_stream():
+    """Transcribe audio, then stream AI summary via SSE.
+
+    Returns transcript immediately in the first SSE event, then streams
+    the Ollama summary token by token.
+    """
+    import json as _json
+    from flask import Response, stream_with_context
+
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file uploaded'}), 400
+
+    audio_file = request.files['audio']
+    meeting_type = request.form.get('meeting_type', 'general')
+
+    upload_dir = current_app.config.get('UPLOAD_FOLDER', 'data/uploads')
+    os.makedirs(upload_dir, exist_ok=True)
+    ext = 'wav' if audio_file.filename.endswith('.wav') else 'webm'
+    tmp_name = f'audio_{uuid.uuid4().hex}.{ext}'
+    tmp_path = os.path.join(upload_dir, tmp_name)
+
+    try:
+        audio_file.save(tmp_path)
+
+        if not _whisper_available():
+            return jsonify({'error': 'Speech-to-text not available. Install faster-whisper: pip install faster-whisper'}), 503
+
+        try:
+            from faster_whisper import WhisperModel
+            file_size_mb = os.path.getsize(tmp_path) / (1024 * 1024)
+            model_size = 'base' if file_size_mb < 20 else 'tiny'
+            model = WhisperModel(model_size, device='cpu', compute_type='int8')
+            segments, info = model.transcribe(tmp_path, beam_size=5)
+            transcript = ' '.join(seg.text.strip() for seg in segments)
+            duration = round(info.duration, 1) if hasattr(info, 'duration') else None
+            del model
+        except Exception as e:
+            current_app.logger.error(f'Whisper transcription error: {e}')
+            return jsonify({'error': f'Transcription failed: {str(e)}'}), 500
+
+        if not transcript.strip():
+            return jsonify({'error': 'Could not detect any speech in the recording.'}), 422
+
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+    def generate():
+        yield f"data: {_json.dumps({'transcript': transcript, 'duration_seconds': duration})}\n\n"
+
+        if not ollama_client.is_available():
+            yield f"data: {_json.dumps({'done': True, 'full_text': transcript})}\n\n"
+            return
+
+        meeting_label = meeting_type.replace('_', ' ').title()
+        prompt = f"""Summarize the following transcript from a {meeting_label} meeting into clean, organized meeting notes.
+
+TRANSCRIPT:
+{transcript}
+
+Format the summary as:
+- A brief overview paragraph
+- Key discussion points (bullet points)
+- Decisions made (if any)
+- Action items (if any, prefix with #action)
+- Follow-ups needed (if any, prefix with #followup)
+
+Keep it concise and professional. Use #action and #followup tags inline."""
+
+        system = ("You are a school counselor's assistant. Summarize meeting transcripts into "
+                  "clean, organized notes. Be concise and professional. Preserve important details "
+                  "and names mentioned. Use the tag format requested.")
+
+        full_text = []
+        try:
+            for token, done in ollama_client.generate_stream(
+                    prompt, system=system, temperature=0.3):
+                full_text.append(token)
+                if token:
+                    yield f"data: {_json.dumps({'token': token})}\n\n"
+                if done:
+                    yield f"data: {_json.dumps({'done': True, 'full_text': ''.join(full_text).strip()})}\n\n"
+        except Exception as e:
+            yield f"data: {_json.dumps({'done': True, 'full_text': transcript})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )

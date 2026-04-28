@@ -255,6 +255,84 @@ def api_parse(record_id):
     })
 
 
+@iep504_bp.route('/api/<int:record_id>/parse-stream', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_parse_stream(record_id):
+    """Stream AI-parsed accommodations from an uploaded PDF."""
+    import json as _json
+    from flask import Response, stream_with_context
+    from app.utils import ollama_client
+
+    record = IEP504Record.query.filter_by(
+        id=record_id, counselor_id=current_user.id).first()
+    if not record:
+        return jsonify({'error': 'Not found'}), 404
+
+    if not record.document_filename:
+        return jsonify({'error': 'No document uploaded yet'}), 400
+
+    pdf_path = os.path.join(DOCS_DIR, record.document_filename)
+    if not os.path.abspath(pdf_path).startswith(os.path.abspath(DOCS_DIR)):
+        return jsonify({'error': 'Invalid document path'}), 400
+    if not os.path.exists(pdf_path):
+        return jsonify({'error': 'Document file not found on disk'}), 404
+
+    try:
+        from PyPDF2 import PdfReader
+        reader = PdfReader(pdf_path)
+        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+    except ImportError:
+        return jsonify({'error': 'PyPDF2 is not installed. Run: pip install PyPDF2'}), 500
+    except Exception:
+        return jsonify({'error': 'Failed to read PDF. The file may be corrupted.'}), 500
+
+    if not text.strip():
+        return jsonify({'error': 'Could not extract text from PDF.'}), 400
+
+    if not ollama_client.is_available():
+        return jsonify({
+            'ok': True, 'ai_available': False, 'raw_text': text.strip(),
+            'accommodations': '', 'message': 'AI is not available.',
+        })
+
+    prompt = (
+        "Below is the text from a student's IEP at a Glance document. "
+        "Extract ONLY the accommodations and modifications listed. "
+        "Format each accommodation as a bullet point (- item). "
+        "Do not include IEP goals, services, or other information. "
+        "If no accommodations are found, say 'No accommodations found in document.'\n\n"
+        f"--- DOCUMENT TEXT ---\n{text[:4000]}\n--- END ---"
+    )
+    system = (
+        "You are a special education document parser. Extract accommodations "
+        "accurately and concisely. Do not add commentary or explanations."
+    )
+
+    def generate():
+        full_text = []
+        try:
+            for token, done in ollama_client.generate_stream(
+                    prompt, system=system, temperature=0.2):
+                full_text.append(token)
+                if token:
+                    yield f"data: {_json.dumps({'token': token})}\n\n"
+                if done:
+                    result_text = ''.join(full_text).strip()
+                    record.accommodations_text = result_text
+                    record.updated_at = datetime.now(timezone.utc)
+                    db.session.commit()
+                    yield f"data: {_json.dumps({'done': True, 'full_text': result_text, 'raw_text': text.strip()})}\n\n"
+        except Exception as e:
+            yield f"data: {_json.dumps({'error': str(e)})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        content_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
 @iep504_bp.route('/api/<int:record_id>/document', methods=['GET'])
 @login_required
 def api_document(record_id):

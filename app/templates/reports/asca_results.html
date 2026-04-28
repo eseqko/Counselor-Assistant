@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}ASCA Results Reports{% endblock %}
+{% block page_title %}ASCA Results Reports{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Type</label>
+            <select name="type" class="form-control">
+                <option value="">All</option>
+                {% for val, label in program_types %}
+                <option value="{{ val }}" {{ 'selected' if program_type == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Programs ({{ programs|length }})
+        <a href="{{ url_for('reports.asca_results_add') }}" class="btn btn-sm btn-primary">+ New Program</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Domain</th><th>School Year</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                {% for p in programs %}
+                <tr>
+                    <td><a href="{{ url_for('reports.asca_results_view', id=p.id) }}">{{ p.name }}</a></td>
+                    <td><span class="badge badge-info">{{ p.type_label }}</span></td>
+                    <td>{{ p.asca_domain|replace('_', ' ')|title or '-' }}</td>
+                    <td>{{ p.school_year or '-' }}</td>
+                    <td><span class="badge badge-{{ 'success' if p.status == 'completed' else 'info' }}">{{ p.status|title }}</span></td>
+                    <td><a href="{{ url_for('reports.asca_results_view', id=p.id) }}" class="btn btn-sm btn-outline">Open</a></td>
+                </tr>
+                {% endfor %}
+                {% if not programs %}
+                <tr><td colspan="6"><div class="empty-state"><p>No programs documented yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}MTSS / RTI{% endblock %}
+{% block page_title %}MTSS / RTI Intervention Plans{% endblock %}
+{% block content %}
+
+<!-- Pyramid -->
+<div class="card">
+    <div class="card-header">Tier Distribution (Active Plans)</div>
+    <div class="card-body">
+        <div style="max-width:520px;margin:0 auto;font-family:sans-serif;">
+            <div style="display:flex;justify-content:center;margin-bottom:6px;">
+                <div style="background:#dc2626;color:#fff;padding:10px 24px;border-radius:6px;text-align:center;font-weight:700;width:160px;">
+                    Tier 3 — Intensive<br>{{ pyramid[3] }} students
+                </div>
+            </div>
+            <div style="display:flex;justify-content:center;margin-bottom:6px;">
+                <div style="background:#f59e0b;color:#fff;padding:10px 24px;border-radius:6px;text-align:center;font-weight:700;width:280px;">
+                    Tier 2 — Targeted<br>{{ pyramid[2] }} students
+                </div>
+            </div>
+            <div style="display:flex;justify-content:center;">
+                <div style="background:#10b981;color:#fff;padding:10px 24px;border-radius:6px;text-align:center;font-weight:700;width:400px;">
+                    Tier 1 — Universal<br>{{ pyramid[1] }} students
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Student</label>
+            <select name="student_id" class="form-control">
+                <option value="">All</option>
+                {% for s in students %}<option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Tier</label>
+            <select name="tier" class="form-control">
+                <option value="">All</option>
+                {% for v, l in tiers %}<option value="{{ v }}" {{ 'selected' if tier == v|string }}>{{ l }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <select name="status" class="form-control">
+                <option value="">All</option>
+                {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if status == v }}>{{ l }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Plans ({{ plans|length }})
+        <a href="{{ url_for('interventions.add') }}" class="btn btn-sm btn-primary">+ New Plan</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Student</th><th>Tier</th><th>Concern</th><th>Strategy</th><th>Start</th><th>Review</th><th>Status</th></tr></thead>
+            <tbody>
+                {% for p in plans %}
+                <tr>
+                    <td><a href="{{ url_for('caseload.view_student', id=p.student.id) }}">{{ p.student.display_name }}</a></td>
+                    <td><span class="badge {% if p.tier == 3 %}badge-danger{% elif p.tier == 2 %}badge-warning{% else %}badge-success{% endif %}">Tier {{ p.tier }}</span></td>
+                    <td>{{ p.concern_area|replace('_', ' ')|title }}</td>
+                    <td>{{ (p.strategy or '')[:80] }}{% if (p.strategy or '')|length > 80 %}...{% endif %}</td>
+                    <td>{{ p.start_date.strftime('%m/%d/%Y') if p.start_date else '-' }}</td>
+                    <td>{{ p.review_date.strftime('%m/%d/%Y') if p.review_date else '-' }}</td>
+                    <td><a href="{{ url_for('interventions.view', id=p.id) }}" class="btn btn-sm btn-outline">View</a></td>
+                </tr>
+                {% endfor %}
+                {% if not plans %}
+                <tr><td colspan="7"><div class="empty-state"><p>No intervention plans yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

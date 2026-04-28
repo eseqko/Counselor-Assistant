@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Edit Plan{% endblock %}
+{% block page_title %}Edit Intervention Plan{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Tier</label>
+                    <select name="tier" class="form-control">
+                        {% for v, l in tiers %}<option value="{{ v }}" {{ 'selected' if v == plan.tier }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Concern Area</label>
+                    <select name="concern_area" class="form-control">
+                        {% for v, l in concern_areas %}<option value="{{ v }}" {{ 'selected' if v == plan.concern_area }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Concern Details</label>
+                <textarea name="concern_details" class="form-control" rows="2">{{ plan.concern_details or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Strategy</label>
+                <textarea name="strategy" class="form-control" rows="3">{{ plan.strategy }}</textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group"><label>Frequency</label><input type="text" name="frequency" class="form-control" value="{{ plan.frequency or '' }}"></div>
+                <div class="form-group"><label>Duration</label><input type="text" name="duration" class="form-control" value="{{ plan.duration or '' }}"></div>
+                <div class="form-group"><label>Location</label><input type="text" name="location" class="form-control" value="{{ plan.location or '' }}"></div>
+                <div class="form-group"><label>Interventionist</label><input type="text" name="interventionist" class="form-control" value="{{ plan.interventionist or '' }}"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Baseline</label>
+                <textarea name="baseline_data" class="form-control" rows="2">{{ plan.baseline_data or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Success Criteria</label>
+                <textarea name="success_criteria" class="form-control" rows="2">{{ plan.success_criteria or '' }}</textarea>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Start</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ plan.start_date.strftime('%Y-%m-%d') if plan.start_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Review</label>
+                    <input type="date" name="review_date" class="form-control" value="{{ plan.review_date.strftime('%Y-%m-%d') if plan.review_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>End</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ plan.end_date.strftime('%Y-%m-%d') if plan.end_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status" class="form-control">
+                        {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if v == plan.status }}>{{ l }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Outcome</label>
+                <textarea name="outcome" class="form-control" rows="3">{{ plan.outcome or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Next Steps</label>
+                <textarea name="next_steps" class="form-control" rows="2">{{ plan.next_steps or '' }}</textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('interventions.view', id=plan.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

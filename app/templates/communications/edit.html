@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Edit Communication{% endblock %}
+{% block page_title %}Edit Communication{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="contact_date" class="form-control" value="{{ log.contact_date.strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="contact_type" class="form-control">
+                        {% for val, label in contact_types %}
+                        <option value="{{ val }}" {{ 'selected' if val == log.contact_type }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Direction</label>
+                    <select name="direction" class="form-control">
+                        {% for val, label in directions %}
+                        <option value="{{ val }}" {{ 'selected' if val == log.direction }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select name="contact_role" class="form-control">
+                        <option value="">--</option>
+                        {% for val, label in contact_roles %}
+                        <option value="{{ val }}" {{ 'selected' if val == log.contact_role }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Contact Person *</label>
+                <input type="text" name="contact_person" class="form-control" value="{{ log.contact_person }}" required>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="contact_email" class="form-control" value="{{ log.contact_email or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="text" name="contact_phone" class="form-control" value="{{ log.contact_phone or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Subject</label>
+                <input type="text" name="subject" class="form-control" value="{{ log.subject or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label>Summary</label>
+                <textarea name="summary" class="form-control" rows="4">{{ log.summary or '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Duration (minutes)</label>
+                <input type="number" name="duration_minutes" class="form-control" min="0" value="{{ log.duration_minutes or '' }}">
+            </div>
+
+            <div class="form-group">
+                <label><input type="checkbox" name="follow_up_needed" {{ 'checked' if log.follow_up_needed }}> Follow-up needed</label>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Follow-Up Date</label>
+                    <input type="date" name="follow_up_date" class="form-control" value="{{ log.follow_up_date.strftime('%Y-%m-%d') if log.follow_up_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Follow-Up Notes</label>
+                    <input type="text" name="follow_up_notes" class="form-control" value="{{ log.follow_up_notes or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label><input type="checkbox" name="follow_up_completed" {{ 'checked' if log.follow_up_completed }}> Follow-up completed</label>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a href="{{ url_for('communications.view', id=log.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

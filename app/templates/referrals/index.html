@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Referrals{% endblock %}
+{% block page_title %}Referrals{% endblock %}
+{% block content %}
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+    <a href="?status=open" class="badge {% if status == 'open' %}badge-primary{% else %}badge-info{% endif %}" style="text-decoration:none;padding:6px 12px;font-size:0.82rem;">
+        Open: {{ counts.get('open', 0) }}
+    </a>
+    <a href="?status=pending" class="badge {% if status == 'pending' %}badge-primary{% else %}badge-warning{% endif %}" style="text-decoration:none;padding:6px 12px;font-size:0.82rem;">
+        Pending: {{ counts.get('pending', 0) }}
+    </a>
+    <a href="?status=in_progress" class="badge {% if status == 'in_progress' %}badge-primary{% else %}badge-info{% endif %}" style="text-decoration:none;padding:6px 12px;font-size:0.82rem;">
+        In Progress: {{ counts.get('in_progress', 0) }}
+    </a>
+    <a href="?status=completed" class="badge {% if status == 'completed' %}badge-primary{% else %}badge-success{% endif %}" style="text-decoration:none;padding:6px 12px;font-size:0.82rem;">
+        Completed: {{ counts.get('completed', 0) }}
+    </a>
+    <a href="?status=no_show" class="badge {% if status == 'no_show' %}badge-primary{% else %}badge-gray{% endif %}" style="text-decoration:none;padding:6px 12px;font-size:0.82rem;">
+        No Show: {{ counts.get('no_show', 0) }}
+    </a>
+    <a href="?" class="badge badge-gray" style="text-decoration:none;padding:6px 12px;font-size:0.82rem;">All</a>
+</div>
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Student</label>
+            <select name="student_id" class="form-control">
+                <option value="">All Students</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <select name="status" class="form-control">
+                <option value="">All</option>
+                <option value="open" {{ 'selected' if status == 'open' }}>Open (any)</option>
+                {% for val, label in statuses %}
+                <option value="{{ val }}" {{ 'selected' if status == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Urgency</label>
+            <select name="urgency" class="form-control">
+                <option value="">All</option>
+                {% for val, label in urgency_levels %}
+                <option value="{{ val }}" {{ 'selected' if urgency == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Type</label>
+            <select name="referral_type" class="form-control">
+                <option value="">All</option>
+                {% for val, label in referral_types %}
+                <option value="{{ val }}" {{ 'selected' if referral_type == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Referrals ({{ referrals|length }})
+        <a href="{{ url_for('referrals.add') }}" class="btn btn-sm btn-primary">+ New Referral</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Student</th>
+                    <th>Type</th>
+                    <th>Referred To</th>
+                    <th>Urgency</th>
+                    <th>Status</th>
+                    <th>Follow-Up</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in referrals %}
+                <tr>
+                    <td>{{ r.referral_date.strftime('%m/%d/%Y') }}</td>
+                    <td><a href="{{ url_for('caseload.view_student', id=r.student.id) }}">{{ r.student.display_name }}</a></td>
+                    <td><span class="badge badge-info">{{ r.type_label }}</span></td>
+                    <td>{{ r.referred_to }}</td>
+                    <td>
+                        {% if r.urgency == 'emergency' %}
+                            <span class="badge badge-danger">{{ r.urgency_label }}</span>
+                        {% elif r.urgency == 'urgent' %}
+                            <span class="badge badge-warning">{{ r.urgency_label }}</span>
+                        {% else %}
+                            <span class="badge badge-gray">{{ r.urgency_label }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.status == 'completed' %}
+                            <span class="badge badge-success">{{ r.status_label }}</span>
+                        {% elif r.status == 'pending' %}
+                            <span class="badge badge-warning">{{ r.status_label }}</span>
+                        {% elif r.status in ('no_show', 'declined', 'cancelled') %}
+                            <span class="badge badge-gray">{{ r.status_label }}</span>
+                        {% else %}
+                            <span class="badge badge-info">{{ r.status_label }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{% if r.follow_up_date %}{{ r.follow_up_date.strftime('%m/%d') }}{% endif %}</td>
+                    <td style="white-space:nowrap;">
+                        <a href="{{ url_for('referrals.view', id=r.id) }}" class="btn btn-sm btn-outline">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not referrals %}
+                <tr><td colspan="8"><div class="empty-state"><p>No referrals found.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

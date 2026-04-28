@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Communication Log{% endblock %}
+{% block page_title %}Communication Log{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;width:100%;">
+        <div class="form-group">
+            <label>Student</label>
+            <select name="student_id" class="form-control">
+                <option value="">All Students</option>
+                {% for s in students %}
+                <option value="{{ s.id }}" {{ 'selected' if student_id == s.id|string }}>{{ s.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Type</label>
+            <select name="contact_type" class="form-control">
+                <option value="">All</option>
+                {% for val, label in contact_types %}
+                <option value="{{ val }}" {{ 'selected' if contact_type == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Communications ({{ logs|length }})
+        <a href="{{ url_for('communications.add') }}" class="btn btn-sm btn-primary">+ Log Communication</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Student</th><th>Type</th><th>Contact</th><th>Subject</th><th>Follow-Up</th><th></th></tr></thead>
+            <tbody>
+                {% for l in logs %}
+                <tr>
+                    <td>{{ l.contact_date.strftime('%m/%d/%Y') }}</td>
+                    <td>{% if l.student %}<a href="{{ url_for('caseload.view_student', id=l.student.id) }}">{{ l.student.display_name }}</a>{% else %}-{% endif %}</td>
+                    <td><span class="badge badge-info">{{ l.type_label }}</span>
+                        {% if l.direction == 'incoming' %}<span class="badge badge-gray">In</span>{% endif %}</td>
+                    <td>{{ l.contact_person }}{% if l.role_label %} <span style="color:var(--gray);font-size:0.78rem;">({{ l.role_label }})</span>{% endif %}</td>
+                    <td>{{ l.subject or '-' }}</td>
+                    <td>{% if l.follow_up_needed %}<span class="badge badge-warning">{{ l.follow_up_date.strftime('%m/%d') if l.follow_up_date else 'Yes' }}</span>{% endif %}</td>
+                    <td><a href="{{ url_for('communications.view', id=l.id) }}" class="btn btn-sm btn-outline">View</a></td>
+                </tr>
+                {% endfor %}
+                {% if not logs %}
+                <tr><td colspan="7"><div class="empty-state"><p>No communications logged.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
