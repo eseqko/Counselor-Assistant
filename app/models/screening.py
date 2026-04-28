@@ -431,6 +431,36 @@ BUILTIN_SCREENERS = {
             ],
         },
     },
+    'aces': {
+        'name': 'Adverse Childhood Experiences (ACEs)',
+        'short_name': 'ACEs',
+        'description': 'Standard 10-item ACE questionnaire (CDC-Kaiser). Screens for trauma exposure before age 18 that correlates with long-term physical and mental health outcomes.',
+        'instructions': 'Before your 18th birthday, did you experience any of the following? Answer each question Yes or No. Responses are confidential and used to inform support and resources — not to label or judge.',
+        'questions': [
+            {'id': 'q1', 'text': 'Did a parent or other adult in the household often or very often swear at you, insult you, put you down, or humiliate you? Or act in a way that made you afraid you might be physically hurt?'},
+            {'id': 'q2', 'text': 'Did a parent or other adult in the household often or very often push, grab, slap, or throw something at you? Or ever hit you so hard that you had marks or were injured?'},
+            {'id': 'q3', 'text': 'Did an adult or person at least 5 years older than you ever touch or fondle you in a sexual way, have you touch their body in a sexual way, or attempt or actually have sexual contact with you?'},
+            {'id': 'q4', 'text': 'Did you often or very often feel that no one in your family loved you or thought you were important or special? Or that your family didn\'t look out for each other, feel close to each other, or support each other?'},
+            {'id': 'q5', 'text': 'Did you often or very often feel that you didn\'t have enough to eat, had to wear dirty clothes, had no one to protect you? Or that your parents were too drunk or high to take care of you or take you to the doctor if needed?'},
+            {'id': 'q6', 'text': 'Were your parents ever separated or divorced?'},
+            {'id': 'q7', 'text': 'Was your mother or stepmother often or very often pushed, grabbed, slapped, or had something thrown at her? Or sometimes, often, or very often kicked, bitten, hit with a fist, or hit with something hard? Or ever repeatedly hit for at least a few minutes or threatened with a gun or knife?'},
+            {'id': 'q8', 'text': 'Did you live with anyone who was a problem drinker or alcoholic, or who used street drugs?'},
+            {'id': 'q9', 'text': 'Was a household member depressed or mentally ill, or did a household member attempt suicide?'},
+            {'id': 'q10', 'text': 'Did a household member go to prison?'},
+        ],
+        'options': [
+            {'label': 'No', 'value': 0},
+            {'label': 'Yes', 'value': 1},
+        ],
+        'scoring': {
+            'ranges': [
+                {'min': 0, 'max': 0, 'label': 'No ACEs', 'severity': 'none', 'action': 'No ACE exposure reported. Reinforce protective factors.'},
+                {'min': 1, 'max': 3, 'label': 'Low-Moderate', 'severity': 'low', 'action': 'Some adversity reported. Build resilience; monitor; consider supportive counseling.'},
+                {'min': 4, 'max': 6, 'label': 'High', 'severity': 'high', 'action': 'Significant ACE exposure — strong correlation with health/behavioral risks. Refer to trauma-informed support; coordinate with family/care team.'},
+                {'min': 7, 'max': 10, 'label': 'Very High', 'severity': 'severe', 'action': 'Extensive trauma exposure. Prioritize trauma-informed care, mental health referral, and wraparound services. Assess for safety and immediate needs.'},
+            ],
+        },
+    },
     'columbia': {
         'name': 'Columbia Suicide Severity Rating Scale (Brief)',
         'short_name': 'C-SSRS',
