@@ -34,9 +34,29 @@ def _add_missing_indexes(app):
 
 
 def _add_missing_columns(app):
-    """Add any columns defined in models but missing from the SQLite database."""
-    import sqlalchemy
+    """Add any columns defined in models but missing from the SQLite database.
+
+    Uses a hash of the model schema to skip introspection when nothing changed.
+    """
+    import hashlib, sqlalchemy
+
+    schema_sig = hashlib.md5(
+        str(sorted(
+            (t, sorted(c.name for c in cols.columns))
+            for t, cols in db.metadata.tables.items()
+        )).encode()
+    ).hexdigest()
+
+    cache_file = os.path.join(app.instance_path, '.schema_hash')
+    os.makedirs(app.instance_path, exist_ok=True)
+    try:
+        if os.path.isfile(cache_file) and open(cache_file).read().strip() == schema_sig:
+            return
+    except OSError:
+        pass
+
     inspector = sqlalchemy.inspect(db.engine)
+    changed = False
     for table_name, table in db.metadata.tables.items():
         if not inspector.has_table(table_name):
             continue
@@ -55,12 +75,16 @@ def _add_missing_columns(app):
                         default = f" DEFAULT {val}"
                 nullable = "" if col.nullable else " NOT NULL"
                 if nullable and not default:
-                    # SQLite can't add NOT NULL without default; make nullable
                     nullable = ""
                 sql = f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type}{nullable}{default}"
                 db.session.execute(sqlalchemy.text(sql))
                 app.logger.info(f"Added missing column: {table_name}.{col.name}")
-    db.session.commit()
+                changed = True
+    if changed:
+        db.session.commit()
+
+    with open(cache_file, 'w') as f:
+        f.write(schema_sig)
 
 
 def create_app(config_class=Config):
@@ -255,9 +279,11 @@ def create_app(config_class=Config):
             db.session.add(default_user)
             db.session.commit()
         else:
-            # Upgrade path: mark existing users who have real data as setup-complete
+            # Upgrade path: mark existing users with notes/students as setup-complete
+            from app.models.student import Student
             for u in User.query.filter_by(setup_completed=False).all():
-                if not u.check_password('changeme'):
+                has_data = Student.query.filter_by(assigned_counselor_id=u.id).first()
+                if has_data:
                     u.setup_completed = True
             db.session.commit()
 

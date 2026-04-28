@@ -91,7 +91,7 @@ def _fetch_todays_external_events(user):
     if not user.external_ical_url:
         return []
     try:
-        resp = http_requests.get(user.external_ical_url, timeout=8)
+        resp = http_requests.get(user.external_ical_url, timeout=3)
         resp.raise_for_status()
     except Exception:
         return []
@@ -163,16 +163,16 @@ def index():
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
 
-    # Stats
-    total_students = Student.query.filter_by(
-        assigned_counselor_id=current_user.id, status='active').count()
+    # Stats — single query for student IDs (reused for count + grad risk)
+    my_student_ids = [s.id for s in Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active'
+    ).with_entities(Student.id).all()]
+    total_students = len(my_student_ids)
+
     todays_events = CalendarEvent.query.filter(
         CalendarEvent.owner_id == current_user.id,
         db.func.date(CalendarEvent.start_datetime) == today
     ).order_by(CalendarEvent.start_datetime).all()
-
-    # Fetch external calendar events for today
-    external_events = _fetch_todays_external_events(current_user)
 
     recent_notes = Note.query.filter_by(author_id=current_user.id).order_by(
         Note.created_at.desc()).limit(5).all()
@@ -231,17 +231,9 @@ def index():
         counselor_id=current_user.id
     ).order_by(ServiceRecord.date.desc()).limit(5).all()
 
-    # Combined event count for stats card
-    all_event_count = len(todays_events) + len(external_events)
-
     # Graduation at-risk summary from transcript records
-    my_student_ids = [s.id for s in Student.query.filter_by(
-        assigned_counselor_id=current_user.id, status='active'
-    ).with_entities(Student.id).all()]
-
     grad_risk = {'critical': 0, 'at-risk': 0, 'warning': 0, 'on-track': 0}
     if my_student_ids:
-        # Get latest transcript per student
         seen = set()
         transcripts = TranscriptRecord.query.filter(
             TranscriptRecord.student_id.in_(my_student_ids)
@@ -254,7 +246,7 @@ def index():
                     grad_risk[rl] += 1
     grad_at_risk_total = grad_risk['critical'] + grad_risk['at-risk']
 
-    # Smart alerts
+    # Smart alerts (cached by day — fast after first load)
     alerts = get_alerts(current_user)
     alert_counts = {}
     for a in alerts:
@@ -265,8 +257,8 @@ def index():
         today=today,
         total_students=total_students,
         todays_events=todays_events,
-        external_events=external_events,
-        all_event_count=all_event_count,
+        external_events=[],
+        all_event_count=len(todays_events),
         recent_notes=recent_notes,
         recent_services=recent_services,
         follow_ups=follow_ups,
@@ -282,6 +274,23 @@ def index():
         alerts=alerts,
         alert_counts=alert_counts,
     )
+
+
+@dashboard_bp.route('/api/external-events')
+@login_required
+def external_events_api():
+    """Fetch external iCal events asynchronously so they don't block page load."""
+    events = _fetch_todays_external_events(current_user)
+    result = []
+    for e in events:
+        result.append({
+            'title': e['title'],
+            'start': e['start_datetime'].strftime('%I:%M %p') if not e.get('is_all_day') else 'All day',
+            'end': e['end_datetime'].strftime('%I:%M %p') if e.get('end_datetime') and not e.get('is_all_day') else '',
+            'location': e.get('location', ''),
+            'is_all_day': e.get('is_all_day', False),
+        })
+    return jsonify({'events': result, 'count': len(result)})
 
 
 @dashboard_bp.route('/follow-up/<int:note_id>/toggle-complete', methods=['POST'])
