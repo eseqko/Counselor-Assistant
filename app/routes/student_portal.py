@@ -6,6 +6,7 @@ from app.models.user import User
 from app.utils.student_tools_registry import STUDENT_TOOLS, get_student_tool
 from app.utils import ollama_client
 from app.utils.stream_helpers import stream_sse
+from app.utils.context_budget import budget_prompt
 
 student_portal_bp = Blueprint('student_portal', __name__,
                               template_folder='../templates/student_portal')
@@ -69,7 +70,8 @@ def generate(token):
         return jsonify({'error': 'AI is temporarily unavailable. Please try again later.'}), 503
 
     try:
-        response = ollama_client.generate(prompt, system=tool['system_prompt'])
+        bp, bs = budget_prompt(prompt, tool['system_prompt'])
+        response = ollama_client.generate(bp, system=bs)
     except Exception:
         return jsonify({'error': 'AI generation took too long. Please try again.'}), 504
 

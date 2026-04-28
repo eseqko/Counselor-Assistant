@@ -15,6 +15,7 @@ from app.models.calendar_event import CalendarEvent
 from app.utils.ai_tools_registry import AI_TOOLS, CATEGORIES, get_tool, get_tools_by_category, search_tools
 from app.utils import ollama_client
 from app.utils.stream_helpers import stream_sse
+from app.utils.context_budget import budget_prompt
 from app.utils.audit import log_action
 from app.models.knowledge_base import KnowledgeDocument, KnowledgeChunk
 from app.utils.knowledge_base import build_knowledge_context
@@ -106,19 +107,19 @@ def generate():
     system_prompt = tool['system_prompt']
     if kb_context:
         system_prompt += (
-            '\n\nYou have access to the counselor\'s district knowledge base below. '
-            'Reference specific policies, procedures, or details from these documents when relevant. '
-            'Cite the source document name when you use information from it.'
+            '\n\nUse the district knowledge base below when relevant. '
+            'Cite the source document.'
             + kb_context
         )
 
     try:
+        prompt, system_prompt = budget_prompt(prompt, system_prompt)
         response = ollama_client.generate(prompt, system=system_prompt)
     except requests.Timeout:
         return jsonify({'error': (
             'The local AI model took too long to respond. This often happens on the first generation '
             'while the model loads into memory. Please try again — subsequent generations should be faster. '
-            'If it keeps timing out, try a smaller/faster model in Settings (e.g. llama3.2:3b).'
+            'If it keeps timing out, try a smaller model in Settings (e.g. gemma3:1b).'
         )}), 504
     except requests.ConnectionError:
         return jsonify({'error': (
@@ -183,9 +184,8 @@ def generate_stream():
     system_prompt = tool['system_prompt']
     if kb_context:
         system_prompt += (
-            '\n\nYou have access to the counselor\'s district knowledge base below. '
-            'Reference specific policies, procedures, or details from these documents when relevant. '
-            'Cite the source document name when you use information from it.'
+            '\n\nUse the district knowledge base below when relevant. '
+            'Cite the source document.'
             + kb_context
         )
 
@@ -263,22 +263,17 @@ def _build_student_context(student_id):
         return ''
 
     lines = [f'\n--- STUDENT CONTEXT ---']
-    lines.append(f'Name: {student.display_name}')
-    lines.append(f'Grade: {student.grade_level or "N/A"}')
+    lines.append(f'Name: {student.display_name}, Grade: {student.grade_level or "N/A"}')
 
     designations = []
     if student.iep_status:
         designations.append('IEP')
     if student.section_504:
-        designations.append('504 Plan')
+        designations.append('504')
     if student.el_status and student.el_status != 'EO':
-        designations.append(f'EL: {student.el_status}')
+        designations.append(f'EL:{student.el_status}')
     if designations:
         lines.append(f'Designations: {", ".join(designations)}')
-
-    tags = [t.name for t in student.tags]
-    if tags:
-        lines.append(f'Tags: {", ".join(tags)}')
 
     thirty_days = date.today() - timedelta(days=30)
     absences = AttendanceRecord.query.filter(
@@ -292,24 +287,23 @@ def _build_student_context(student_id):
         AttendanceRecord.status == 'tardy'
     ).count()
     if absences or tardies:
-        lines.append(f'Attendance (30 days): {absences} absences, {tardies} tardies')
+        lines.append(f'Attendance (30d): {absences} absent, {tardies} tardy')
 
     grades = GradeRecord.query.filter_by(student_id=student_id).order_by(
         GradeRecord.school_year.desc(), GradeRecord.quarter.desc()
-    ).limit(8).all()
+    ).limit(5).all()
     if grades:
-        grade_lines = [f'  {g.course_name}: {g.letter_grade or "N/A"}' for g in grades]
         failing = [g for g in grades if g.letter_grade in ('F', 'D', 'D-', 'D+')]
-        lines.append(f'Recent Grades ({len(failing)} failing):')
-        lines.extend(grade_lines)
+        grade_strs = [f'{g.course_name}:{g.letter_grade or "N/A"}' for g in grades]
+        lines.append(f'Grades ({len(failing)} failing): {", ".join(grade_strs)}')
 
     notes = Note.query.filter_by(
         student_id=student_id, author_id=current_user.id
-    ).order_by(Note.session_date.desc()).limit(5).all()
+    ).order_by(Note.session_date.desc()).limit(3).all()
     if notes:
         lines.append('Recent Notes:')
         for n in notes:
-            lines.append(f'  {n.session_date} [{n.note_type}]: {(n.content or "")[:120]}')
+            lines.append(f'  {n.session_date} [{n.note_type}]: {(n.content or "")[:80]}')
 
     lines.append('--- END STUDENT CONTEXT ---\n')
     return '\n'.join(lines)

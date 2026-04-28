@@ -2,16 +2,16 @@
 import json
 from flask import Response, stream_with_context
 from app.utils import ollama_client
+from app.utils.context_budget import budget_prompt
 
 
 def stream_sse(prompt, system=None, temperature=0.7, timeout=None):
     """Return a Flask Response that streams SSE tokens from Ollama.
 
-    Each SSE event is either:
-      data: {"token": "word "}
-      data: {"done": true, "full_text": "accumulated output"}
-      data: {"error": "message"}
+    Automatically applies context budget management before streaming.
     """
+    prompt, system = budget_prompt(prompt, system)
+
     def generate():
         full_text = []
         try:

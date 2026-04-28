@@ -16,8 +16,8 @@ DOCUMENT_CATEGORIES = {
     'other': {'label': 'Other', 'icon': '&#128196;'},
 }
 
-CHUNK_SIZE = 800
-CHUNK_OVERLAP = 100
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 50
 
 
 def allowed_file(filename):
@@ -130,10 +130,10 @@ def search_chunks(query, chunks, top_k=5):
     return [c for _, c in scored[:top_k]]
 
 
-def build_knowledge_context(query, all_chunks, max_tokens=1500):
+def build_knowledge_context(query, all_chunks, max_tokens=600):
     """Build a knowledge base context string for AI prompt injection.
-    Retrieves the most relevant chunks and formats them."""
-    relevant = search_chunks(query, all_chunks, top_k=8)
+    Retrieves the most relevant chunks, optimized for small local models."""
+    relevant = search_chunks(query, all_chunks, top_k=3)
     if not relevant:
         return ''
 

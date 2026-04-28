@@ -220,7 +220,7 @@ function copyPortalLink() {
             </div>
             <div class="form-group" style="flex:1;min-width:160px;">
                 <label style="font-size:0.82rem;font-weight:600;">Model</label>
-                <input type="text" id="ollama-model" class="form-control" placeholder="llama3.2:3b"
+                <input type="text" id="ollama-model" class="form-control" placeholder="gemma3:4b"
                        style="font-size:0.85rem;">
             </div>
             <div class="form-group">
@@ -232,10 +232,20 @@ function copyPortalLink() {
             <summary style="font-size:0.82rem;color:var(--gray);cursor:pointer;">Setup instructions</summary>
             <ol style="font-size:0.82rem;color:var(--gray);margin:6px 0 0 16px;line-height:1.8;">
                 <li>Install Ollama: visit <code>ollama.com</code> and download for your OS</li>
-                <li>Open a terminal and run: <code>ollama pull llama3.2:3b</code></li>
+                <li>Open a terminal and pull a model:
+                    <ul style="margin:4px 0 4px 16px;line-height:1.7;">
+                        <li><code>ollama pull gemma3:4b</code> &mdash; recommended (good quality, runs on most hardware)</li>
+                        <li><code>ollama pull gemma3:1b</code> &mdash; fastest, lowest RAM usage (~2 GB), great for older machines</li>
+                        <li><code>ollama pull gemma3:12b</code> &mdash; higher quality, needs 8+ GB RAM</li>
+                    </ul>
+                </li>
                 <li>Start Ollama: <code>ollama serve</code> (runs in background)</li>
                 <li>Come back here and click "Save" — AI features will activate automatically</li>
             </ol>
+            <p style="font-size:0.8rem;color:var(--gray);margin-top:8px;">
+                <strong>Tip:</strong> Prompts are optimized for small local models (2B-4B parameters).
+                Larger models produce better output but require more RAM and are slower.
+            </p>
         </details>
     </div>
 </div>

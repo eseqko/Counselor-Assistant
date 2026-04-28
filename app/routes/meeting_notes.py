@@ -351,9 +351,8 @@ Format the summary as:
 
 Keep it concise and professional. Use #action and #followup tags inline."""
 
-            system = ("You are a school counselor's assistant. Summarize meeting transcripts into "
-                      "clean, organized notes. Be concise and professional. Preserve important details "
-                      "and names mentioned. Use the tag format requested.")
+            system = ("Summarize meeting transcripts into clean, organized notes. "
+                      "Be concise. Preserve important details and names. Use the tag format requested.")
             try:
                 summary = ollama_client.generate(prompt, system=system, temperature=0.3)
             except Exception:

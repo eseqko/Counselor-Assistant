@@ -30,11 +30,10 @@ AI_TOOLS = [
              'options': ['Elementary (K-5)', 'Middle (6-8)', 'High (9-12)'], 'required': False},
         ],
         'system_prompt': (
-            'You are a school crisis intervention specialist. Generate a structured, '
-            'step-by-step crisis response script. Include: immediate safety assessment, '
-            'de-escalation language, documentation requirements, mandatory reporting '
-            'considerations, and follow-up plan. Be specific and actionable. '
-            'Follow district and state protocols. Never minimize the situation.'
+            'You are a school crisis intervention specialist. Generate a step-by-step '
+            'crisis response script with: safety assessment, de-escalation language, '
+            'documentation needs, reporting considerations, and follow-up plan. '
+            'Be specific and actionable.'
         ),
         'prompt_template': (
             'Generate a crisis intervention script for the following situation:\n\n'
@@ -60,12 +59,10 @@ AI_TOOLS = [
              'placeholder': 'What behaviors or statements prompted this screening?', 'required': True},
         ],
         'system_prompt': (
-            'You are a school counselor crisis specialist. Generate a suicide risk '
-            'screening guide using evidence-based approaches (Columbia Protocol / QPR). '
-            'Include: screening questions in appropriate order, risk level assessment '
-            'criteria, immediate safety planning steps, parent notification guidance, '
-            'referral resources, and documentation template. Always err on the side of '
-            'safety. Include the National Suicide Prevention Lifeline: 988.'
+            'Generate a suicide risk screening guide using Columbia Protocol/QPR. '
+            'Include: screening questions, risk level criteria, safety planning, '
+            'parent notification, referrals, and documentation. Err on safety. '
+            'Include 988 Suicide & Crisis Lifeline.'
         ),
         'prompt_template': (
             'Create a suicide risk screening guide for this situation:\n\n'
@@ -92,12 +89,10 @@ AI_TOOLS = [
              'placeholder': 'e.g. California', 'required': False},
         ],
         'system_prompt': (
-            'You are helping a school counselor document a mandated report. '
-            'Organize the information clearly for submission to Child Protective Services. '
-            'Include: factual observations (no interpretations), direct quotes where applicable, '
-            'timeline of events, involved parties, actions already taken, and reporting '
-            'checklist. Remind the counselor of their legal obligation and timeline requirements. '
-            'Never advise NOT reporting — when in doubt, report.'
+            'Help organize a mandated report for CPS submission. Include: factual '
+            'observations, direct quotes, timeline, involved parties, actions taken, '
+            'and reporting checklist. Remind of legal obligations. '
+            'Never advise against reporting.'
         ),
         'prompt_template': (
             'Help me organize a mandated report:\n\n'
@@ -133,11 +128,9 @@ AI_TOOLS = [
              'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor curriculum designer. Create a detailed, '
-            'ready-to-deliver SEL lesson plan aligned with CASEL competencies. '
-            'Include: learning objectives, ASCA Mindsets & Behaviors standards, '
-            'materials needed, warm-up activity, main activity with step-by-step '
-            'instructions, discussion questions, closing/reflection, and assessment.'
+            'Create a ready-to-deliver SEL lesson plan aligned with CASEL. '
+            'Include: objectives, materials, warm-up, main activity with steps, '
+            'discussion questions, closing, and assessment.'
         ),
         'prompt_template': (
             'Create an SEL lesson plan:\n\n'
@@ -164,11 +157,10 @@ AI_TOOLS = [
              'options': ['K-2', '3-5', '6-8', '9-12'], 'required': True},
         ],
         'system_prompt': (
-            'You are a school counselor designing a group counseling curriculum. '
-            'Create a full multi-session outline with: group norms, session-by-session '
-            'plan (objective, activity, discussion, closure), pre/post assessment, '
-            'parent consent letter template, and ASCA alignment. Make activities '
-            'age-appropriate and evidence-based.'
+            'Design a group counseling curriculum. Include: group norms, '
+            'session-by-session plan (objective, activity, discussion, closure), '
+            'pre/post assessment, parent consent letter, and ASCA alignment. '
+            'Make activities age-appropriate.'
         ),
         'prompt_template': (
             'Design a group counseling curriculum:\n\n'
@@ -196,11 +188,9 @@ AI_TOOLS = [
              'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor specializing in coping skills and mindfulness. '
-            'Create a ready-to-use activity with: clear instructions, materials needed '
-            '(keep minimal), step-by-step walkthrough, debrief questions, and a '
-            'take-home tip the student can use independently. Make it engaging and '
-            'age-appropriate.'
+            'Create a coping skills activity with: clear instructions, minimal '
+            'materials, step-by-step walkthrough, debrief questions, and a '
+            'take-home tip. Make it engaging and age-appropriate.'
         ),
         'prompt_template': (
             'Create a coping skills activity:\n\n'
@@ -230,11 +220,9 @@ AI_TOOLS = [
              'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor preparing for a parent meeting. '
-            'Create organized talking points with: opening/rapport builder, '
-            'data points to share, key concerns framed constructively, '
-            'questions to ask the parent, proposed action steps, and '
-            'closing/next steps. Use strength-based language.'
+            'Create parent meeting talking points with: opening/rapport, '
+            'data to share, concerns framed constructively, questions to ask, '
+            'action steps, and next steps. Use strength-based language.'
         ),
         'prompt_template': (
             'Prepare talking points for a parent meeting:\n\n'
@@ -266,11 +254,9 @@ AI_TOOLS = [
              'placeholder': 'Any relevant background...', 'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor communication coach. Create a sensitive '
-            'conversation script with: opening statement, key phrases to use, '
-            'phrases to avoid, anticipated reactions and responses, de-escalation '
-            'language if needed, and concrete next steps. Use trauma-informed, '
-            'culturally responsive language throughout.'
+            'Create a sensitive conversation script with: opening statement, '
+            'key phrases to use, phrases to avoid, anticipated reactions, '
+            'de-escalation language, and next steps. Use trauma-informed language.'
         ),
         'prompt_template': (
             'Help me script a difficult conversation:\n\n'
@@ -300,10 +286,9 @@ AI_TOOLS = [
              'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor drafting a professional email. '
-            'Write a clear, warm, and professional email. Include: subject line, '
-            'greeting, body with key information, call to action, and signature block. '
-            'Keep it concise. If Spanish translation is requested, provide both versions.'
+            'Draft a professional parent email. Include: subject line, greeting, '
+            'body, call to action, and signature. Keep concise. '
+            'If Spanish translation requested, provide both versions.'
         ),
         'prompt_template': (
             'Draft a parent email:\n\n'
@@ -332,11 +317,9 @@ AI_TOOLS = [
              'placeholder': 'A specific story that illustrates this student...', 'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor writing a college recommendation letter. '
-            'Write a compelling, authentic letter. Include: how long you have known '
-            'the student, academic context, personal qualities with specific examples, '
-            'growth narrative, and strong closing endorsement. Vary sentence structure. '
-            'Avoid cliches. Make it feel personal, not templated.'
+            'Write a college recommendation letter. Include: how long you have known '
+            'the student, academic context, personal qualities with examples, '
+            'growth narrative, and closing endorsement. Make it authentic, not templated.'
         ),
         'prompt_template': (
             'Draft a college recommendation letter:\n\n'
@@ -360,11 +343,9 @@ AI_TOOLS = [
              'placeholder': 'Paste the student\'s essay draft here...', 'required': True},
         ],
         'system_prompt': (
-            'You are a college essay coach. Provide constructive, encouraging feedback. '
-            'Cover: overall impression, narrative structure, voice/authenticity, '
-            'specific strengths, areas for improvement with suggestions, word choice, '
-            'opening hook, and closing impact. Never rewrite the essay — coach the '
-            'student to improve it themselves. Be specific with line-level feedback.'
+            'Provide constructive college essay feedback. Cover: overall impression, '
+            'structure, voice, strengths, areas to improve, and opening/closing impact. '
+            'Do NOT rewrite the essay — coach the student to improve it.'
         ),
         'prompt_template': (
             'Provide feedback on this college essay:\n\n'
@@ -394,11 +375,9 @@ AI_TOOLS = [
              'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor financial aid specialist. Explain financial '
-            'aid concepts in plain, jargon-free language that families can understand. '
+            'Explain financial aid in plain language families can understand. '
             'Include: what it is, who qualifies, step-by-step process, deadlines, '
-            'common mistakes to avoid, and helpful resources/links. Be culturally '
-            'sensitive and inclusive of all family structures.'
+            'and common mistakes. Be inclusive of all family structures.'
         ),
         'prompt_template': (
             'Create a financial aid explainer:\n\n'
@@ -427,10 +406,9 @@ AI_TOOLS = [
              'placeholder': 'e.g. Math class, lunch, transitions', 'required': False},
         ],
         'system_prompt': (
-            'You are a school counselor/behaviorist drafting a Behavior Intervention Plan. '
-            'Include: operational definition of target behavior, baseline data template, '
-            'antecedent strategies, replacement behaviors, consequence strategies, '
-            'reinforcement schedule, crisis plan if applicable, data collection method, '
+            'Draft a Behavior Intervention Plan. Include: behavior definition, '
+            'baseline data template, antecedent strategies, replacement behaviors, '
+            'consequence strategies, reinforcement schedule, data collection, '
             'and review date. Use PBIS-aligned language.'
         ),
         'prompt_template': (
@@ -460,11 +438,9 @@ AI_TOOLS = [
              'required': True},
         ],
         'system_prompt': (
-            'You are a 504 coordinator suggesting appropriate accommodations. '
-            'Provide: categorized accommodations (classroom, testing, behavioral, '
-            'environmental), rationale for each, implementation tips for teachers, '
-            'and evaluation criteria. Be specific — avoid generic lists. '
-            'Match accommodations to the actual functional limitations described.'
+            'Suggest 504 accommodations categorized by: classroom, testing, '
+            'behavioral, environmental. Include rationale and implementation tips. '
+            'Be specific — match accommodations to the functional limitations described.'
         ),
         'prompt_template': (
             'Suggest 504 accommodations:\n\n'
@@ -491,11 +467,9 @@ AI_TOOLS = [
              'placeholder': 'Any teacher observations or data...', 'required': False},
         ],
         'system_prompt': (
-            'You are helping prepare an SST (Student Study Team) referral summary. '
-            'Organize: student background, reason for referral, data summary '
-            '(grades, attendance, behavior), interventions tried and results, '
-            'strengths and areas of concern, and recommended discussion points '
-            'for the SST meeting. Use objective, data-driven language.'
+            'Prepare an SST referral summary. Organize: background, reason for '
+            'referral, data summary (grades, attendance, behavior), interventions '
+            'tried, strengths, concerns, and discussion points. Use objective language.'
         ),
         'prompt_template': (
             'Create an SST referral summary:\n\n'
@@ -524,11 +498,9 @@ AI_TOOLS = [
              'placeholder': 'Describe what you currently do in this area...', 'required': True},
         ],
         'system_prompt': (
-            'You are an ASCA National Model specialist. Conduct a program audit '
-            'for the specified component. Provide: alignment checklist, strengths, '
-            'gaps identified, specific recommendations for improvement, sample '
-            'language for program documentation, and resources. Reference the '
-            'ASCA National Model 4th Edition framework.'
+            'Conduct an ASCA National Model program audit. Provide: alignment '
+            'checklist, strengths, gaps, recommendations, and sample documentation '
+            'language. Reference the ASCA 4th Edition framework.'
         ),
         'prompt_template': (
             'Help me audit my counseling program:\n\n'
@@ -556,12 +528,9 @@ AI_TOOLS = [
              'placeholder': 'What did you do that led to these results?', 'required': True},
         ],
         'system_prompt': (
-            'You are helping a school counselor write their annual results report. '
-            'Create a professional narrative that: summarizes the program goal, '
-            'describes interventions delivered, presents data with context, '
-            'discusses outcomes vs. targets, identifies lessons learned, and '
-            'proposes next steps. Use data-driven, administrative-friendly language '
-            'suitable for presenting to school board or administration.'
+            'Write an annual results report narrative. Summarize: program goal, '
+            'interventions, data with context, outcomes vs. targets, lessons learned, '
+            'and next steps. Use data-driven, admin-friendly language.'
         ),
         'prompt_template': (
             'Write an annual results report narrative:\n\n'

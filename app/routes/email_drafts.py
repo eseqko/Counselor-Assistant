@@ -572,8 +572,8 @@ def api_ai_draft():
         )
 
     system = (
-        "You are a school counselor writing professional communications. "
-        "Write clearly, warmly, and concisely. Use merge fields in double curly braces."
+        "Write professional school counselor communications. "
+        "Be clear, warm, and concise. Use merge fields in double curly braces."
     )
 
     try:
@@ -624,8 +624,8 @@ def api_ai_draft_stream():
         )
 
     system = (
-        "You are a school counselor writing professional communications. "
-        "Write clearly, warmly, and concisely. Use merge fields in double curly braces."
+        "Write professional school counselor communications. "
+        "Be clear, warm, and concise. Use merge fields in double curly braces."
     )
 
     return stream_sse(prompt, system=system, temperature=0.7)
