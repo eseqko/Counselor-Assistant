@@ -172,7 +172,6 @@
 
             <script>
             function toggleFollowUp(noteId, checkbox) {
-                // Immediately hide the item with a fade
                 var row = document.getElementById('followup-' + noteId);
                 if (row && checkbox.checked) {
                     row.style.transition = 'opacity 0.3s, max-height 0.3s';
@@ -183,21 +182,19 @@
                     row.style.marginBottom = '0';
                 }
 
-                // Update the follow-up count badge
                 var countEl = document.getElementById('follow-up-count');
                 if (countEl && checkbox.checked) {
                     var current = parseInt(countEl.textContent) || 0;
                     countEl.textContent = Math.max(0, current - 1);
                 }
 
-                fetch('/dashboard/follow-up/' + noteId + '/toggle-complete', {method: 'POST'})
+                fetch('/follow-up/' + noteId + '/toggle-complete', {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': '{{ csrf_token() }}'}
+                })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        // If unchecking (restoring), reload to move it back
-                        if (!checkbox.checked) {
-                            location.reload();
-                        }
-                        // If checking off, no reload needed — it's already hidden
+                        if (!checkbox.checked) location.reload();
                     });
             }
             </script>
@@ -386,7 +383,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var id = this.dataset.id;
         if (this.checked) { item.classList.add('completed'); } else { item.classList.remove('completed'); }
         if (source === 'local') {
-            fetch('/dashboard/event/' + id + '/toggle-complete', {method: 'POST'}).catch(function(){});
+            fetch('/event/' + id + '/toggle-complete', {method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'}}).catch(function(){});
         } else {
             var key = 'checkedExternalEvents_{{ today.isoformat() }}';
             var data = JSON.parse(localStorage.getItem(key) || '{}');
