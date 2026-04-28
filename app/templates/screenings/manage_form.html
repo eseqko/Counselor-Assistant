@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Google Form — {{ template.short_name }}{% endblock %}
+{% block page_title %}Google Form: {{ template.short_name or template.name }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        Google Form Link
+        <a href="{{ url_for('screenings.index') }}" class="btn btn-sm btn-outline">← Back to Screenings</a>
+    </div>
+    <div class="card-body">
+        <p><strong>{{ template.name }}</strong></p>
+
+        {% if template.google_form_url %}
+        <div style="padding:12px;background:var(--light-gray);border-radius:8px;margin:12px 0;">
+            <label style="font-weight:600;font-size:0.85rem;">Shareable Form Link:</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+                <input type="text" id="form-url" class="form-control" value="{{ template.google_form_url }}" readonly
+                       style="font-size:0.88rem;flex:1;">
+                <button type="button" class="btn btn-sm btn-primary" onclick="copyLink()">Copy</button>
+                <a href="{{ template.google_form_url }}" target="_blank" class="btn btn-sm btn-outline">Open</a>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin:16px 0;">
+            <form method="POST" action="{{ url_for('screenings.create_google_form', tid=template.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline"
+                        onclick="return confirm('This will create a new Google Form and replace the current link. Continue?');">
+                    Recreate Form
+                </button>
+            </form>
+            <a href="{{ url_for('screenings.import_form_responses', tid=template.id) }}" class="btn btn-sm btn-primary">
+                Import Responses
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if courses %}
+<div class="card">
+    <div class="card-header">Post to Google Classroom</div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('screenings.post_to_classroom', tid=template.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Course *</label>
+                    <select name="course_id" class="form-control" required>
+                        <option value="">-- Select a course --</option>
+                        {% for c in courses %}
+                        <option value="{{ c.id }}">{{ c.name }}{% if c.section %} — {{ c.section }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Post as</label>
+                    <select name="post_type" class="form-control">
+                        <option value="assignment">Assignment (students see it in classwork)</option>
+                        <option value="announcement">Announcement (stream post with link)</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Post to Classroom</button>
+        </form>
+    </div>
+</div>
+{% elif google_connected %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No active Google Classroom courses found. You may need to re-authorize with Classroom permissions, or check that you have active courses in Google Classroom.</p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>Connect your Google account to post to Classroom.</p>
+            <a href="{{ url_for('google_auth.authorize') }}" class="btn btn-primary">Connect Google</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function copyLink() {
+    var input = document.getElementById('form-url');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(function() {
+        var btn = input.nextElementSibling;
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+    });
+}
+</script>
+
+{% endblock %}

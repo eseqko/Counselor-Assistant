@@ -39,4 +39,8 @@ class Config:
     GOOGLE_CREDENTIALS_FILE = os.path.join(DATA_DIR, 'google_credentials.json')
     GOOGLE_SCOPES = [
         'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/forms.body',
+        'https://www.googleapis.com/auth/forms.responses.readonly',
+        'https://www.googleapis.com/auth/classroom.courses.readonly',
+        'https://www.googleapis.com/auth/classroom.coursework.students',
     ]

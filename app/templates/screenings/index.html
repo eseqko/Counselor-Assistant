@@ -18,6 +18,33 @@
     {% endif %}
 {% endfor %}
 
+{% macro template_card(t, badge_html='') %}
+<div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
+    <div>
+        <strong>{{ t.short_name or t.name }}</strong>
+        {{ badge_html|safe }}
+        <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
+    </div>
+    {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
+    <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+        <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
+        {% if t.google_form_id %}
+        <a href="{{ url_for('screenings.manage_form', tid=t.id) }}" class="btn btn-sm btn-outline" title="Manage Google Form">
+            Google Form
+        </a>
+        {% elif google_connected %}
+        <form method="POST" action="{{ url_for('screenings.create_google_form', tid=t.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline" title="Create Google Form to share">
+                Send via Google Form
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
 <div class="card">
     <div class="card-header">
         Clinical Screeners
@@ -26,18 +53,7 @@
         {% if clinical_templates %}
         <div class="grid-2">
             {% for t in clinical_templates %}
-            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
-                <div>
-                    <strong>{{ t.short_name or t.name }}</strong>
-                    <span class="badge badge-info">Built-in</span>
-                    <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
-                </div>
-                {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
-                <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
-                <div style="margin-top:8px;">
-                    <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
-                </div>
-            </div>
+                {{ template_card(t, '<span class="badge badge-info">Built-in</span>') }}
             {% endfor %}
         </div>
         {% else %}<div class="empty-state"><p>No clinical screeners available.</p></div>{% endif %}
@@ -52,18 +68,7 @@
         {% if career_templates %}
         <div class="grid-2">
             {% for t in career_templates %}
-            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
-                <div>
-                    <strong>{{ t.short_name or t.name }}</strong>
-                    <span class="badge" style="background:#10b98120;color:#10b981;">Career</span>
-                    <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
-                </div>
-                {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
-                <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
-                <div style="margin-top:8px;">
-                    <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
-                </div>
-            </div>
+                {{ template_card(t, '<span class="badge" style="background:#10b98120;color:#10b981;">Career</span>') }}
             {% endfor %}
         </div>
         {% else %}<div class="empty-state"><p>No career assessments available.</p></div>{% endif %}
@@ -79,17 +84,7 @@
     <div class="card-body">
         <div class="grid-2">
             {% for t in custom_templates %}
-            <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
-                <div>
-                    <strong>{{ t.short_name or t.name }}</strong>
-                    <div style="font-size:0.86rem;color:var(--gray);margin-top:4px;">{{ t.name }}</div>
-                </div>
-                {% if t.description %}<p style="font-size:0.84rem;margin:8px 0;">{{ t.description }}</p>{% endif %}
-                <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
-                <div style="margin-top:8px;">
-                    <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
-                </div>
-            </div>
+                {{ template_card(t) }}
             {% endfor %}
         </div>
     </div>

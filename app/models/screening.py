@@ -23,6 +23,9 @@ class ScreeningTemplate(db.Model):
     is_built_in = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
 
+    google_form_id = db.Column(db.String(200))
+    google_form_url = db.Column(db.String(500))
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     counselor = db.relationship('User', backref='screening_templates')

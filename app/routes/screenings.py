@@ -1,12 +1,13 @@
 import json
 from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.models.screening import (ScreeningTemplate, ScreeningResult, BUILTIN_SCREENERS)
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.google_client import is_connected
 
 screenings_bp = Blueprint('screenings', __name__)
 
@@ -168,9 +169,10 @@ def index():
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
 
+    google_connected = is_connected(current_user)
     return render_template('screenings/index.html',
         templates=templates, results=results, students=students,
-        student_id=student_id)
+        student_id=student_id, google_connected=google_connected)
 
 
 @screenings_bp.route('/template/<int:tid>/administer', methods=['GET', 'POST'])
@@ -284,3 +286,208 @@ def add_template():
         flash('Template created.', 'success')
         return redirect(url_for('screenings.index'))
     return render_template('screenings/add_template.html')
+
+
+@screenings_bp.route('/template/<int:tid>/create-form', methods=['POST'])
+@login_required
+def create_google_form(tid):
+    """Create a Google Form from a screening template."""
+    template = ScreeningTemplate.query.get_or_404(tid)
+
+    if not is_connected(current_user):
+        flash('Connect your Google account first (Settings → Google).', 'warning')
+        return redirect(url_for('screenings.index'))
+
+    from app.utils.google_forms import create_form_from_template
+    form_id, form_url = create_form_from_template(current_user, template)
+
+    if not form_id:
+        flash('Failed to create Google Form. You may need to re-authorize with '
+              'the new Forms scope — go to Settings → Google → Reconnect.', 'danger')
+        return redirect(url_for('screenings.index'))
+
+    template.google_form_id = form_id
+    template.google_form_url = form_url
+    db.session.commit()
+
+    log_action('create', 'google_form', template.id, f'Form for {template.short_name}')
+    flash(f'Google Form created for {template.short_name}!', 'success')
+    return redirect(url_for('screenings.manage_form', tid=template.id))
+
+
+@screenings_bp.route('/template/<int:tid>/form')
+@login_required
+def manage_form(tid):
+    """Manage Google Form for a screening template — share link, post to Classroom."""
+    template = ScreeningTemplate.query.get_or_404(tid)
+
+    if not template.google_form_id:
+        flash('No Google Form created yet for this template.', 'info')
+        return redirect(url_for('screenings.index'))
+
+    courses = []
+    google_connected = is_connected(current_user)
+    if google_connected:
+        try:
+            from app.utils.google_classroom import list_courses
+            courses = list_courses(current_user)
+        except Exception:
+            pass
+
+    return render_template('screenings/manage_form.html',
+        template=template, courses=courses, google_connected=google_connected)
+
+
+@screenings_bp.route('/template/<int:tid>/post-classroom', methods=['POST'])
+@login_required
+def post_to_classroom(tid):
+    """Post a screening form link to a Google Classroom course."""
+    template = ScreeningTemplate.query.get_or_404(tid)
+
+    if not template.google_form_url:
+        flash('Create the Google Form first.', 'warning')
+        return redirect(url_for('screenings.index'))
+
+    course_id = request.form.get('course_id')
+    post_type = request.form.get('post_type', 'assignment')
+
+    if not course_id:
+        flash('Please select a course.', 'warning')
+        return redirect(url_for('screenings.manage_form', tid=template.id))
+
+    from app.utils.google_classroom import post_form_to_course, post_announcement_to_course
+
+    desc = template.description or f'Please complete the {template.name} assessment.'
+    if template.instructions:
+        desc += f'\n\nInstructions: {template.instructions}'
+
+    if post_type == 'announcement':
+        result = post_announcement_to_course(
+            current_user, course_id,
+            f'Please complete: {template.name}\n\n{desc}',
+            template.google_form_url,
+        )
+    else:
+        result = post_form_to_course(
+            current_user, course_id,
+            template.name, desc, template.google_form_url,
+        )
+
+    if result:
+        log_action('create', 'classroom_post', template.id,
+                   f'{template.short_name} → Classroom')
+        flash(f'{template.short_name} posted to Google Classroom!', 'success')
+    else:
+        flash('Failed to post to Classroom. Check your permissions and try again.', 'danger')
+
+    return redirect(url_for('screenings.manage_form', tid=template.id))
+
+
+@screenings_bp.route('/template/<int:tid>/import-responses')
+@login_required
+def import_form_responses(tid):
+    """Preview responses from Google Form for assignment to students."""
+    template = ScreeningTemplate.query.get_or_404(tid)
+
+    if not template.google_form_id:
+        flash('No Google Form linked to this template.', 'warning')
+        return redirect(url_for('screenings.index'))
+
+    from app.utils.google_forms import get_form_responses, match_responses_to_template
+
+    raw_responses = get_form_responses(current_user, template.google_form_id)
+    if not raw_responses:
+        flash('No responses found in the Google Form yet.', 'info')
+        return redirect(url_for('screenings.manage_form', tid=template.id))
+
+    matched = match_responses_to_template(template, raw_responses)
+
+    existing_ids = set()
+    for r in ScreeningResult.query.filter_by(
+        template_id=template.id, counselor_id=current_user.id
+    ).filter(ScreeningResult.notes.like('gform_resp_%')).all():
+        existing_ids.add(r.notes)
+
+    previews = []
+    for resp in matched:
+        resp_id = resp.get('_response_id', '')
+        marker = f'gform_resp_{resp_id}'
+        if marker in existing_ids:
+            continue
+
+        clean = {k: v for k, v in resp.items() if not k.startswith('_')}
+        if not clean:
+            continue
+
+        total, severity, interp = _calc_score(template, clean)
+        previews.append({
+            'response_id': resp_id,
+            'submitted': resp.get('_submitted', ''),
+            'total': total,
+            'severity': severity,
+            'interpretation': interp,
+            'responses_json': json.dumps(clean),
+        })
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active'
+    ).order_by(Student.last_name).all()
+
+    return render_template('screenings/import_responses.html',
+        template=template, previews=previews, students=students)
+
+
+@screenings_bp.route('/template/<int:tid>/save-imports', methods=['POST'])
+@login_required
+def save_imported_responses(tid):
+    """Save imported form responses after student assignment."""
+    template = ScreeningTemplate.query.get_or_404(tid)
+
+    response_ids = request.form.getlist('response_id')
+    imported = 0
+
+    for resp_id in response_ids:
+        student_id = request.form.get(f'student_{resp_id}')
+        if not student_id:
+            continue
+
+        marker = f'gform_resp_{resp_id}'
+        existing = ScreeningResult.query.filter_by(
+            template_id=template.id, counselor_id=current_user.id,
+            notes=marker
+        ).first()
+        if existing:
+            continue
+
+        responses_json = request.form.get(f'responses_{resp_id}', '{}')
+        try:
+            clean = json.loads(responses_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        total, severity, interp = _calc_score(template, clean)
+
+        result = ScreeningResult(
+            template_id=template.id,
+            student_id=int(student_id),
+            counselor_id=current_user.id,
+            administered_date=date.today(),
+            responses_json=responses_json,
+            total_score=total,
+            severity=severity,
+            interpretation=interp,
+            notes=marker,
+        )
+        db.session.add(result)
+        imported += 1
+
+    db.session.commit()
+
+    if imported:
+        log_action('import', 'screening_responses', template.id,
+                   f'Imported {imported} from Google Form')
+        flash(f'Imported {imported} response(s) and scored.', 'success')
+    else:
+        flash('No new responses to import.', 'info')
+
+    return redirect(url_for('screenings.manage_form', tid=template.id))
