@@ -220,7 +220,7 @@ function copyPortalLink() {
             </div>
             <div class="form-group" style="flex:1;min-width:160px;">
                 <label style="font-size:0.82rem;font-weight:600;">Model</label>
-                <input type="text" id="ollama-model" class="form-control" placeholder="gemma3:4b"
+                <input type="text" id="ollama-model" class="form-control" placeholder="gemma4:e4b"
                        style="font-size:0.85rem;">
             </div>
             <div class="form-group">
@@ -234,9 +234,8 @@ function copyPortalLink() {
                 <li>Install Ollama: visit <code>ollama.com</code> and download for your OS</li>
                 <li>Open a terminal and pull a model:
                     <ul style="margin:4px 0 4px 16px;line-height:1.7;">
-                        <li><code>ollama pull gemma3:4b</code> &mdash; recommended (good quality, runs on most hardware)</li>
-                        <li><code>ollama pull gemma3:1b</code> &mdash; fastest, lowest RAM usage (~2 GB), great for older machines</li>
-                        <li><code>ollama pull gemma3:12b</code> &mdash; higher quality, needs 8+ GB RAM</li>
+                        <li><code>ollama pull gemma4:e4b</code> &mdash; recommended (good quality, runs on most hardware)</li>
+                        <li><code>ollama pull gemma4:e2b</code> &mdash; fastest, lowest RAM usage (~3 GB), great for older machines</li>
                     </ul>
                 </li>
                 <li>Start Ollama: <code>ollama serve</code> (runs in background)</li>

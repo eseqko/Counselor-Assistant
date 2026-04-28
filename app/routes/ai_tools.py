@@ -119,7 +119,7 @@ def generate():
         return jsonify({'error': (
             'The local AI model took too long to respond. This often happens on the first generation '
             'while the model loads into memory. Please try again — subsequent generations should be faster. '
-            'If it keeps timing out, try a smaller model in Settings (e.g. gemma3:1b).'
+            'If it keeps timing out, try a smaller model in Settings (e.g. gemma4:e2b).'
         )}), 504
     except requests.ConnectionError:
         return jsonify({'error': (
