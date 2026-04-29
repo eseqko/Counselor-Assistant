@@ -517,9 +517,49 @@ main {
 @media (min-width: 601px) and (max-width: 900px) {
   :root { --sidebar-w: 240px; }
 }
+/* Watermark */
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: calc(var(--sidebar-w, 280px) + (100vw - var(--sidebar-w, 280px)) / 2);
+  transform: translate(-50%, -50%);
+  width: 400px;
+  height: 400px;
+  background: var(--school-logo-url, none) center / contain no-repeat;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Print letterhead */
+.print-letterhead { display: none; }
+@media print {
+  header, .sidebar, .ham-btn { display: none !important; }
+  main { margin-left: 0 !important; padding-top: 0 !important; }
+  .print-letterhead {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #333;
+  }
+  .print-letterhead img[data-school-logo] { height: 50px; }
+  .print-letterhead .lh-name { font-size: 14pt; font-weight: 700; margin: 0; }
+  .print-letterhead .lh-contact { font-size: 8pt; color: #555; margin: 2px 0 0; }
+  body::after { display: none; }
+}
 </style>
 </head>
 <body>
+
+<div class="print-letterhead">
+  <img data-school-logo style="display:none;" alt="">
+  <div>
+    <div class="lh-name" data-school-name></div>
+    <div class="lh-contact"><span data-school-contact-address></span> <span data-school-contact-phone></span> <span data-school-contact-email></span></div>
+  </div>
+</div>
 
 <!-- ── HEADER ── -->
 <header>
@@ -527,6 +567,7 @@ main {
     <span></span><span></span><span></span>
   </button>
   <div class="header-brand">
+    <img data-school-logo class="school-logo" style="display:none;height:42px;border-radius:4px;object-fit:contain;" alt="">
     <span class="paw" data-school-emoji>🐾</span>
     <div class="brand-text">
       <h1 data-school-name>Jefferson High School</h1>

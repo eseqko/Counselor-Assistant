@@ -33,6 +33,7 @@
     {% if current_user.is_authenticated %}
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header" id="sidebar-header">
+            <img id="sidebar-logo" style="display:none;height:48px;width:auto;margin-bottom:6px;border-radius:6px;object-fit:contain;" alt="">
             <div id="sidebar-mascot-emoji" style="display:none;font-size:1.6rem;line-height:1;margin-bottom:4px;"></div>
             <h2 id="sidebar-title">Counselor Assistant</h2>
             <div class="subtitle" id="sidebar-subtitle">FERPA Compliant - Local Only</div>
@@ -328,6 +329,14 @@
             {% endif %}
             {% endwith %}
 
+            <div id="print-letterhead" class="print-letterhead">
+                <img id="print-letterhead-logo" style="display:none;" alt="">
+                <div>
+                    <div id="print-school-name" style="font-size:14pt;font-weight:700;"></div>
+                    <div id="print-school-contact" style="font-size:8pt;color:#555;"></div>
+                </div>
+            </div>
+
             {% block content %}{% endblock %}
         </div>
     </div>
@@ -365,10 +374,28 @@
                 subtitle.textContent = cfg.mascot ? 'Go ' + cfg.mascot + '!' : (cfg.motto || 'FERPA Compliant - Local Only');
             }
 
-            /* Mascot emoji */
-            if (cfg.mascotEmoji) {
+            /* Logo or mascot emoji */
+            var logo = document.getElementById('sidebar-logo');
+            if (cfg.logoUrl) {
+                logo.src = cfg.logoUrl;
+                logo.style.display = 'block';
+                emoji.style.display = 'none';
+                /* Watermark */
+                document.documentElement.style.setProperty('--school-logo-url', 'url(' + cfg.logoUrl + ')');
+            } else if (cfg.mascotEmoji) {
                 emoji.textContent = cfg.mascotEmoji;
                 emoji.style.display = 'block';
+            }
+
+            /* Print letterhead */
+            var pl = document.getElementById('print-letterhead-logo');
+            if (pl && cfg.logoUrl) { pl.src = cfg.logoUrl; pl.style.display = ''; }
+            var pn = document.getElementById('print-school-name');
+            if (pn) pn.textContent = cfg.schoolName || '';
+            var ps = document.getElementById('print-school-contact');
+            if (ps) {
+                var parts = [cfg.contactAddress, cfg.contactPhone, cfg.contactEmail].filter(Boolean);
+                ps.textContent = parts.join(' | ');
             }
         } catch(e) {}
 

@@ -1,9 +1,12 @@
 import json
 import io
 import os
+import glob
 import zipfile
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, flash, jsonify, send_from_directory, send_file)
+                   url_for, flash, jsonify, send_from_directory, send_file,
+                   current_app)
+from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 from app import db, csrf
 from app.models.course import Course, Department, GraduationRequirement
@@ -332,6 +335,74 @@ def save_school_config():
     current_user.school_config_json = json.dumps(data, ensure_ascii=False)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+LOGO_ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'svg', 'webp'}
+
+
+def _logo_dir():
+    d = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'data/uploads'), 'school_logos')
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _find_logo(user_id):
+    pattern = os.path.join(_logo_dir(), f'logo_{user_id}.*')
+    matches = glob.glob(pattern)
+    return matches[0] if matches else None
+
+
+@course_catalog_bp.route('/api/school-logo', methods=['POST'])
+@csrf.exempt
+@login_required
+def upload_logo():
+    f = request.files.get('logo')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'error': 'No file provided'}), 400
+    ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+    if ext not in LOGO_ALLOWED_EXT:
+        return jsonify({'ok': False, 'error': f'Allowed types: {", ".join(LOGO_ALLOWED_EXT)}'}), 400
+
+    old = _find_logo(current_user.id)
+    if old:
+        os.remove(old)
+
+    fname = secure_filename(f'logo_{current_user.id}.{ext}')
+    f.save(os.path.join(_logo_dir(), fname))
+
+    import time
+    logo_url = f'/course-catalog/api/school-logo?v={int(time.time())}'
+    return jsonify({'ok': True, 'logoUrl': logo_url})
+
+
+@course_catalog_bp.route('/api/school-logo', methods=['GET'])
+@login_required
+def serve_logo():
+    path = _find_logo(current_user.id)
+    if not path:
+        return '', 404
+    return send_file(path)
+
+
+@course_catalog_bp.route('/api/school-logo', methods=['DELETE'])
+@csrf.exempt
+@login_required
+def delete_logo():
+    path = _find_logo(current_user.id)
+    if path:
+        os.remove(path)
+    return jsonify({'ok': True})
+
+
+@course_catalog_bp.route('/public/school-logo')
+def public_logo():
+    from app.models.user import User
+    user = User.query.filter(User.school_config_json.isnot(None)).first()
+    if user:
+        path = _find_logo(user.id)
+        if path:
+            return send_file(path)
+    return '', 404
 
 
 # =====================================================================

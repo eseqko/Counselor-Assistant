@@ -701,9 +701,41 @@ select.form-control {
     line-height: 1.5;
 }
 
+/* School logo watermark */
+body::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 55%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    height: 400px;
+    background: var(--school-logo-url, none) center / contain no-repeat;
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Print letterhead — hidden on screen */
+.print-letterhead {
+    display: none;
+}
+
 /* Print styles */
 @media print {
     .sidebar, .top-bar, .btn, .filter-bar, .no-print { display: none !important; }
     .main-content { margin-left: 0 !important; }
     .card { box-shadow: none; border: 1px solid #ccc; }
+    body::after { display: none; }
+    .print-letterhead {
+        display: flex !important;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        margin-bottom: 16px;
+        border-bottom: 2px solid #333;
+    }
+    .print-letterhead img { height: 50px; width: auto; object-fit: contain; }
+    .print-letterhead div:last-child > div:first-child { font-size: 14pt; font-weight: 700; }
+    .print-letterhead div:last-child > div:last-child { font-size: 8pt; color: #555; margin-top: 2px; }
 }
