@@ -15,6 +15,10 @@
     motto: '',
     schoolYear: new Date().getFullYear() + '–' + (new Date().getFullYear() + 1),
     colors: { primary: '#1a3a5c', secondary: '#c8a227' },
+    logoUrl: '',
+    contactPhone: '',
+    contactEmail: '',
+    contactAddress: '',
     setupComplete: false
   };
 
@@ -167,6 +171,9 @@
       root.setProperty('--navy-dark', darken(primary, 12));
       root.setProperty('--gold', secondary);
       root.setProperty('--gold-light', lighten(secondary, 35));
+      if (cfg.logoUrl) {
+        root.setProperty('--school-logo-url', 'url(' + cfg.logoUrl + ')');
+      }
     },
 
     /** Apply school name/mascot to common page elements. */
@@ -184,7 +191,16 @@
         el.textContent = cfg.shortName || cfg.schoolName;
       });
       document.querySelectorAll('[data-school-emoji]').forEach(el => {
-        el.textContent = cfg.mascotEmoji || '';
+        if (cfg.logoUrl) { el.style.display = 'none'; }
+        else { el.textContent = cfg.mascotEmoji || ''; }
+      });
+      document.querySelectorAll('[data-school-logo]').forEach(el => {
+        if (cfg.logoUrl) {
+          el.src = cfg.logoUrl;
+          el.style.display = '';
+        } else {
+          el.style.display = 'none';
+        }
       });
       document.querySelectorAll('[data-school-mascot]').forEach(el => {
         el.textContent = (cfg.mascotEmoji ? cfg.mascotEmoji + ' ' : '') +
@@ -195,6 +211,15 @@
       });
       document.querySelectorAll('[data-school-motto]').forEach(el => {
         el.textContent = cfg.motto;
+      });
+      document.querySelectorAll('[data-school-contact-phone]').forEach(el => {
+        el.textContent = cfg.contactPhone || '';
+      });
+      document.querySelectorAll('[data-school-contact-email]').forEach(el => {
+        el.textContent = cfg.contactEmail || '';
+      });
+      document.querySelectorAll('[data-school-contact-address]').forEach(el => {
+        el.textContent = cfg.contactAddress || '';
       });
     },
 

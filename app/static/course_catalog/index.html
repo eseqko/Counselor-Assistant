@@ -466,6 +466,27 @@ main {
 .counselor-card a  { color: var(--navy); word-break: break-all; }
 
 /* ═══════════════════════════════════════════
+   CTE PATHWAY DIAGRAMS
+═══════════════════════════════════════════ */
+.pathway-card { background:var(--white); border-radius:var(--r); padding:20px; margin-bottom:16px; box-shadow:var(--shadow); }
+.pathway-card h3 { color:var(--navy); margin:0 0 4px; font-size:1rem; }
+.pathway-card .sector { font-size:0.78rem; color:var(--muted); margin-bottom:14px; }
+.pathway-sequence { display:flex; align-items:stretch; gap:0; margin:0 0 12px; }
+.pathway-step { flex:1; min-width:120px; background:var(--bg); border-radius:8px; padding:12px 10px; text-align:center; }
+.pathway-step-label { font-size:0.62rem; text-transform:uppercase; font-weight:700; letter-spacing:0.05em; margin-bottom:6px; opacity:0.7; }
+.pathway-step-name { font-size:0.82rem; font-weight:700; color:var(--navy); line-height:1.3; margin-bottom:4px; }
+.pathway-step-meta { font-size:0.7rem; color:var(--muted); }
+.pathway-arrow { display:flex; align-items:center; padding:0 8px; font-size:1.2rem; color:var(--muted); flex-shrink:0; }
+.pathway-alt { font-size:0.78rem; color:var(--muted); margin-bottom:8px; padding:6px 10px; background:var(--bg); border-radius:6px; }
+.pathway-badges { display:flex; flex-wrap:wrap; gap:6px; font-size:0.75rem; }
+.pathway-badges span { padding:3px 10px; border-radius:12px; }
+.pathway-subheading { display:flex; align-items:center; gap:8px; margin:20px 0 10px; padding-bottom:6px; border-bottom:1px dashed var(--border); font-size:0.92rem; font-weight:700; color:var(--navy); }
+@media(max-width:600px) {
+  .pathway-sequence { flex-direction:column; }
+  .pathway-arrow { justify-content:center; transform:rotate(90deg); padding:4px 0; }
+}
+
+/* ═══════════════════════════════════════════
    NO RESULTS
 ═══════════════════════════════════════════ */
 .no-results { text-align: center; padding: 60px 20px; color: var(--muted); }
@@ -496,9 +517,49 @@ main {
 @media (min-width: 601px) and (max-width: 900px) {
   :root { --sidebar-w: 240px; }
 }
+/* Watermark */
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: calc(var(--sidebar-w, 280px) + (100vw - var(--sidebar-w, 280px)) / 2);
+  transform: translate(-50%, -50%);
+  width: 400px;
+  height: 400px;
+  background: var(--school-logo-url, none) center / contain no-repeat;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Print letterhead */
+.print-letterhead { display: none; }
+@media print {
+  header, .sidebar, .ham-btn { display: none !important; }
+  main { margin-left: 0 !important; padding-top: 0 !important; }
+  .print-letterhead {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #333;
+  }
+  .print-letterhead img[data-school-logo] { height: 50px; }
+  .print-letterhead .lh-name { font-size: 14pt; font-weight: 700; margin: 0; }
+  .print-letterhead .lh-contact { font-size: 8pt; color: #555; margin: 2px 0 0; }
+  body::after { display: none; }
+}
 </style>
 </head>
 <body>
+
+<div class="print-letterhead">
+  <img data-school-logo style="display:none;" alt="">
+  <div>
+    <div class="lh-name" data-school-name></div>
+    <div class="lh-contact"><span data-school-contact-address></span> <span data-school-contact-phone></span> <span data-school-contact-email></span></div>
+  </div>
+</div>
 
 <!-- ── HEADER ── -->
 <header>
@@ -506,6 +567,7 @@ main {
     <span></span><span></span><span></span>
   </button>
   <div class="header-brand">
+    <img data-school-logo class="school-logo" style="display:none;height:42px;border-radius:4px;object-fit:contain;" alt="">
     <span class="paw" data-school-emoji>🐾</span>
     <div class="brand-text">
       <h1 data-school-name>Jefferson High School</h1>
@@ -538,6 +600,7 @@ main {
     <button class="sidebar-link"        id="sl-postsecondary"onclick="showPage('postsecondary','sl-postsecondary')">🎓 Post-Secondary</button>
     <button class="sidebar-link"        id="sl-ncaa"         onclick="showPage('ncaa','sl-ncaa')">🏈 NCAA Eligibility</button>
     <button class="sidebar-link"        id="sl-scheduling"   onclick="showPage('scheduling','sl-scheduling')">📆 Scheduling &amp; Contacts</button>
+    <button class="sidebar-link"        id="sl-ctepathways"  onclick="showPage('ctepathways','sl-ctepathways')">🛤️ CTE Pathways</button>
 
     <div class="sidebar-divider"></div>
     <div class="sidebar-label">Course Departments</div>
@@ -879,6 +942,51 @@ function renderInfoPages() {
         </div>
       </div>
     </div>
+
+    <div class="info-page" id="page-ctepathways">
+      <div class="info-card">
+        <h2>🛤️ CTE Career Pathways</h2>
+        <p>Jefferson High School offers <strong>five Career Technical Education (CTE) pathways</strong>. Each pathway follows a three-course sequence: <strong>Introductory → Concentrator → Capstone (Work-Based Learning)</strong>. CTE courses count toward the 10-credit graduation requirement and many also satisfy a-g requirements.</p>
+        <h3>CTE Completion Levels</h3>
+        <div style="display:flex;align-items:center;gap:0;margin:10px 0 6px;flex-wrap:wrap;">
+          ${[{n:'Explorer',c:5},{n:'Concentrator',c:10},{n:'Completer',c:15},{n:'Advanced',c:20}].map((lv,i,arr)=>`
+            <div style="text-align:center;padding:6px 14px;">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;font-size:0.72rem;font-weight:700;">${lv.c}</div>
+              <div style="font-size:0.72rem;font-weight:700;">${lv.n}</div>
+              <div style="font-size:0.65rem;color:var(--muted);">${lv.c} credits</div>
+            </div>
+            ${i<arr.length-1?'<div style="flex:0 0 20px;height:2px;background:var(--border);margin-top:-10px;"></div>':''}
+          `).join('')}
+        </div>
+      </div>
+
+      ${CTE_PATHWAY_ORDER.map(key=>{
+        const pw = CTE_PATHWAYS[key];
+        const seq = pw.sequence.map(id=>COURSES.find(c=>c.id===id)).filter(Boolean);
+        const alts = (pw.altIntro||[]).map(id=>COURSES.find(c=>c.id===id)).filter(Boolean);
+        const labels = ['Introductory','Concentrator','Capstone'];
+        return `<div class="pathway-card" style="border-left:4px solid ${pw.color};">
+          <h3>${pw.icon} ${esc(pw.name)}</h3>
+          <div class="sector">${esc(pw.sector)}</div>
+          <div class="pathway-sequence">
+            ${seq.map((c,i)=>`
+              ${i>0?'<div class="pathway-arrow">→</div>':''}
+              <div class="pathway-step" style="border-top:3px solid ${pw.color};">
+                <div class="pathway-step-label">${labels[i]||''}</div>
+                <div class="pathway-step-name">${esc(c.name)}</div>
+                <div class="pathway-step-meta">Gr ${esc(c.grade)} · ${esc(c.credits)} cr${c.ag?' · a-g '+c.ag:''}</div>
+              </div>
+            `).join('')}
+          </div>
+          ${alts.length?`<div class="pathway-alt">Alternate introductory: ${alts.map(c=>'<strong>'+esc(c.name)+'</strong>'+(c.ag?' (a-g '+c.ag+')':'')).join(' or ')}</div>`:''}
+          <div class="pathway-badges">
+            ${seq.some(c=>c.dualEnroll)?'<span style="background:#dbeafe;color:#1e40af;">🎓 Dual Enrollment</span>':''}
+            ${seq.some(c=>c.ag==='f')?'<span style="background:#ede9fe;color:#5b21b6;">Also satisfies a-g "f" (VPA)</span>':''}
+            ${alts.some(c=>c.ag==='d')?'<span style="background:#d1fae5;color:#065f46;">Alt intro satisfies a-g "d" (Science)</span>':''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
   `;
 }
 
@@ -941,7 +1049,7 @@ const COURSES = [
   {id:'sc9',  dept:'science', name:'AP Chemistry',                                    code:'23900/23901', grade:'11-12', credits:'10', ag:'d', type:'ap',  prereq:'C- or better in Biology & Chemistry; C- or concurrent MC3', collegeCredit:true, desc:'College-level chemistry via hands-on labs: chemical reactions, energy, equilibrium, and acids/bases. Builds critical thinking and scientific reasoning.'},
   {id:'sc10', dept:'science', name:'AP Physics 1',                                    code:'23910/23911', grade:'11-12', credits:'10', ag:'d', type:'ap',  prereq:'Completion of MC1 and MC2; concurrent MC3', collegeCredit:true, desc:'Algebra-based physics applying concepts to models for motion, forces, and energy. Tests understanding of the physical world.'},
   {id:'sc11', dept:'science', name:'AP Environmental Science',                        code:'23906/23907', grade:'11-12', credits:'10', ag:'d', type:'ap',  prereq:'Two years lab science (life & physical); at least MC1', collegeCredit:true, desc:'Scientific principles for understanding natural world interrelationships. Identifies and analyzes environmental problems and examines solutions. Draws from biology and chemistry.'},
-  {id:'sc12', dept:'science', name:'Engineering Technology 1b: Engineering Sustainability CP', code:'23649/26350', grade:'9-12', credits:'10', ag:'d', type:'cp', prereq:'Math Course 1 with C or higher', dualEnroll:true, desc:'Explores sustainable energy solutions. Lab work tests, observes, and solves community problems related to the energy transition.'},
+  // sc12 moved to CTE department (ct13)
 
   // ── LOTE ──
   {id:'lo1',  dept:'lote', name:'Filipino Language 1 CP',              code:'24112/24113', grade:'9-12',  credits:'10', ag:'e', type:'cp', prereq:'None', desc:'Introduction to Filipino (Tagalog). Develops all four language skills with emphasis on Speaking and Listening — sounds, intonation, stress, vocabulary, and basic grammar.'},
@@ -967,10 +1075,7 @@ const COURSES = [
   {id:'vp9',  dept:'vpa', name:'Ceramics 2 CP',                      code:'25008/25009', grade:'10-12', credits:'10', ag:'f', type:'cp', prereq:'C or better in Ceramics 1 CP', desc:'Advanced ceramics: student-directed projects, detail work, glazing, thematic pieces, and introduction to the potter\'s wheel.'},
   {id:'vp10', dept:'vpa', name:'Concert Band CP (Level 1)',           code:'25200/25201', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introduction to playing a musical instrument of your choice. No previous experience needed. Covers technique and music notation. School instruments available.'},
   {id:'vp11', dept:'vpa', name:'Symphonic Band CP (Level 2)',         code:'25202/25203', grade:'9-12',  credits:'2.10', ag:'f', type:'cp', prereq:'Passing grade in Concert Band CP', desc:'Advanced wind and percussion ensemble. High skill level required. Covers ensemble precision and standard band literature. 40-minute after-school (5th period) class.'},
-  {id:'vp12', dept:'vpa', name:'Dance 1: Composition CP',            code:'25216/25217', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, desc:'Introductory dance (Performing Arts/CTE). Develops body alignment, coordination, flexibility, and appreciation for dance forms: ballet, jazz, hip hop, modern, cultural dance. Dual enrollment with Skyline College.'},
-  {id:'vp13', dept:'vpa', name:'Dance 2: Production CP',             code:'25218/25219', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Dance 1', dualEnroll:true, desc:'Intermediate dance (CTE). Deeper choreographic skill, technical accuracy, and career development. Dual enrollment with Skyline College.'},
-  {id:'vp14', dept:'vpa', name:'Digital Art 1 CP',                   code:'26220/26221', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, desc:'Explores digital media in contemporary art. Covers photo manipulation and graphic design. Dual enrollment with Skyline College.'},
-  {id:'vp15', dept:'vpa', name:'Digital Art 2 CP',                   code:'26228/26229', grade:'10-12', credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Digital Art 1 CP', dualEnroll:true, desc:'Advanced digital media: video production from pre- to post-production. Dual enrollment with Skyline College.'},
+  // vp12-vp15 moved to CTE department (ct8-ct11)
   {id:'vp16', dept:'vpa', name:'Fashion Design CP',                  code:'25248/25249', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introductory fashion design: hand and machine sewing, pattern reading/creation, fashion illustration, textiles, fashion history, and contemporary trends.'},
   {id:'vp17', dept:'vpa', name:'Fashion Design 2 CP',                code:'28410/28411', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'C or better in Fashion Design 1', desc:'Expands on Fashion 1: varied seams, alterations, and reading/drafting patterns.'},
   {id:'vp18', dept:'vpa', name:'Guitar 1 CP',                        code:'25208/25209', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Beginning guitar: open chords, power chords, moveable chords, pickstyle and fingerstyle techniques. Music theory, composition, improvisation, and notation/tablature reading.'},
@@ -981,14 +1086,25 @@ const COURSES = [
   {id:'vp23', dept:'vpa', name:'Sculpture CP',                       code:'25010/25011', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introductory 3D visual arts. Students conceptualize 3D space to create artworks with diverse materials. Critical thinking about art design is heavily emphasized.'},
   {id:'vp24', dept:'vpa', name:'Vocal Music CP',                     code:'25204/25205', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introductory vocal music and performance. Students learn to read written music and translate it to vocal performance. Includes peer performances.'},
 
-  // ── CTE ──
-  {id:'ct1', dept:'cte', name:'Culinary Arts I: Foods & Nutrition',      code:'26104A/26105B',     grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Level 1: career readiness, food safety, kitchen equipment, knife skills, recipe reading, food science, dietary guidelines, meal planning, baking, and global food exploration. Weekly cooking labs.'},
-  {id:'ct2', dept:'cte', name:'Culinary Arts II: Foodservice & Hospitality', code:'26108/26109',   grade:'10-12', credits:'10', ag:'g', type:'cp', prereq:'Passing grade in Culinary Arts I', dualEnroll:true, desc:'Level 2: hospitality industry standards, advanced culinary techniques, front/back-of-house. Dual enrollment with Skyline College (Restaurant & Banquet Operations). Students earn a professional portfolio.'},
-  {id:'ct3', dept:'cte', name:'Engineering Technology 1a: Engineering Design CP', code:'26218/26219', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Introduction to engineering design process, problem-solving, and STEM concepts.'},
-  {id:'ct4', dept:'cte', name:'Engineering Technology 2: Engineering Electronics CP', code:'23649/26350', grade:'9-12', credits:'10', ag:'', type:'cp', prereq:'Engineering Technology 1a or 1b', desc:'Advanced engineering covering electronics concepts and applications.'},
-  {id:'ct5', dept:'cte', name:'Gateway to Health CP',                    code:'EMC 425.1/425.2',   grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Introduction to health sciences careers. Covers foundational health concepts, patient care, and pathways into healthcare professions.'},
-  {id:'ct6', dept:'cte', name:'EMC Essentials (Emergency Medical Care)', code:'26374/26375',       grade:'9-12',  credits:'10', ag:'',  type:'cp', prereq:'Gateway to Health CP (recommended)', desc:'Emergency medical care concepts, first aid, and basic life support skills.'},
-  {id:'ct7', dept:'cte', name:'CTE Work-Based Learning',                 code:'WORK 670.1/670.2',  grade:'9-12',  credits:'10', ag:'',  type:'cp', prereq:'Counselor approval', desc:'Students earn CTE credit through supervised work experience tied to a career pathway.'},
+  // ── CTE — Culinary Arts ──
+  {id:'ct1',  dept:'cte', name:'Foods & Nutrition',                        code:'26104A/26105B',   grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'culinary', pathwayLevel:'introductory', desc:'Career readiness, food safety, kitchen equipment, knife skills, recipe reading, food science, dietary guidelines, meal planning, baking, and global food exploration. Weekly cooking labs.'},
+  {id:'ct2',  dept:'cte', name:'Culinary Arts',                            code:'26108/26109',     grade:'10-12', credits:'10', ag:'g', type:'cp', prereq:'Passing grade in Foods & Nutrition', dualEnroll:true, pathway:'culinary', pathwayLevel:'concentrator', desc:'Hospitality industry standards, advanced culinary techniques, front/back-of-house operations. Dual enrollment with Skyline College (Restaurant & Banquet Operations). Students earn a professional portfolio.'},
+  // ── CTE — Engineering Technology ──
+  {id:'ct3',  dept:'cte', name:'Principles of Engineering CP',             code:'26218/26219',     grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'engineering', pathwayLevel:'introductory', desc:'Introduction to engineering design process, problem-solving, and STEM concepts.'},
+  {id:'ct4',  dept:'cte', name:'Digital Electronics CP',                   code:'23649/26350',     grade:'9-12',  credits:'10', ag:'',  type:'cp', prereq:'Principles of Engineering, Intro to Robotics, or Eng Sustainability', pathway:'engineering', pathwayLevel:'concentrator', desc:'Capstone for the Engineering Technology pathway. Fundamentals of electronics: modeling circuits in software, prototyping on breadboards, and soldering components on PCBs.'},
+  {id:'ct12', dept:'cte', name:'Introduction to Robotics CP',              code:'',                grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'engineering', pathwayLevel:'introductory', desc:'Hands-on introduction to robotics, programming, and engineering design. Alternate introductory course for the Engineering Technology pathway.'},
+  {id:'ct13', dept:'cte', name:'Engineering Technology 1b: Engineering Sustainability CP', code:'23649/26350', grade:'9-12', credits:'10', ag:'d', type:'cp', prereq:'Math Course 1 with C or higher', dualEnroll:true, pathway:'engineering', pathwayLevel:'introductory', desc:'Explores sustainable energy solutions. Lab work tests, observes, and solves community problems related to the energy transition. Also satisfies a-g "d" (lab science). Alternate introductory course for the Engineering Technology pathway.'},
+  // ── CTE — Patient Care ──
+  {id:'ct5',  dept:'cte', name:'Gateway to Health CP',                     code:'EMC 425.1/425.2', grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'health', pathwayLevel:'introductory', desc:'Introduction to health sciences careers. Covers foundational health concepts, patient care, basic assessment, CPR, and math calculations used in health care.'},
+  {id:'ct6',  dept:'cte', name:'EMC Essentials (Emergency Medical Care)',   code:'26374/26375',     grade:'9-12',  credits:'10', ag:'',  type:'cp', prereq:'Gateway to Health CP (recommended)', pathway:'health', pathwayLevel:'concentrator', desc:'Emergency medical care concepts, first aid, and basic life support skills.'},
+  // ── CTE — Digital Media Arts ──
+  {id:'ct8',  dept:'cte', name:'Digital Art 1 CP',                         code:'26220/26221',     grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, pathway:'digital_art', pathwayLevel:'introductory', desc:'Explores digital media in contemporary art. Covers photo manipulation and graphic design. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  {id:'ct9',  dept:'cte', name:'Digital Art 2 CP',                         code:'26228/26229',     grade:'10-12', credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Digital Art 1 CP', dualEnroll:true, pathway:'digital_art', pathwayLevel:'concentrator', desc:'Advanced digital media: video production from pre- to post-production. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  // ── CTE — Performing Arts - Dance ──
+  {id:'ct10', dept:'cte', name:'Dance 1: Composition CP',                  code:'25216/25217',     grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, pathway:'dance', pathwayLevel:'introductory', desc:'Introductory dance. Develops body alignment, coordination, flexibility, and appreciation for dance forms: ballet, jazz, hip hop, modern, cultural dance. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  {id:'ct11', dept:'cte', name:'Dance 2: Production CP',                   code:'25218/25219',     grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Dance 1', dualEnroll:true, pathway:'dance', pathwayLevel:'concentrator', desc:'Intermediate dance. Deeper choreographic skill, technical accuracy, and career development. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  // ── CTE — Capstone ──
+  {id:'ct7',  dept:'cte', name:'CTE Work-Based Learning',                  code:'WORK 670.1/670.2', grade:'9-12', credits:'10', ag:'',  type:'cp', prereq:'Counselor approval', pathway:['culinary','engineering','health','digital_art','dance'], pathwayLevel:'capstone', desc:'Students earn CTE credit through supervised work experience tied to a career pathway.'},
 
   // ── PE & HEALTH ──
   {id:'pe1', dept:'pe', name:'PE 9',                                    code:'27000/27001', grade:'9',    credits:'10', ag:'',  type:'cp',  prereq:'None', desc:'Physical education for 9th graders: fitness, team sports, and wellness fundamentals.'},
@@ -1013,7 +1129,7 @@ const COURSES = [
   {id:'el10', dept:'electives', name:'Ghost Stories in Literature & Film CP',   code:'21230/21231', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Explores the ghost story genre across literature and film: cultural, psychological, and narrative dimensions.'},
   {id:'el11', dept:'electives', name:'Graphic Novels & Identity CP',            code:'21238/21239', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Studies graphic novels as literary and artistic works, exploring themes of identity, culture, and social justice.'},
   {id:'el12', dept:'electives', name:'History of Sports CP',                    code:'20125/20126', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Social, cultural, and political history of sports in America and globally.'},
-  {id:'el13', dept:'electives', name:'Introduction to Robotics CP',             code:'',            grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Hands-on introduction to robotics, programming, and engineering design.'},
+  // el13 moved to CTE department (ct12)
   {id:'el14', dept:'electives', name:'Social Justice Movements CP',             code:'20121/20122', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Historical and contemporary analysis of social justice movements in the United States and globally.'},
 
   // ── SPECIAL EDUCATION ──
@@ -1056,6 +1172,15 @@ const DEPT_CONFIG = {
   'special-ed':     { label:'Special Education',           color:'#92400e', icon:'🤝' },
 };
 const DEPT_ORDER = ['social-science','english','mathematics','science','lote','vpa','cte','pe','electives','special-ed'];
+
+const CTE_PATHWAYS = {
+  culinary:    {sector:'Hospitality, Tourism and Recreation', name:'Culinary Arts',            icon:'\u{1F37D}️', color:'#dc2626', sequence:['ct1','ct2','ct7']},
+  engineering: {sector:'Engineering and Architecture',        name:'Engineering Technology',    icon:'⚙️',    color:'#2563eb', sequence:['ct3','ct4','ct7'], altIntro:['ct12','ct13']},
+  health:      {sector:'Health Science and Medical Technology',name:'Patient Care',             icon:'\u{1F3E5}',       color:'#059669', sequence:['ct5','ct6','ct7']},
+  digital_art: {sector:'Arts, Media and Entertainment',       name:'Digital Media Arts',        icon:'\u{1F3A8}',       color:'#7c3aed', sequence:['ct8','ct9','ct7']},
+  dance:       {sector:'Arts, Media and Entertainment',       name:'Performing Arts - Dance',   icon:'\u{1F483}',       color:'#be185d', sequence:['ct10','ct11','ct7']},
+};
+const CTE_PATHWAY_ORDER = ['culinary','engineering','health','digital_art','dance'];
 
 /* ═══════════════════════════════════════════════════
    NAV HELPERS
@@ -1188,9 +1313,30 @@ function renderCourses() {
       <span class="section-icon">${cfg.icon}</span>
       <span class="section-title">${cfg.label}</span>
       <span class="section-pill">${groups[dept].length}</span>
-    </div><div class="course-grid">`;
-    for (const c of groups[dept]) html += renderCard(c, cfg.color);
-    html += `</div>`;
+    </div>`;
+
+    if (dept === 'cte' && currentDept !== 'all') {
+      const levelOrder = {introductory:0, concentrator:1, capstone:2};
+      for (const pk of CTE_PATHWAY_ORDER) {
+        const pw = CTE_PATHWAYS[pk];
+        const pCourses = groups[dept].filter(c => {
+          const p = c.pathway;
+          return p === pk || (Array.isArray(p) && p.includes(pk));
+        }).sort((a,b) => (levelOrder[a.pathwayLevel]||0) - (levelOrder[b.pathwayLevel]||0));
+        if (!pCourses.length) continue;
+        html += `<div class="pathway-subheading" style="border-left:3px solid ${pw.color};padding-left:10px;margin:18px 0 8px;">
+          <span style="font-size:1.1rem;">${pw.icon}</span>
+          <strong style="margin-left:4px;">${pw.name}</strong>
+          <span style="color:var(--gray);font-size:0.82rem;margin-left:6px;">${pw.sector}</span>
+        </div><div class="course-grid">`;
+        for (const c of pCourses) html += renderCard(c, pw.color);
+        html += `</div>`;
+      }
+    } else {
+      html += `<div class="course-grid">`;
+      for (const c of groups[dept]) html += renderCard(c, cfg.color);
+      html += `</div>`;
+    }
   }
   container.innerHTML = html;
 }
@@ -1207,6 +1353,14 @@ function renderCard(c, color) {
   const collegeBadge = c.collegeCredit ? `<span class="badge badge-college">College Credit</span>` : '';
   const yearBadge    = c.fullYear   ? `<span class="badge badge-college">Full-Year</span>` : '';
 
+  let pathwayBadge = '';
+  if (c.pathway && !Array.isArray(c.pathway) && CTE_PATHWAYS[c.pathway]) {
+    const pw = CTE_PATHWAYS[c.pathway];
+    pathwayBadge = `<span class="badge" style="background:${pw.color}20;color:${pw.color};">${pw.icon} ${pw.name}</span>`;
+  } else if (Array.isArray(c.pathway)) {
+    pathwayBadge = `<span class="badge" style="background:#71717a20;color:#71717a;">Capstone (All Pathways)</span>`;
+  }
+
   const prereqHtml = c.prereq && c.prereq !== 'None'
     ? `<div class="card-prereq">Prereq: <em>${c.prereq}</em></div>` : '';
 
@@ -1220,7 +1374,7 @@ function renderCard(c, color) {
         ${typeBadge}
         <span class="badge badge-grade">Gr ${c.grade}</span>
         <span class="badge badge-credits">${c.credits} cr</span>
-        ${agBadge}${dualBadge}${collegeBadge}${yearBadge}
+        ${agBadge}${dualBadge}${collegeBadge}${yearBadge}${pathwayBadge}
       </div>
       ${prereqHtml}
     </div>

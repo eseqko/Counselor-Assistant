@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Import Responses — {{ template.short_name }}{% endblock %}
+{% block page_title %}Import Form Responses: {{ template.short_name }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        Assign Students to Responses ({{ previews|length }} new)
+        <a href="{{ url_for('screenings.manage_form', tid=template.id) }}" class="btn btn-sm btn-outline">← Back</a>
+    </div>
+    <div class="card-body">
+        {% if previews %}
+        <p style="color:var(--gray);font-size:0.88rem;">
+            Select a student for each response you want to import. Responses without a student assigned will be skipped.
+        </p>
+
+        <form method="POST" action="{{ url_for('screenings.save_imported_responses', tid=template.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Submitted</th>
+                            <th>Score</th>
+                            <th>Result</th>
+                            <th>Assign Student</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in previews %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td style="font-size:0.85rem;">{{ p.submitted[:19] if p.submitted else '—' }}</td>
+                            <td><strong>{{ p.total }}</strong></td>
+                            <td>
+                                {% set sev_lower = (p.severity or '')|lower %}
+                                {% if sev_lower in ('severe', 'high', 'moderately severe', 'pervasive') %}
+                                    <span class="badge badge-danger">{{ p.severity }}</span>
+                                {% elif sev_lower in ('moderate', 'frequent') %}
+                                    <span class="badge badge-warning">{{ p.severity }}</span>
+                                {% elif sev_lower in ('mild', 'some', 'low-moderate') %}
+                                    <span class="badge badge-info">{{ p.severity }}</span>
+                                {% else %}
+                                    <span class="badge badge-success">{{ p.severity }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <input type="hidden" name="response_id" value="{{ p.response_id }}">
+                                <input type="hidden" name="responses_{{ p.response_id }}" value="{{ p.responses_json }}">
+                                <select name="student_{{ p.response_id }}" class="form-control" style="min-width:200px;">
+                                    <option value="">-- Skip --</option>
+                                    {% for s in students %}
+                                    <option value="{{ s.id }}">{{ s.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:16px;display:flex;gap:8px;">
+                <button type="submit" class="btn btn-primary">Import Selected</button>
+                <a href="{{ url_for('screenings.manage_form', tid=template.id) }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="empty-state">
+            <p>All responses from this Google Form have already been imported.</p>
+            <a href="{{ url_for('screenings.manage_form', tid=template.id) }}" class="btn btn-outline">Back</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

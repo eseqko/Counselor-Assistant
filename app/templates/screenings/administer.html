@@ -28,15 +28,27 @@
                 </div>
             </div>
 
+            {% set scoring = template.scoring %}
+            {% set scoring_type = scoring.get('type', 'sum') if scoring else 'sum' %}
+            {% set dim_labels = scoring.get('dimension_labels', {}) if scoring else {} %}
+
             <div style="margin:20px 0;">
+                {% set current_dim = namespace(val='') %}
                 {% for q in template.questions %}
+                {% set q_dim = q.get('dimension', '') %}
+                {% if scoring_type in ('dimensions',) and q_dim != current_dim.val %}
+                    {% set current_dim.val = q_dim %}
+                    <div style="font-weight:700;font-size:0.92rem;margin:18px 0 8px;padding:6px 10px;background:var(--light-gray);border-radius:4px;color:var(--text);">
+                        {{ dim_labels.get(q_dim, q_dim|capitalize) }}
+                    </div>
+                {% endif %}
                 <div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;">
                     <div style="font-weight:600;margin-bottom:8px;">{{ loop.index }}. {{ q.text }}</div>
                     <div style="display:flex;gap:12px;flex-wrap:wrap;">
                         {% for opt in q.options %}
                         <label style="cursor:pointer;display:flex;align-items:center;gap:4px;">
                             <input type="radio" name="{{ q.id }}" value="{{ opt.value }}" required>
-                            {{ opt.label }} <span style="color:var(--gray);font-size:0.78rem;">({{ opt.value }})</span>
+                            {{ opt.label }}{% if scoring_type == 'sum' %} <span style="color:var(--gray);font-size:0.78rem;">({{ opt.value }})</span>{% endif %}
                         </label>
                         {% endfor %}
                     </div>

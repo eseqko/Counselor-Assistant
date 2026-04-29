@@ -319,12 +319,50 @@ tr:hover td { background: #fafbfc; }
   margin-top: 12px; font-size: 0.75rem; color: var(--muted);
   display: flex; align-items: flex-start; gap: 6px; line-height: 1.55;
 }
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 400px;
+  height: 400px;
+  background: var(--school-logo-url, none) center / contain no-repeat;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+}
+.print-letterhead { display: none; }
+@media print {
+  header { display: none !important; }
+  .print-letterhead {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #333;
+  }
+  .print-letterhead img[data-school-logo] { height: 50px; }
+  .print-letterhead .lh-name { font-size: 14pt; font-weight: 700; margin: 0; }
+  .print-letterhead .lh-contact { font-size: 8pt; color: #555; margin: 2px 0 0; }
+  body::after { display: none; }
+}
 </style>
 </head>
 <body>
 
+<div class="print-letterhead">
+  <img data-school-logo style="display:none;" alt="">
+  <div>
+    <div class="lh-name" data-school-name></div>
+    <div class="lh-contact"><span data-school-contact-address></span> <span data-school-contact-phone></span> <span data-school-contact-email></span></div>
+  </div>
+</div>
+
 <header>
   <div class="hdr-left">
+    <img data-school-logo style="display:none;height:36px;border-radius:4px;object-fit:contain;" alt="">
     <span style="font-size:24px;" data-school-emoji>🐾</span>
     <div>
       <div class="hdr-title">Course Catalog Editor</div>
@@ -661,6 +699,27 @@ tr:hover td { background: #fafbfc; }
           <label>Prerequisites</label>
           <input type="text" id="fPrereq" placeholder="e.g. Biology with C or higher">
         </div>
+        <div class="field">
+          <label>CTE Pathway</label>
+          <select id="fPathway">
+            <option value="">None</option>
+            <option value="culinary">Culinary Arts</option>
+            <option value="engineering">Engineering Technology</option>
+            <option value="health">Patient Care</option>
+            <option value="digital_art">Digital Media Arts</option>
+            <option value="dance">Performing Arts - Dance</option>
+            <option value="all">All Pathways (Capstone)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Pathway Level</label>
+          <select id="fPathwayLevel">
+            <option value="">N/A</option>
+            <option value="introductory">Introductory</option>
+            <option value="concentrator">Concentrator</option>
+            <option value="capstone">Capstone</option>
+          </select>
+        </div>
         <div class="field form-full">
           <label>Course Description <span class="req">*</span></label>
           <textarea id="fDesc" placeholder="Describe what students will learn, major topics, skills, and outcomes…"></textarea>
@@ -916,7 +975,7 @@ const SEED = [
   {id:'sc9',  dept:'science', name:'AP Chemistry',            code:'23900/23901', grade:'11-12', credits:'10', ag:'d', type:'ap',  prereq:'C- or better in Biology & Chemistry; C- or concurrent MC3', collegeCredit:true, desc:'College-level chemistry: hands-on labs covering reactions, energy, equilibrium, and acids/bases.'},
   {id:'sc10', dept:'science', name:'AP Physics 1',            code:'23910/23911', grade:'11-12', credits:'10', ag:'d', type:'ap',  prereq:'Completion of MC1 and MC2; concurrent MC3', collegeCredit:true, desc:'Algebra-based physics: motion, forces, and energy. Tests understanding of the physical world.'},
   {id:'sc11', dept:'science', name:'AP Environmental Science',code:'23906/23907', grade:'11-12', credits:'10', ag:'d', type:'ap',  prereq:'Two years lab science; at least MC1', collegeCredit:true, desc:'Scientific principles for understanding natural world interrelationships and environmental problems.'},
-  {id:'sc12', dept:'science', name:'Engineering Technology 1b: Engineering Sustainability CP', code:'23649/26350', grade:'9-12', credits:'10', ag:'d', type:'cp', prereq:'Math Course 1 with C or higher', dualEnroll:true, desc:'Explores sustainable energy solutions. Lab work tests and solves community energy problems.'},
+  // sc12 moved to CTE department (ct13)
   {id:'lo1',  dept:'lote', name:'Filipino Language 1 CP',            code:'24112/24113', grade:'9-12',  credits:'10', ag:'e', type:'cp', prereq:'None', desc:'Introduction to Filipino (Tagalog). Develops all four language skills with emphasis on Speaking and Listening.'},
   {id:'lo2',  dept:'lote', name:'Filipino Language 2 CP',            code:'24114/24115', grade:'9-12',  credits:'10', ag:'e', type:'cp', prereq:'C- in Filipino 1 (recommended)', desc:'Continuation of Filipino 1. Builds on all four skills at the elementary level.'},
   {id:'lo3',  dept:'lote', name:'Filipino Language 3 CP',            code:'24116/24117', grade:'9-12',  credits:'10', ag:'e', type:'cp', prereq:'C- in Filipino 2 (recommended)', desc:'Advanced Tagalog. Strengthens communicative proficiency through real-world scenarios and cultural analysis.'},
@@ -938,10 +997,7 @@ const SEED = [
   {id:'vp9',  dept:'vpa', name:'Ceramics 2 CP',                      code:'25008/25009', grade:'10-12', credits:'10', ag:'f', type:'cp', prereq:'C or better in Ceramics 1 CP', desc:'Advanced ceramics with student-directed projects and introduction to the potter\'s wheel.'},
   {id:'vp10', dept:'vpa', name:'Concert Band CP (Level 1)',           code:'25200/25201', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introduction to playing a musical instrument of your choice. No experience needed.'},
   {id:'vp11', dept:'vpa', name:'Symphonic Band CP (Level 2)',         code:'25202/25203', grade:'9-12',  credits:'2.10', ag:'f', type:'cp', prereq:'Passing grade in Concert Band CP', desc:'Advanced wind and percussion ensemble. 40-minute after-school (5th period) class.'},
-  {id:'vp12', dept:'vpa', name:'Dance 1: Composition CP',            code:'25216/25217', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, desc:'Introductory dance (Performing Arts/CTE). Ballet, jazz, hip hop, modern, and cultural dance. Dual enrollment with Skyline College.'},
-  {id:'vp13', dept:'vpa', name:'Dance 2: Production CP',             code:'25218/25219', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Dance 1', dualEnroll:true, desc:'Intermediate dance with choreographic skill and career development. Dual enrollment with Skyline College.'},
-  {id:'vp14', dept:'vpa', name:'Digital Art 1 CP',                   code:'26220/26221', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, desc:'Photo manipulation and graphic design. Dual enrollment with Skyline College.'},
-  {id:'vp15', dept:'vpa', name:'Digital Art 2 CP',                   code:'26228/26229', grade:'10-12', credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Digital Art 1 CP', dualEnroll:true, desc:'Advanced digital media: video production from pre- to post-production. Dual enrollment with Skyline College.'},
+  // vp12-vp15 moved to CTE department (ct8-ct11)
   {id:'vp16', dept:'vpa', name:'Fashion Design CP',                  code:'25248/25249', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introductory fashion design: sewing, pattern reading/creation, fashion illustration, and textiles.'},
   {id:'vp17', dept:'vpa', name:'Fashion Design 2 CP',                code:'28410/28411', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'C or better in Fashion Design 1', desc:'Expands on Fashion 1: varied seams, alterations, and reading/drafting patterns.'},
   {id:'vp18', dept:'vpa', name:'Guitar 1 CP',                        code:'25208/25209', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Beginning guitar: chords, pickstyle and fingerstyle techniques, music theory, and notation reading.'},
@@ -951,13 +1007,19 @@ const SEED = [
   {id:'vp22', dept:'vpa', name:'Piano 1 CP',                         code:'28406/28407', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Read and write basic music notes, gain performance confidence, and explore mallet instruments.'},
   {id:'vp23', dept:'vpa', name:'Sculpture CP',                       code:'25010/25011', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introductory 3D visual arts with diverse materials. Critical thinking about art design emphasized.'},
   {id:'vp24', dept:'vpa', name:'Vocal Music CP',                     code:'25204/25205', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', desc:'Introductory vocal music and performance. Students learn to read music and perform for peers.'},
-  {id:'ct1', dept:'cte', name:'Culinary Arts I: Foods & Nutrition',      code:'26104A/26105B', grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Level 1: food safety, kitchen skills, recipe reading, nutrition, meal planning, baking, and weekly cooking labs.'},
-  {id:'ct2', dept:'cte', name:'Culinary Arts II: Foodservice & Hospitality', code:'26108/26109', grade:'10-12', credits:'10', ag:'g', type:'cp', prereq:'Passing grade in Culinary Arts I', dualEnroll:true, desc:'Level 2: hospitality industry, advanced culinary techniques, and formal dining service. Dual enrollment with Skyline College.'},
-  {id:'ct3', dept:'cte', name:'Engineering Technology 1a: Engineering Design CP', code:'26218/26219', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Introduction to engineering design process and STEM concepts.'},
-  {id:'ct4', dept:'cte', name:'Engineering Technology 2: Engineering Electronics CP', code:'23649/26350', grade:'9-12', credits:'10', ag:'', type:'cp', prereq:'Engineering Technology 1a or 1b', desc:'Advanced engineering covering electronics concepts and applications.'},
-  {id:'ct5', dept:'cte', name:'Gateway to Health CP',                    code:'EMC 425.1/425.2', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Introduction to health sciences careers, patient care, and healthcare pathways.'},
-  {id:'ct6', dept:'cte', name:'EMC Essentials (Emergency Medical Care)', code:'26374/26375', grade:'9-12', credits:'10', ag:'', type:'cp', prereq:'Gateway to Health CP (recommended)', desc:'Emergency medical care concepts, first aid, and basic life support skills.'},
-  {id:'ct7', dept:'cte', name:'CTE Work-Based Learning', code:'WORK 670.1/670.2', grade:'9-12', credits:'10', ag:'', type:'cp', prereq:'Counselor approval', desc:'Students earn CTE credit through supervised work experience tied to a career pathway.'},
+  {id:'ct1',  dept:'cte', name:'Foods & Nutrition',       code:'26104A/26105B', grade:'9-12',  credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'culinary', pathwayLevel:'introductory', desc:'Career readiness, food safety, kitchen equipment, knife skills, recipe reading, food science, dietary guidelines, meal planning, baking, and global food exploration. Weekly cooking labs.'},
+  {id:'ct2',  dept:'cte', name:'Culinary Arts',            code:'26108/26109', grade:'10-12', credits:'10', ag:'g', type:'cp', prereq:'Passing grade in Foods & Nutrition', dualEnroll:true, pathway:'culinary', pathwayLevel:'concentrator', desc:'Hospitality industry standards, advanced culinary techniques, front/back-of-house operations. Dual enrollment with Skyline College (Restaurant & Banquet Operations). Students earn a professional portfolio.'},
+  {id:'ct3',  dept:'cte', name:'Principles of Engineering CP', code:'26218/26219', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'engineering', pathwayLevel:'introductory', desc:'Introduction to engineering design process, problem-solving, and STEM concepts.'},
+  {id:'ct4',  dept:'cte', name:'Digital Electronics CP',   code:'23649/26350', grade:'9-12', credits:'10', ag:'', type:'cp', prereq:'Principles of Engineering, Intro to Robotics, or Eng Sustainability', pathway:'engineering', pathwayLevel:'concentrator', desc:'Fundamentals of electronics: modeling circuits in software, prototyping on breadboards, and soldering components on PCBs.'},
+  {id:'ct5',  dept:'cte', name:'Gateway to Health CP',     code:'EMC 425.1/425.2', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'health', pathwayLevel:'introductory', desc:'Introduction to health sciences careers. Covers foundational health concepts, patient care, basic assessment, CPR, and math calculations used in health care.'},
+  {id:'ct6',  dept:'cte', name:'EMC Essentials (Emergency Medical Care)', code:'26374/26375', grade:'9-12', credits:'10', ag:'', type:'cp', prereq:'Gateway to Health CP (recommended)', pathway:'health', pathwayLevel:'concentrator', desc:'Emergency medical care concepts, first aid, and basic life support skills.'},
+  {id:'ct7',  dept:'cte', name:'CTE Work-Based Learning',  code:'WORK 670.1/670.2', grade:'9-12', credits:'10', ag:'', type:'cp', prereq:'Counselor approval', pathway:['culinary','engineering','health','digital_art','dance'], pathwayLevel:'capstone', desc:'Students earn CTE credit through supervised work experience tied to a career pathway.'},
+  {id:'ct8',  dept:'cte', name:'Digital Art 1 CP',         code:'26220/26221', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, pathway:'digital_art', pathwayLevel:'introductory', desc:'Explores digital media in contemporary art. Covers photo manipulation and graphic design. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  {id:'ct9',  dept:'cte', name:'Digital Art 2 CP',         code:'26228/26229', grade:'10-12', credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Digital Art 1 CP', dualEnroll:true, pathway:'digital_art', pathwayLevel:'concentrator', desc:'Advanced digital media: video production from pre- to post-production. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  {id:'ct10', dept:'cte', name:'Dance 1: Composition CP',  code:'25216/25217', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'None', dualEnroll:true, pathway:'dance', pathwayLevel:'introductory', desc:'Introductory dance. Develops body alignment, coordination, flexibility, and appreciation for dance forms: ballet, jazz, hip hop, modern, cultural dance. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  {id:'ct11', dept:'cte', name:'Dance 2: Production CP',   code:'25218/25219', grade:'9-12',  credits:'10', ag:'f', type:'cp', prereq:'Passing grade in Dance 1', dualEnroll:true, pathway:'dance', pathwayLevel:'concentrator', desc:'Intermediate dance. Deeper choreographic skill, technical accuracy, and career development. Also satisfies a-g "f" (VPA). Dual enrollment with Skyline College.'},
+  {id:'ct12', dept:'cte', name:'Introduction to Robotics CP', code:'', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', pathway:'engineering', pathwayLevel:'introductory', desc:'Hands-on introduction to robotics, programming, and engineering design. Alternate introductory course for the Engineering Technology pathway.'},
+  {id:'ct13', dept:'cte', name:'Engineering Technology 1b: Engineering Sustainability CP', code:'23649/26350', grade:'9-12', credits:'10', ag:'d', type:'cp', prereq:'Math Course 1 with C or higher', dualEnroll:true, pathway:'engineering', pathwayLevel:'introductory', desc:'Explores sustainable energy solutions. Lab work tests, observes, and solves community problems related to the energy transition. Also satisfies a-g "d" (lab science). Alternate introductory course for the Engineering Technology pathway.'},
   {id:'pe1', dept:'pe', name:'PE 9',                   code:'27000/27001', grade:'9',    credits:'10', ag:'',  type:'cp',  prereq:'None', desc:'Physical education for 9th graders: fitness, team sports, and wellness fundamentals.'},
   {id:'pe2', dept:'pe', name:'PE 10',                  code:'27002/27003', grade:'10',   credits:'10', ag:'',  type:'cp',  prereq:'None', desc:'Physical education for 10th graders.'},
   {id:'pe3', dept:'pe', name:'PE 10: Yoga & Fitness',  code:'27206/27207', grade:'10',   credits:'10', ag:'',  type:'cp',  prereq:'None', desc:'Alternative PE 10 focusing on yoga, mindfulness, and fitness.'},
@@ -978,7 +1040,7 @@ const SEED = [
   {id:'el10', dept:'electives', name:'Ghost Stories in Literature & Film CP', code:'21230/21231', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Explores the ghost story genre across literature and film.'},
   {id:'el11', dept:'electives', name:'Graphic Novels & Identity CP',          code:'21238/21239', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Studies graphic novels exploring themes of identity, culture, and social justice.'},
   {id:'el12', dept:'electives', name:'History of Sports CP',                  code:'20125/20126', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Social, cultural, and political history of sports in America and globally.'},
-  {id:'el13', dept:'electives', name:'Introduction to Robotics CP',           code:'',            grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Hands-on introduction to robotics, programming, and engineering design.'},
+  // el13 moved to CTE department (ct12)
   {id:'el14', dept:'electives', name:'Social Justice Movements CP',           code:'20121/20122', grade:'9-12', credits:'10', ag:'g', type:'cp', prereq:'None', desc:'Historical and contemporary analysis of social justice movements.'},
   {id:'sp1',  dept:'special-ed', name:'Language Arts Seminar 1',  code:'29000/29001', grade:'9-12', credits:'10', ag:'', type:'sp', prereq:'IEP', desc:'Special education language arts: foundational reading, writing, and communication.'},
   {id:'sp2',  dept:'special-ed', name:'Language Arts Seminar 2',  code:'29002/29003', grade:'9-12', credits:'10', ag:'', type:'sp', prereq:'IEP', desc:'Intermediate special education language arts.'},
@@ -1206,6 +1268,8 @@ function openEditModal(id) {
   document.getElementById('fAg').value          = c.ag || '';
   document.getElementById('fPrereq').value      = c.prereq || '';
   document.getElementById('fDesc').value        = c.desc;
+  document.getElementById('fPathway').value     = Array.isArray(c.pathway) ? 'all' : (c.pathway || '');
+  document.getElementById('fPathwayLevel').value = c.pathwayLevel || '';
   document.getElementById('fCollege').checked   = !!c.collegeCredit;
   document.getElementById('fDual').checked      = !!c.dualEnroll;
   document.getElementById('fFullYear').checked  = !!c.fullYear;
@@ -1233,6 +1297,11 @@ function saveCourse() {
     prereq:       document.getElementById('fPrereq').value.trim() || 'None',
     desc,
   };
+  const pwVal = document.getElementById('fPathway').value;
+  const pwLevel = document.getElementById('fPathwayLevel').value;
+  if (pwVal === 'all') obj.pathway = ['culinary','engineering','health','digital_art','dance'];
+  else if (pwVal) obj.pathway = pwVal;
+  if (pwLevel) obj.pathwayLevel = pwLevel;
   if (document.getElementById('fCollege').checked)  obj.collegeCredit = true;
   if (document.getElementById('fDual').checked)     obj.dualEnroll    = true;
   if (document.getElementById('fFullYear').checked) obj.fullYear      = true;
