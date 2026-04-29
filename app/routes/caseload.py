@@ -155,11 +155,19 @@ def view_student(id):
             except (json.JSONDecodeError, TypeError):
                 pass
 
+    cte_details = None
+    if latest_transcript and latest_transcript.cte_courses_json:
+        try:
+            cte_details = json.loads(latest_transcript.cte_courses_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return render_template('caseload/view.html',
         student=student, notes=notes, services=services,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,
+        cte_details=cte_details,
         credits_total_shortfall=credits_total_shortfall,
         credits_all_met=credits_all_met,
         exit_reasons=Student.EXIT_REASONS)
@@ -695,3 +703,35 @@ def transcript_save():
         'message': f'Saved {saved} transcript record(s).'
                    + (f' {len(not_found)} student(s) not found in your caseload.' if not_found else '')
     })
+
+
+@caseload_bp.route('/<int:id>/cte-courses', methods=['POST'])
+@login_required
+def save_cte_courses(id):
+    student = Student.query.filter_by(id=id, counselor_id=current_user.id).first_or_404()
+    latest = student.transcript_records.first()
+    if not latest:
+        flash('No transcript record found. Import a transcript first.', 'warning')
+        return redirect(url_for('caseload.view_student', id=id))
+
+    pathway = request.form.get('cte_pathway', '').strip()
+    courses = []
+    i = 0
+    while True:
+        name = request.form.get(f'cte_course_name_{i}')
+        if name is None:
+            break
+        name = name.strip()
+        if name:
+            courses.append({
+                'name': name,
+                'grade': request.form.get(f'cte_course_grade_{i}', '').strip(),
+                'credits': request.form.get(f'cte_course_credits_{i}', '10').strip(),
+                'level': request.form.get(f'cte_course_level_{i}', '').strip(),
+            })
+        i += 1
+
+    latest.cte_courses_json = json.dumps({'pathway': pathway, 'courses': courses})
+    db.session.commit()
+    flash('CTE pathway details saved.', 'success')
+    return redirect(url_for('caseload.view_student', id=id))

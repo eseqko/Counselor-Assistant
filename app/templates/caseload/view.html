@@ -220,6 +220,10 @@
                 {% if latest_transcript.cte_is_completer %}background:#f5f3ff;border-color:#ddd6fe;
                 {% else %}background:#eff6ff;border-color:#bfdbfe;{% endif %}">
                 <div style="font-size:0.72rem;text-transform:uppercase;font-weight:700;color:#6b7280;letter-spacing:0.5px;">CTE Pathway</div>
+                {% if cte_details and cte_details.pathway %}
+                {% set pw_info = {'culinary':{'n':'Culinary Arts','i':'🍽️','c':'#dc2626'},'engineering':{'n':'Engineering Technology','i':'⚙️','c':'#2563eb'},'health':{'n':'Patient Care','i':'🏥','c':'#059669'},'digital_art':{'n':'Digital Media Arts','i':'🎨','c':'#7c3aed'},'dance':{'n':'Performing Arts - Dance','i':'💃','c':'#be185d'}}.get(cte_details.pathway, {}) %}
+                <div style="font-size:0.82rem;font-weight:600;color:{{ pw_info.get('c','#2563eb') }};margin:2px 0;">{{ pw_info.get('i','') }} {{ pw_info.get('n', cte_details.pathway) }}</div>
+                {% endif %}
                 <div style="font-size:1.5rem;font-weight:700;margin:4px 0;{% if latest_transcript.cte_is_completer %}color:#7c3aed;{% else %}color:#2563eb;{% endif %}">
                     {{ latest_transcript.cte_completed|int }} credits
                 </div>
@@ -395,17 +399,55 @@
                     </div>
                     {% endfor %}
                 </div>
-                <!-- Pathway reference -->
-                <div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;margin-bottom:14px;">
-                    <div style="font-size:0.78rem;font-weight:600;color:#6b7280;margin-bottom:6px;">JHS CTE Pathways — Each: Introductory → Concentrator → Capstone/WBL</div>
-                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                        <span style="font-size:0.76rem;background:#dc262620;color:#dc2626;padding:2px 8px;border-radius:4px;">🍽️ Culinary Arts</span>
-                        <span style="font-size:0.76rem;background:#2563eb20;color:#2563eb;padding:2px 8px;border-radius:4px;">⚙️ Engineering Technology</span>
-                        <span style="font-size:0.76rem;background:#05966920;color:#059669;padding:2px 8px;border-radius:4px;">🏥 Patient Care</span>
-                        <span style="font-size:0.76rem;background:#7c3aed20;color:#7c3aed;padding:2px 8px;border-radius:4px;">🎨 Digital Media Arts</span>
-                        <span style="font-size:0.76rem;background:#be185d20;color:#be185d;padding:2px 8px;border-radius:4px;">💃 Performing Arts - Dance</span>
+                {% set pw_map = {
+                    'culinary':    {'name': 'Culinary Arts',            'icon': '🍽️', 'color': '#dc2626'},
+                    'engineering': {'name': 'Engineering Technology',   'icon': '⚙️',  'color': '#2563eb'},
+                    'health':      {'name': 'Patient Care',            'icon': '🏥', 'color': '#059669'},
+                    'digital_art': {'name': 'Digital Media Arts',      'icon': '🎨', 'color': '#7c3aed'},
+                    'dance':       {'name': 'Performing Arts - Dance', 'icon': '💃', 'color': '#be185d'}
+                } %}
+
+                <!-- Student's Pathway & Courses -->
+                {% if cte_details and cte_details.pathway %}
+                {% set pw = pw_map.get(cte_details.pathway, {}) %}
+                <div style="background:white;border:1px solid #e5e7eb;border-radius:6px;padding:12px;margin-bottom:14px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span style="font-size:1.1rem;">{{ pw.get('icon', '') }}</span>
+                        <strong style="color:{{ pw.get('color', '#1a365d') }};font-size:0.92rem;">{{ pw.get('name', cte_details.pathway) }}</strong>
+                        <span style="font-size:0.72rem;color:#9ca3af;margin-left:auto;">Introductory → Concentrator → Capstone</span>
                     </div>
+                    {% if cte_details.courses %}
+                    <table style="width:100%;font-size:0.82rem;border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid #e5e7eb;">
+                                <th style="text-align:left;padding:4px 6px;color:#6b7280;font-weight:600;">Course</th>
+                                <th style="text-align:center;padding:4px 6px;color:#6b7280;font-weight:600;width:80px;">Level</th>
+                                <th style="text-align:center;padding:4px 6px;color:#6b7280;font-weight:600;width:60px;">Grade</th>
+                                <th style="text-align:center;padding:4px 6px;color:#6b7280;font-weight:600;width:60px;">Credits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in cte_details.courses %}
+                            <tr style="border-bottom:1px solid #f3f4f6;">
+                                <td style="padding:5px 6px;">{{ c.name }}</td>
+                                <td style="text-align:center;padding:5px 6px;">
+                                    {% if c.level == 'introductory' %}<span style="font-size:0.72rem;background:#dbeafe;color:#2563eb;padding:1px 6px;border-radius:3px;">Intro</span>
+                                    {% elif c.level == 'concentrator' %}<span style="font-size:0.72rem;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;">Conc.</span>
+                                    {% elif c.level == 'capstone' %}<span style="font-size:0.72rem;background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:3px;">Capstone</span>
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td style="text-align:center;padding:5px 6px;font-weight:600;">{{ c.grade or '—' }}</td>
+                                <td style="text-align:center;padding:5px 6px;">{{ c.credits or '10' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p style="font-size:0.82rem;color:#9ca3af;margin:4px 0 0;">Pathway selected but no courses added yet.</p>
+                    {% endif %}
                 </div>
+                {% endif %}
+
                 <!-- Detail text -->
                 <div style="font-size:0.84rem;color:#4a5568;line-height:1.6;">
                     {% if latest_transcript.cte_is_completer %}
@@ -425,6 +467,49 @@
                     {% else %}
                     <span style="color:#dc2626;">Need {{ [0, 10 - latest_transcript.cte_completed|int]|max }} more credits</span>
                     {% endif %}
+                </div>
+
+                <!-- Edit CTE Details -->
+                <div style="margin-top:14px;border-top:1px solid #e5e7eb;padding-top:12px;">
+                    <button type="button" onclick="document.getElementById('cteEditForm').classList.toggle('hidden')" class="btn btn-sm btn-outline" style="font-size:0.78rem;">
+                        {{ 'Edit' if cte_details else 'Add' }} Pathway &amp; Courses
+                    </button>
+                    <form id="cteEditForm" method="POST" action="{{ url_for('caseload.save_cte_courses', id=student.id) }}" class="hidden" style="margin-top:10px;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:12px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div style="margin-bottom:10px;">
+                            <label style="font-size:0.8rem;font-weight:600;color:#374151;">Pathway</label>
+                            <select name="cte_pathway" class="form-control" style="font-size:0.85rem;max-width:300px;">
+                                <option value="">-- Select --</option>
+                                {% for pk, pv in pw_map.items() %}
+                                <option value="{{ pk }}" {{ 'selected' if cte_details and cte_details.pathway == pk }}>{{ pv.icon }} {{ pv.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div id="cteCoursesContainer" style="margin-bottom:10px;">
+                            <label style="font-size:0.8rem;font-weight:600;color:#374151;margin-bottom:6px;display:block;">Courses Taken</label>
+                            {% if cte_details and cte_details.courses %}
+                                {% for c in cte_details.courses %}
+                                <div class="cte-course-row" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
+                                    <input type="text" name="cte_course_name_{{ loop.index0 }}" value="{{ c.name }}" placeholder="Course name" class="form-control" style="font-size:0.82rem;flex:2;">
+                                    <select name="cte_course_level_{{ loop.index0 }}" class="form-control" style="font-size:0.82rem;flex:1;">
+                                        <option value="">Level</option>
+                                        <option value="introductory" {{ 'selected' if c.level == 'introductory' }}>Introductory</option>
+                                        <option value="concentrator" {{ 'selected' if c.level == 'concentrator' }}>Concentrator</option>
+                                        <option value="capstone" {{ 'selected' if c.level == 'capstone' }}>Capstone</option>
+                                    </select>
+                                    <input type="text" name="cte_course_grade_{{ loop.index0 }}" value="{{ c.grade }}" placeholder="Grade" class="form-control" style="font-size:0.82rem;width:60px;">
+                                    <input type="text" name="cte_course_credits_{{ loop.index0 }}" value="{{ c.credits or '10' }}" placeholder="Cr" class="form-control" style="font-size:0.82rem;width:50px;">
+                                    <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:1rem;padding:2px 4px;">&#10005;</button>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <button type="button" onclick="addCteRow()" class="btn btn-sm btn-outline" style="font-size:0.76rem;margin-bottom:10px;">+ Add Course</button>
+                        <div style="display:flex;gap:6px;">
+                            <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                            <button type="button" onclick="document.getElementById('cteEditForm').classList.add('hidden')" class="btn btn-sm btn-outline">Cancel</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -466,6 +551,20 @@ function switchTranscriptTab(tab, btn) {
     document.querySelectorAll('.transcript-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('transcript-panel-' + tab).style.display = 'block';
     btn.classList.add('active');
+}
+var _cteIdx = {{ (cte_details.courses|length) if cte_details and cte_details.courses else 0 }};
+function addCteRow() {
+    var i = _cteIdx++;
+    var c = document.getElementById('cteCoursesContainer');
+    var d = document.createElement('div');
+    d.className = 'cte-course-row';
+    d.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center;';
+    d.innerHTML = '<input type="text" name="cte_course_name_'+i+'" placeholder="Course name" class="form-control" style="font-size:0.82rem;flex:2;">'
+      + '<select name="cte_course_level_'+i+'" class="form-control" style="font-size:0.82rem;flex:1;"><option value="">Level</option><option value="introductory">Introductory</option><option value="concentrator">Concentrator</option><option value="capstone">Capstone</option></select>'
+      + '<input type="text" name="cte_course_grade_'+i+'" placeholder="Grade" class="form-control" style="font-size:0.82rem;width:60px;">'
+      + '<input type="text" name="cte_course_credits_'+i+'" value="10" placeholder="Cr" class="form-control" style="font-size:0.82rem;width:50px;">'
+      + '<button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:1rem;padding:2px 4px;">&#10005;</button>';
+    c.appendChild(d);
 }
 </script>
 

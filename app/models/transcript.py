@@ -25,6 +25,7 @@ class TranscriptRecord(db.Model):
     cte_completed = db.Column(db.Float, default=0)
     cte_level = db.Column(db.String(20))  # none, explorer, concentrator, completer, advanced
     cte_is_completer = db.Column(db.Boolean, default=False)
+    cte_courses_json = db.Column(db.Text)  # JSON: {pathway, courses: [{name, id, grade, credits, level}]}
 
     # Full data as JSON text
     credits_json = db.Column(db.Text)  # Full credit summary by subject
