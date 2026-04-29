@@ -30,21 +30,20 @@
     {% endif %}
 </div>
 
-<!-- Action Items (Smart Alerts) -->
-{% if alerts %}
+<!-- Action Items (Critical Alerts Only) -->
+{% if critical_alerts %}
 <div class="card" id="action-items-panel">
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Today's Action Items
+        <span>Critical Action Items
             {% if alert_counts.get('critical') %}<span class="alert-badge critical">{{ alert_counts.critical }} critical</span>{% endif %}
             {% if alert_counts.get('high') %}<span class="alert-badge high">{{ alert_counts.high }} high</span>{% endif %}
         </span>
         <div style="display:flex;gap:6px;align-items:center;">
             <button class="btn btn-sm btn-outline" onclick="refreshAlerts()" title="Refresh">&#8635;</button>
-            <button class="btn btn-sm btn-outline" onclick="toggleAlertPanel()" id="alert-toggle">Expand</button>
         </div>
     </div>
-    <div class="card-body" id="alert-list" style="display:none;">
-        {% for alert in alerts %}
+    <div class="card-body">
+        {% for alert in critical_alerts %}
         <div class="alert-item priority-{{ alert.priority_label }}">
             <div class="alert-priority-dot"></div>
             <div class="alert-content">
@@ -61,6 +60,34 @@
             {% endif %}
         </div>
         {% endfor %}
+        {% if alerts|length > critical_alerts|length %}
+        <div style="text-align:center;padding:8px 0 4px;">
+            <button class="btn btn-sm btn-outline" onclick="toggleAllAlerts()" id="all-alerts-toggle" style="font-size:0.82rem;">
+                View All Alerts ({{ alerts|length }})
+            </button>
+        </div>
+        <div id="all-alerts-list" style="display:none;">
+            {% for alert in alerts %}
+            {% if alert.priority_label not in ('critical', 'high') %}
+            <div class="alert-item priority-{{ alert.priority_label }}">
+                <div class="alert-priority-dot"></div>
+                <div class="alert-content">
+                    <div class="alert-title">
+                        <span class="alert-category-tag">{{ alert.category }}</span>
+                        {{ alert.title }}
+                    </div>
+                    {% if alert.detail %}
+                    <div class="alert-detail">{{ alert.detail }}</div>
+                    {% endif %}
+                </div>
+                {% if alert.action_url %}
+                <a href="{{ alert.action_url }}" class="btn btn-sm btn-outline alert-action">{{ alert.action_label or 'View' }}</a>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -93,6 +120,31 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Dashboard Charts -->
+<div class="card">
+    <div class="card-header">Note Activity — Last 8 Weeks</div>
+    <div class="card-body" style="position:relative;height:200px;">
+        <canvas id="noteActivityChart"></canvas>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Service Type Breakdown</div>
+        <div class="card-body" style="position:relative;height:240px;display:flex;align-items:center;justify-content:center;">
+            <canvas id="svcBreakdownChart"></canvas>
+        </div>
+    </div>
+    {% if grad_risk.critical or grad_risk['at-risk'] or grad_risk.warning or grad_risk['on-track'] %}
+    <div class="card">
+        <div class="card-header">Caseload Risk Snapshot</div>
+        <div class="card-body" style="position:relative;height:240px;">
+            <canvas id="riskSnapshotChart"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
 
 <div class="grid-2">
     <!-- Today's Schedule -->
@@ -344,9 +396,103 @@
 }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Load external calendar events in the background
+    // ── Charts ───────────────────────────────────────────────────
+    var noteTrend = {{ note_trend_json|safe }};
+    var svcBreakdown = {{ svc_breakdown_json|safe }};
+    var gradRisk = {{ grad_risk_json|safe }};
+
+    // 1) Note Activity — line chart
+    var noteCtx = document.getElementById('noteActivityChart');
+    if (noteCtx) {
+        new Chart(noteCtx, {
+            type: 'line',
+            data: {
+                labels: noteTrend.map(function(d){ return d.label; }),
+                datasets: [{
+                    label: 'Notes',
+                    data: noteTrend.map(function(d){ return d.count; }),
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37,99,235,0.08)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#2563eb'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // 2) Service Type Breakdown — doughnut chart
+    var svcCtx = document.getElementById('svcBreakdownChart');
+    if (svcCtx) {
+        var svcLabels = Object.keys(svcBreakdown);
+        var svcValues = Object.values(svcBreakdown);
+        var svcColors = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#6366f1','#14b8a6','#e11d48','#a855f7','#0ea5e9','#eab308'];
+        if (svcLabels.length > 0) {
+            new Chart(svcCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: svcLabels,
+                    datasets: [{
+                        data: svcValues,
+                        backgroundColor: svcColors.slice(0, svcLabels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 }, padding: 8 } }
+                    }
+                }
+            });
+        } else {
+            svcCtx.parentElement.innerHTML = '<div class="empty-state"><p>No service records yet.</p></div>';
+        }
+    }
+
+    // 3) Caseload Risk Snapshot — horizontal bar chart
+    var riskCtx = document.getElementById('riskSnapshotChart');
+    if (riskCtx) {
+        new Chart(riskCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Critical', 'At-Risk', 'Warning', 'On-Track'],
+                datasets: [{
+                    data: [gradRisk.critical, gradRisk['at-risk'], gradRisk.warning, gradRisk['on-track']],
+                    backgroundColor: ['#c62828', '#e65100', '#f9a825', '#2e7d32'],
+                    borderRadius: 4,
+                    barThickness: 28
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // ── External calendar events ─────────────────────────────────
     fetch('/api/external-events')
         .then(function(r){ return r.json(); })
         .then(function(data){
@@ -397,16 +543,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-/* Alert panel controls */
-function toggleAlertPanel() {
-    var list = document.getElementById('alert-list');
-    var btn = document.getElementById('alert-toggle');
+/* Alert controls */
+function toggleAllAlerts() {
+    var list = document.getElementById('all-alerts-list');
+    var btn = document.getElementById('all-alerts-toggle');
     if (list.style.display === 'none') {
         list.style.display = 'block';
-        btn.textContent = 'Collapse';
+        btn.textContent = 'Hide Extra Alerts';
     } else {
         list.style.display = 'none';
-        btn.textContent = 'Expand';
+        btn.textContent = 'View All Alerts ({{ alerts|length }})';
     }
 }
 function refreshAlerts() {

@@ -8,7 +8,9 @@ from app.models.activity import Activity
 from app.models.service_record import ServiceRecord
 from app.models.transcript import TranscriptRecord
 from app.utils.alert_engine import get_alerts
+from sqlalchemy import func as sa_func
 from datetime import datetime, date, timedelta, timezone
+import json
 import requests as http_requests
 import pytz
 import re
@@ -252,6 +254,29 @@ def index():
     for a in alerts:
         p = a.get('priority_label', 'low')
         alert_counts[p] = alert_counts.get(p, 0) + 1
+    critical_alerts = [a for a in alerts if a.get('priority_label') in ('critical', 'high')]
+
+    # ── Chart data ────────────────────────────────────────────────
+    # 1) Note activity trend — notes per week for last 8 weeks
+    note_trend = []
+    for i in range(7, -1, -1):
+        wk_start = today - timedelta(days=today.weekday() + 7 * i)
+        wk_end = wk_start + timedelta(days=6)
+        count = Note.query.filter(
+            Note.author_id == current_user.id,
+            Note.session_date >= wk_start,
+            Note.session_date <= wk_end
+        ).count()
+        note_trend.append({'label': wk_start.strftime('%m/%d'), 'count': count})
+
+    # 2) Service type breakdown — all-time counts by service_type
+    svc_type_labels = dict(ServiceRecord.SERVICE_TYPES)
+    svc_rows = db.session.query(
+        ServiceRecord.service_type, sa_func.count(ServiceRecord.id)
+    ).filter_by(counselor_id=current_user.id).group_by(
+        ServiceRecord.service_type
+    ).all()
+    svc_breakdown = {svc_type_labels.get(k, k): v for k, v in svc_rows}
 
     return render_template('dashboard/index.html',
         today=today,
@@ -273,6 +298,10 @@ def index():
         grad_at_risk_total=grad_at_risk_total,
         alerts=alerts,
         alert_counts=alert_counts,
+        critical_alerts=critical_alerts,
+        note_trend_json=json.dumps(note_trend),
+        svc_breakdown_json=json.dumps(svc_breakdown),
+        grad_risk_json=json.dumps(grad_risk),
     )
 
 
