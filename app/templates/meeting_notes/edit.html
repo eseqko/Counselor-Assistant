@@ -227,7 +227,7 @@ body.focus-mode .main-content{margin-left:0!important;padding:0!important;}
 
     <!-- Writing area -->
     <div class="notepad-body" id="notepadBody">
-        <textarea id="noteContent" name="content" required
+        <textarea id="noteContent" name="content"
                   placeholder="Start typing... just let it flow.
 
 @ to mention a student    # for tags
@@ -397,7 +397,7 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
         {% for s in students %}
         {id:{{ s.id }}, name:"{{ s.first_name }} {{ s.last_name }}", grade:{{ s.grade_level or 0 }},
          sid:"{{ s.student_id_number }}", iep:{{ 'true' if s.iep_status else 'false' }},
-         five04:{{ 'true' if s.plan_504_status else 'false' }}},
+         five04:{{ 'true' if s.section_504 else 'false' }}},
         {% endfor %}
     ];
 
@@ -677,13 +677,12 @@ Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if 
     document.getElementById('noteForm').addEventListener('submit', function(e) {
         serializeToContent();
         var content = ta.value.trim();
-        if (!content) {
+        var title = document.getElementById('noteTitle').value.trim();
+        if (!title || !content) {
             e.preventDefault();
-            alert('Please add some content before saving.');
-            return;
+            alert((!title ? 'Title' : 'Content') + ' is required.');
+            return false;
         }
-        // Remove required so hidden textarea doesn't block form submit
-        ta.removeAttribute('required');
     });
 
     // Initialize format on load

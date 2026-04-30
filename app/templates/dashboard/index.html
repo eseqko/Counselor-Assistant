@@ -33,17 +33,18 @@
 <!-- Action Items (Critical Alerts Only) -->
 {% if critical_alerts %}
 <div class="card" id="action-items-panel">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleAlertPanel()">
         <span>Critical Action Items
             {% if alert_counts.get('critical') %}<span class="alert-badge critical">{{ alert_counts.critical }} critical</span>{% endif %}
             {% if alert_counts.get('high') %}<span class="alert-badge high">{{ alert_counts.high }} high</span>{% endif %}
         </span>
         <div style="display:flex;gap:6px;align-items:center;">
-            <button class="btn btn-sm btn-outline" onclick="refreshAlerts()" title="Refresh">&#8635;</button>
+            <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();refreshAlerts()" title="Refresh">&#8635;</button>
+            <span id="alert-chevron" style="font-size:0.8rem;color:var(--gray);transition:transform 0.2s;">&#9660;</span>
         </div>
     </div>
-    <div class="card-body">
-        {% for alert in critical_alerts %}
+    <div class="card-body" id="alert-body" style="display:none;">
+        {% for alert in critical_alerts[:5] %}
         <div class="alert-item priority-{{ alert.priority_label }}">
             <div class="alert-priority-dot"></div>
             <div class="alert-content">
@@ -60,15 +61,9 @@
             {% endif %}
         </div>
         {% endfor %}
-        {% if alerts|length > critical_alerts|length %}
-        <div style="text-align:center;padding:8px 0 4px;">
-            <button class="btn btn-sm btn-outline" onclick="toggleAllAlerts()" id="all-alerts-toggle" style="font-size:0.82rem;">
-                View All Alerts ({{ alerts|length }})
-            </button>
-        </div>
-        <div id="all-alerts-list" style="display:none;">
-            {% for alert in alerts %}
-            {% if alert.priority_label not in ('critical', 'high') %}
+        {% if critical_alerts|length > 5 %}
+        <div id="extra-alerts" style="display:none;">
+            {% for alert in critical_alerts[5:] %}
             <div class="alert-item priority-{{ alert.priority_label }}">
                 <div class="alert-priority-dot"></div>
                 <div class="alert-content">
@@ -84,8 +79,17 @@
                 <a href="{{ alert.action_url }}" class="btn btn-sm btn-outline alert-action">{{ alert.action_label or 'View' }}</a>
                 {% endif %}
             </div>
-            {% endif %}
             {% endfor %}
+        </div>
+        <div style="text-align:center;padding:8px 0 4px;">
+            <button class="btn btn-sm btn-outline" onclick="toggleExtraAlerts()" id="extra-alerts-toggle" style="font-size:0.82rem;">
+                Show {{ critical_alerts|length - 5 }} more
+            </button>
+        </div>
+        {% endif %}
+        {% if alerts|length > critical_alerts|length %}
+        <div style="text-align:center;padding:4px 0;font-size:0.78rem;color:var(--gray);">
+            {{ alerts|length - critical_alerts|length }} lower-priority alerts hidden
         </div>
         {% endif %}
     </div>
@@ -544,15 +548,26 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* Alert controls */
-function toggleAllAlerts() {
-    var list = document.getElementById('all-alerts-list');
-    var btn = document.getElementById('all-alerts-toggle');
-    if (list.style.display === 'none') {
-        list.style.display = 'block';
-        btn.textContent = 'Hide Extra Alerts';
+function toggleAlertPanel() {
+    var body = document.getElementById('alert-body');
+    var chev = document.getElementById('alert-chevron');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        chev.style.transform = 'rotate(180deg)';
     } else {
-        list.style.display = 'none';
-        btn.textContent = 'View All Alerts ({{ alerts|length }})';
+        body.style.display = 'none';
+        chev.style.transform = '';
+    }
+}
+function toggleExtraAlerts() {
+    var extra = document.getElementById('extra-alerts');
+    var btn = document.getElementById('extra-alerts-toggle');
+    if (extra.style.display === 'none') {
+        extra.style.display = 'block';
+        btn.textContent = 'Show less';
+    } else {
+        extra.style.display = 'none';
+        btn.textContent = 'Show {{ critical_alerts|length - 5 }} more';
     }
 }
 function refreshAlerts() {

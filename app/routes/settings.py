@@ -704,3 +704,23 @@ def alerts():
 
     return render_template('settings/alerts.html',
         thresholds=current, defaults=DEFAULT_THRESHOLDS)
+
+
+@settings_bp.route('/factory-reset', methods=['POST'])
+@login_required
+def factory_reset():
+    """Delete all data and restart the setup wizard."""
+    from flask_login import logout_user
+    log_action('delete', 'factory_reset', details='Full factory reset initiated')
+    logout_user()
+    db_path = Config.SQLALCHEMY_DATABASE_URI.replace('sqlite:///', '')
+    if os.path.exists(db_path):
+        os.remove(db_path)
+    uploads_dir = os.path.join(Config.BASE_DIR, 'data', 'uploads')
+    if os.path.isdir(uploads_dir):
+        shutil.rmtree(uploads_dir)
+        os.makedirs(uploads_dir, exist_ok=True)
+    schema_hash = os.path.join(Config.BASE_DIR, 'data', '.schema_hash')
+    if os.path.exists(schema_hash):
+        os.remove(schema_hash)
+    return redirect('/setup')
