@@ -1,0 +1,155 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+     background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+     min-height:100vh;color:#333;display:flex;align-items:center;justify-content:center;padding:16px}
+.wizard{background:#fff;border-radius:16px;width:720px;max-width:100%;
+        box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;position:relative}
+.wizard-header{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;
+               padding:32px 40px 24px;text-align:center}
+.wizard-header h1{font-size:1.6rem;margin-bottom:6px;font-weight:700}
+.wizard-header p{opacity:.85;font-size:.9rem}
+
+/* Progress bar */
+.progress-bar{display:flex;padding:0 24px;margin-top:-14px;position:relative;z-index:2}
+.progress-step{flex:1;text-align:center;position:relative}
+.progress-step .dot{width:28px;height:28px;border-radius:50%;background:#e5e7eb;
+                    border:3px solid #fff;display:inline-flex;align-items:center;
+                    justify-content:center;font-size:.72rem;font-weight:700;color:#9ca3af;
+                    position:relative;z-index:2;transition:all .3s}
+.progress-step.active .dot{background:#2563eb;color:#fff}
+.progress-step.done .dot{background:#10b981;color:#fff}
+.progress-step .label{display:block;font-size:.65rem;color:#6b7280;margin-top:4px}
+.progress-step.active .label{color:#2563eb;font-weight:600}
+.progress-line{position:absolute;top:14px;left:7%;right:7%;height:3px;background:#e5e7eb;z-index:1}
+.progress-line .fill{height:100%;background:#2563eb;transition:width .4s;width:0%}
+
+/* Steps */
+.step{display:none;padding:28px 40px 20px;animation:fadeIn .3s}
+.step.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.step h2{font-size:1.15rem;margin-bottom:4px;color:#1e293b}
+.step .desc{color:#64748b;font-size:.85rem;margin-bottom:18px}
+
+/* Form elements */
+.form-row{margin-bottom:14px}
+.form-row label{display:block;font-size:.8rem;font-weight:600;color:#374151;margin-bottom:4px}
+.form-row input[type="text"],.form-row input[type="password"],.form-row input[type="date"],
+.form-row select{width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:8px;
+                  font-size:.88rem;transition:border-color .2s}
+.form-row input:focus,.form-row select:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.form-row .hint{font-size:.75rem;color:#9ca3af;margin-top:3px}
+.form-row.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-row.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* Grade level checkboxes */
+.grade-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+.grade-check{display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer}
+.grade-check input{accent-color:#2563eb;width:16px;height:16px}
+
+/* Color pickers */
+.color-row{display:flex;gap:8px;align-items:center}
+.color-row input[type="color"]{width:40px;height:36px;border:1.5px solid #d1d5db;border-radius:6px;
+                                padding:2px;cursor:pointer;background:#fff}
+.color-row input[type="text"]{flex:1}
+
+/* Emoji picker */
+.emoji-picks{display:flex;gap:4px;flex-wrap:wrap}
+.emoji-btn{width:36px;height:36px;border:1.5px solid #e5e7eb;border-radius:8px;
+           background:#f9fafb;cursor:pointer;font-size:1.1rem;line-height:1;
+           display:flex;align-items:center;justify-content:center;transition:all .15s}
+.emoji-btn:hover{border-color:#2563eb;background:#eff6ff}
+.emoji-btn.selected{border-color:#2563eb;background:#dbeafe;box-shadow:0 0 0 2px rgba(37,99,235,.2)}
+
+/* Logo upload */
+.logo-drop{border:2px dashed #d1d5db;border-radius:10px;padding:16px;text-align:center;
+           cursor:pointer;transition:all .2s;background:#f9fafb}
+.logo-drop:hover,.logo-drop.dragover{border-color:#2563eb;background:#eff6ff}
+.logo-drop .sub-text{font-size:.75rem;color:#9ca3af}
+.btn-remove-logo{background:none;border:none;color:#dc2626;font-size:.78rem;cursor:pointer;
+                  margin-top:4px;text-decoration:underline}
+
+/* File upload */
+.file-drop{border:2px dashed #d1d5db;border-radius:10px;padding:28px;text-align:center;
+           cursor:pointer;transition:all .2s;background:#f9fafb}
+.file-drop:hover,.file-drop.dragover{border-color:#2563eb;background:#eff6ff}
+.file-drop .icon{font-size:2rem;margin-bottom:8px;display:block}
+.file-drop .main-text{font-weight:600;color:#374151;margin-bottom:4px}
+.file-drop .sub-text{font-size:.8rem;color:#9ca3af}
+.file-info{margin-top:10px;padding:10px 14px;background:#f0fdf4;border-radius:8px;
+           font-size:.85rem;color:#15803d;display:none}
+.file-info.show{display:block}
+
+/* Import preview & mapping */
+.import-preview{margin-top:14px;display:none}
+.import-preview.show{display:block}
+.mapping-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mapping-grid label{font-size:.8rem;font-weight:600;color:#374151;margin-bottom:2px;display:block}
+.mapping-grid select{width:100%;padding:7px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:.82rem}
+
+/* Integrations */
+.integration-section h3{font-size:.95rem;color:#1e293b;margin-bottom:4px}
+
+/* Theme pills */
+.theme-pills{display:flex;gap:8px;flex-wrap:wrap}
+.theme-pill{padding:8px 16px;border:1.5px solid #e5e7eb;border-radius:8px;background:#f9fafb;
+            cursor:pointer;font-size:.85rem;font-weight:500;transition:all .15s}
+.theme-pill:hover{border-color:#2563eb;background:#eff6ff}
+.theme-pill.active{border-color:#2563eb;background:#dbeafe;color:#1d4ed8;font-weight:600}
+
+/* Finish summary */
+.finish-summary{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;
+                padding:16px 20px;margin:14px 0;list-style:none}
+.finish-summary li{padding:3px 0;font-size:.88rem}
+.finish-summary .check{color:#16a34a;font-weight:700;margin-right:6px}
+.finish-summary .miss{color:#9ca3af;margin-right:6px}
+
+/* Post-setup links */
+.post-setup{margin-top:16px;padding:14px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}
+.post-setup p{font-size:.82rem;color:#64748b;margin-bottom:8px}
+.post-links{display:flex;gap:10px;flex-wrap:wrap}
+.post-link{font-size:.82rem;color:#2563eb;text-decoration:none;font-weight:600;
+           padding:6px 12px;background:#eff6ff;border-radius:6px;transition:background .15s}
+.post-link:hover{background:#dbeafe}
+
+/* Navigation */
+.wizard-nav{display:flex;justify-content:space-between;padding:14px 40px 24px;align-items:center}
+.btn{padding:10px 24px;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;
+     border:none;transition:all .2s}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-primary:hover{background:#1d4ed8}
+.btn-secondary{background:#f1f5f9;color:#475569}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-skip{background:none;color:#9ca3af;font-size:.8rem;text-decoration:underline;
+          cursor:pointer;border:none;padding:0}
+.btn-skip:hover{color:#6b7280}
+
+/* Welcome step */
+.welcome-features{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.wf-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;text-align:center}
+.wf-card .wf-icon{font-size:1.5rem;margin-bottom:4px;display:block}
+.wf-card .wf-title{font-weight:600;font-size:.85rem;color:#1e293b;margin-bottom:2px}
+.wf-card .wf-desc{font-size:.75rem;color:#64748b}
+
+/* FERPA badge */
+.ferpa-badge{display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;
+             border:1px solid #86efac;padding:4px 12px;border-radius:20px;font-size:.75rem;
+             font-weight:600;color:#15803d;margin-top:8px}
+
+/* Password strength */
+.pw-strength{height:4px;border-radius:2px;background:#e5e7eb;margin-top:4px;overflow:hidden}
+.pw-strength .pw-bar{height:100%;transition:width .3s, background .3s;width:0}
+
+/* Responsive */
+@media(max-width:600px){
+    .wizard-header{padding:24px 20px 18px}
+    .step{padding:20px 16px 14px}
+    .wizard-nav{padding:10px 16px 18px}
+    .welcome-features{grid-template-columns:1fr}
+    .grade-grid{grid-template-columns:repeat(3,1fr)}
+    .form-row.two-col,.form-row.three-col{grid-template-columns:1fr}
+    .progress-bar{padding:0 12px}
+    .progress-step .label{font-size:.58rem}
+    .mapping-grid{grid-template-columns:1fr}
+    .theme-pills{gap:6px}
+    .theme-pill{padding:6px 12px;font-size:.8rem}
+}

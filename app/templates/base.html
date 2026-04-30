@@ -212,8 +212,14 @@
             }
         });
     })();
+    if (window.innerWidth <= 768) {
+        document.querySelectorAll('.sidebar .nav-item').forEach(function(link){
+            link.addEventListener('click', function(){ document.getElementById('sidebar').classList.remove('open'); });
+        });
+    }
     </script>
 
+    <div class="sidebar-backdrop" onclick="document.getElementById('sidebar').classList.remove('open')"></div>
     <div class="main-content">
         <div class="top-bar">
             <div style="display:flex;align-items:center;gap:12px;">
@@ -225,8 +231,8 @@
                 <!-- Global search icon -->
                 <div id="global-search" style="position:relative;">
                     <div id="search-toggle" onclick="toggleGlobalSearch()" style="cursor:pointer;font-size:1.2rem;line-height:1;" title="Search (Ctrl+K)">&#128269;</div>
-                    <div id="search-overlay" style="display:none;position:absolute;right:0;top:32px;
-                         width:400px;background:var(--surface);border:1px solid var(--border);
+                    <div id="search-overlay" style="display:none;position:fixed;right:12px;top:56px;
+                         width:min(400px,calc(100vw - 24px));background:var(--surface,#fff);border:1px solid var(--border,#dee2e6);
                          border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.18);z-index:9999;padding:10px;">
                         <input type="text" id="global-search-input" class="form-control"
                                placeholder="Search students, notes, meetings..."

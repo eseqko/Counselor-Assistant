@@ -54,7 +54,9 @@ if __name__ == '__main__':
         host = explicit_host
         mode = 'manual'
     elif tailscale_ip:
-        host = tailscale_ip
+        # Bind to 0.0.0.0 so both localhost and Tailscale connections work.
+        # Flask middleware below restricts non-localhost to Tailscale IPs only.
+        host = '0.0.0.0'
         mode = 'tailscale'
     else:
         host = '127.0.0.1'
@@ -84,5 +86,16 @@ if __name__ == '__main__':
     print("  Press Ctrl+C to stop the server.")
     print("=" * 60)
     print()
+
+    if mode == 'tailscale':
+        from flask import request as flask_request, abort
+
+        @app.before_request
+        def _tailscale_guard():
+            remote = flask_request.remote_addr or ''
+            if remote.startswith('127.') or remote.startswith('100.') or remote == '::1':
+                return  # localhost or Tailscale CGNAT — allowed
+            abort(403)
+
     app.run(host=host, port=5000,
             debug=os.environ.get('FLASK_DEBUG', '').lower() == 'true')
