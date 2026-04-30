@@ -21,7 +21,6 @@ def _create_follow_up_event(note):
     if note.title:
         title += f" — {note.title}"
 
-    # Set event at 9:00 AM on the follow-up date, 30 min duration
     start_dt = datetime.combine(note.follow_up_date, datetime.min.time().replace(hour=9))
     end_dt = start_dt + timedelta(minutes=30)
 
@@ -88,11 +87,17 @@ def add_note():
             note_type=request.form['note_type'],
             title=request.form.get('title', ''),
             content=request.form['content'],
+            private_comment=request.form.get('private_comment', ''),
             session_date=parse_date(request.form.get('session_date')) or date.today(),
             duration_minutes=int(request.form['duration_minutes']) if request.form.get('duration_minutes') else None,
             asca_domain=request.form.get('asca_domain', ''),
             topic_category=request.form.get('topic_category', ''),
             delivery_method=request.form.get('delivery_method', ''),
+            setting=request.form.get('setting', ''),
+            outcome=request.form.get('outcome', ''),
+            referred_by=request.form.get('referred_by', ''),
+            referral_made='referral_made' in request.form,
+            referral_to=request.form.get('referral_to', ''),
             follow_up_needed='follow_up_needed' in request.form,
             follow_up_date=parse_date(request.form.get('follow_up_date')),
             follow_up_notes=request.form.get('follow_up_notes', ''),
@@ -126,7 +131,8 @@ def add_note():
 def view_note(id):
     note = Note.query.get_or_404(id)
     log_action('view', 'note', note.id)
-    return render_template('notes/view.html', note=note)
+    return render_template('notes/view.html', note=note,
+        note_types=Note.NOTE_TYPES)
 
 
 @notes_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
@@ -138,11 +144,17 @@ def edit_note(id):
         note.note_type = request.form['note_type']
         note.title = request.form.get('title', '')
         note.content = request.form['content']
+        note.private_comment = request.form.get('private_comment', '')
         note.session_date = parse_date(request.form.get('session_date')) or note.session_date
         note.duration_minutes = int(request.form['duration_minutes']) if request.form.get('duration_minutes') else None
         note.asca_domain = request.form.get('asca_domain', '')
         note.topic_category = request.form.get('topic_category', '')
         note.delivery_method = request.form.get('delivery_method', '')
+        note.setting = request.form.get('setting', '')
+        note.outcome = request.form.get('outcome', '')
+        note.referred_by = request.form.get('referred_by', '')
+        note.referral_made = 'referral_made' in request.form
+        note.referral_to = request.form.get('referral_to', '')
         old_follow_up_date = note.follow_up_date
         old_follow_up_needed = note.follow_up_needed
 
@@ -151,7 +163,6 @@ def edit_note(id):
         note.follow_up_notes = request.form.get('follow_up_notes', '')
         note.is_confidential = 'is_confidential' in request.form
 
-        # Create calendar event if follow-up was just added or date changed
         event = None
         if note.follow_up_needed and note.follow_up_date:
             if not old_follow_up_needed or old_follow_up_date != note.follow_up_date:

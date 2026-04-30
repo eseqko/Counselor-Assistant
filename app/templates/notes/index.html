@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Counselor Notes{% endblock %}
-{% block page_title %}Counselor Notes{% endblock %}
+{% block title %}Conference Notes{% endblock %}
+{% block page_title %}Conference Notes{% endblock %}
 {% block content %}
 
 <div class="ferpa-notice">&#128274; All notes are confidential and FERPA-protected. Access is logged.</div>
@@ -21,9 +21,9 @@
             </select>
         </div>
         <div class="form-group">
-            <label>Type</label>
+            <label>Category</label>
             <select name="type" class="form-control">
-                <option value="">All Types</option>
+                <option value="">All Categories</option>
                 {% for val, label in note_types %}
                 <option value="{{ val }}" {{ 'selected' if note_type == val }}>{{ label }}</option>
                 {% endfor %}
@@ -43,6 +43,8 @@
     </form>
 </div>
 
+{% set type_labels = dict(note_types) %}
+
 <div class="card">
     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <span>Notes ({{ notes|length }})</span>
@@ -60,7 +62,7 @@
             <table>
                 <thead><tr>
                     <th style="width:30px;display:none;" class="select-col"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
-                    <th>Date</th><th>Student</th><th>Type</th><th>Title</th><th>Domain</th><th>Follow-Up</th><th>Actions</th>
+                    <th>Date</th><th>Student</th><th>Category</th><th>Title</th><th>Domain</th><th>Follow-Up</th><th>Actions</th>
                 </tr></thead>
                 <tbody>
                     {% for note in notes %}
@@ -68,10 +70,13 @@
                         <td style="display:none;" class="select-col"><input type="checkbox" name="note_ids" value="{{ note.id }}" onclick="updateCount()"></td>
                         <td>{{ note.session_date.strftime('%m/%d/%Y') }}</td>
                         <td><a href="{{ url_for('caseload.view_student', id=note.student.id) }}">{{ note.student.display_name }}</a></td>
-                        <td><span class="badge badge-info">{{ note.note_type }}</span></td>
+                        <td><span class="badge badge-info">{{ type_labels.get(note.note_type, note.note_type) }}</span></td>
                         <td><a href="{{ url_for('notes.view_note', id=note.id) }}">{{ note.title or 'View' }}</a></td>
                         <td>{{ note.asca_domain or '-' }}</td>
-                        <td>{% if note.follow_up_needed %}<span class="badge badge-warning">{{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'Yes' }}</span>{% endif %}</td>
+                        <td>
+                            {% if note.follow_up_needed %}<span class="badge badge-warning">{{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'Yes' }}</span>{% endif %}
+                            {% if note.referral_made %}<span class="badge badge-primary">Referral</span>{% endif %}
+                        </td>
                         <td><a href="{{ url_for('notes.edit_note', id=note.id) }}" class="btn btn-sm btn-outline">Edit</a></td>
                     </tr>
                     {% endfor %}
@@ -95,7 +100,6 @@ function toggleSelectMode() {
     }
     btn.textContent = selectMode ? 'Cancel' : 'Select';
     if (!selectMode) {
-        // Uncheck all
         var boxes = document.querySelectorAll('input[name="note_ids"]');
         for (var j = 0; j < boxes.length; j++) boxes[j].checked = false;
         document.getElementById('selectAll').checked = false;

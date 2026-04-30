@@ -10,7 +10,6 @@ from app.models.student import Student
 from app.models.note import Note
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
-from app.models.service_record import ServiceRecord
 from app.models.calendar_event import CalendarEvent
 from app.utils.ai_tools_registry import AI_TOOLS, CATEGORIES, get_tool, get_tools_by_category, search_tools
 from app.utils import ollama_client
@@ -352,20 +351,20 @@ def action_log_service():
     if not student_id:
         return jsonify({'ok': False, 'error': 'A student must be linked to log a service'}), 400
 
-    record = ServiceRecord(
+    note = Note(
         student_id=int(student_id),
-        counselor_id=current_user.id,
-        date=date.today(),
-        service_type=data.get('service_type', 'individual_counseling'),
-        topic=data.get('title', 'AI-Assisted Session'),
-        description=description,
+        author_id=current_user.id,
+        session_date=date.today(),
+        note_type=data.get('service_type', 'student_conference'),
+        title=data.get('title', 'AI-Assisted Session'),
+        content=description,
         duration_minutes=data.get('duration', 30),
         asca_domain=data.get('asca_domain', ''),
     )
-    db.session.add(record)
+    db.session.add(note)
     db.session.commit()
-    log_action('service_create', 'service_record', record.id, f'Created from AI Tools: {record.topic}')
-    return jsonify({'ok': True, 'record_id': record.id, 'message': 'Service record logged.'})
+    log_action('create', 'note', note.id, f'Created from AI Tools: {note.title}')
+    return jsonify({'ok': True, 'record_id': note.id, 'message': 'Note logged.'})
 
 
 @ai_tools_bp.route('/actions/add-calendar', methods=['POST'])

@@ -135,7 +135,7 @@
 
 <div class="grid-2">
     <div class="card">
-        <div class="card-header">Service Type Breakdown</div>
+        <div class="card-header">Note Categories</div>
         <div class="card-body" style="position:relative;height:240px;display:flex;align-items:center;justify-content:center;">
             <canvas id="svcBreakdownChart"></canvas>
         </div>
@@ -275,9 +275,6 @@
             <a href="{{ url_for('activity_log.add_activity') }}" class="quick-action">
                 <span class="qa-icon">&#9202;</span> Log Activity
             </a>
-            <a href="{{ url_for('service_log.add_record') }}" class="quick-action">
-                <span class="qa-icon">&#128203;</span> Log Service
-            </a>
             <a href="{{ url_for('reports.use_of_time') }}" class="quick-action">
                 <span class="qa-icon">&#128200;</span> Use of Time
             </a>
@@ -306,17 +303,19 @@
     </div>
 
     <div class="card">
-        <div class="card-header">Recent Services</div>
+        <div class="card-header">Upcoming Follow-Ups</div>
         <div class="card-body">
-            {% for rec in recent_services %}
+            {% for note in follow_ups %}
             <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;">
-                <strong>{{ rec.student.display_name }}</strong>
-                <span class="badge badge-primary">{{ rec.service_type }}</span>
-                <div style="font-size:0.82rem;color:var(--gray);">{{ rec.date.strftime('%m/%d/%Y') }}{% if rec.topic %} - {{ rec.topic }}{% endif %}</div>
+                <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);">
+                    <strong>{{ note.student.display_name }}</strong>
+                    <span class="badge badge-warning">{{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'Pending' }}</span>
+                    <div style="font-size:0.82rem;color:var(--gray);">{{ note.title or note.note_type }}</div>
+                </a>
             </div>
             {% endfor %}
-            {% if not recent_services %}
-            <div class="empty-state"><p>No service records yet.</p></div>
+            {% if not follow_ups %}
+            <div class="empty-state"><p>No pending follow-ups.</p></div>
             {% endif %}
         </div>
     </div>
