@@ -48,7 +48,6 @@
             {% endif %}
             <a href="{{ url_for('caseload.edit_student', id=student.id) }}" class="btn btn-sm btn-outline">Edit</a>
             <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Note</a>
-            <a href="{{ url_for('service_log.add_record', student_id=student.id) }}" class="btn btn-sm btn-success">+ Service</a>
         </div>
     </div>
 </div>
@@ -721,31 +720,6 @@ function addCteRow() {
     </div>
 </div>
 
-<!-- Recent Services -->
-<div class="card">
-    <div class="card-header">
-        Service History
-        <a href="{{ url_for('service_log.index', student_id=student.id) }}" class="btn btn-sm btn-outline">View All</a>
-    </div>
-    <div class="table-responsive">
-        <table>
-            <thead><tr><th>Date</th><th>Service Type</th><th>Topic</th><th>Duration</th></tr></thead>
-            <tbody>
-                {% for rec in services %}
-                <tr>
-                    <td>{{ rec.date.strftime('%m/%d/%Y') }}</td>
-                    <td><span class="badge badge-primary">{{ rec.service_type }}</span></td>
-                    <td>{{ rec.topic or '-' }}</td>
-                    <td>{{ rec.duration_minutes or '-' }} min</td>
-                </tr>
-                {% endfor %}
-                {% if not services %}
-                <tr><td colspan="4"><div class="empty-state"><p>No service records.</p></div></td></tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </div>
-</div>
 
 <!-- AI Support Insights -->
 <div class="card no-print">

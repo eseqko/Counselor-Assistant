@@ -128,7 +128,6 @@ def view_student(id):
     student = Student.query.get_or_404(id)
     log_action('view', 'student', student.id)
     notes = student.notes.limit(10).all()
-    services = student.service_records.limit(10).all()
     latest_transcript = student.transcript_records.first()
 
     # Pre-parse JSON fields for template
@@ -163,7 +162,7 @@ def view_student(id):
             pass
 
     return render_template('caseload/view.html',
-        student=student, notes=notes, services=services,
+        student=student, notes=notes,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,

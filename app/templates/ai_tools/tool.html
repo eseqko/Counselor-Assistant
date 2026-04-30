@@ -367,23 +367,26 @@ function showActionModal(action) {
             '<button onclick="submitAction(\'note\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
             '\u{1F4DC} Save Note</button>';
     } else if (action === 'service') {
-        title.textContent = '\u{1F4CB} Log Service Record';
+        title.textContent = '\u{1F4CB} Log Note';
         body.innerHTML =
             '<div style="margin-bottom:12px;">' +
-            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Service Type</label>' +
+            '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Category</label>' +
             '<select id="action-service-type" class="form-control" style="width:100%;">' +
-            '<option value="individual_counseling">Individual Counseling</option>' +
+            '<option value="student_conference">Student Conference</option>' +
+            '<option value="academic">Academic</option>' +
+            '<option value="behavior">Behavior</option>' +
+            '<option value="social_emotional">Social/Emotional Counseling</option>' +
+            '<option value="college_career">College/Career Planning</option>' +
+            '<option value="parent_guardian_contact">Parent/Guardian Contact</option>' +
             '<option value="group_counseling">Group Counseling</option>' +
-            '<option value="crisis_intervention">Crisis Intervention</option>' +
-            '<option value="consultation">Consultation</option>' +
-            '<option value="parent_conference">Parent Conference</option>' +
-            '<option value="college_career">College &amp; Career</option>' +
+            '<option value="crisis">Crisis Intervention</option>' +
+            '<option value="scheduling">Scheduling</option>' +
             '</select></div>' +
             '<div style="margin-bottom:12px;">' +
             '<label style="font-weight:600;font-size:0.84rem;display:block;margin-bottom:4px;">Duration (minutes)</label>' +
             '<input type="number" id="action-duration" class="form-control" value="30" style="width:100%;"></div>' +
             '<button onclick="submitAction(\'service\')" class="btn btn-primary" style="width:100%;border-radius:8px;">' +
-            '\u{1F4CB} Log Service</button>';
+            '\u{1F4CB} Log Note</button>';
     } else if (action === 'calendar') {
         title.textContent = '\u{1F4C5} Add to Calendar';
         body.innerHTML =

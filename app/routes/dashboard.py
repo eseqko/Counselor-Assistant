@@ -5,7 +5,6 @@ from app.models.student import Student
 from app.models.calendar_event import CalendarEvent
 from app.models.note import Note
 from app.models.activity import Activity
-from app.models.service_record import ServiceRecord
 from app.models.transcript import TranscriptRecord
 from app.utils.alert_engine import get_alerts
 from sqlalchemy import func as sa_func
@@ -228,11 +227,6 @@ def index():
         Note.follow_up_completed_date > five_days_ago
     ).order_by(Note.follow_up_completed_date.desc()).all()
 
-    # Recent service records
-    recent_services = ServiceRecord.query.filter_by(
-        counselor_id=current_user.id
-    ).order_by(ServiceRecord.date.desc()).limit(5).all()
-
     # Graduation at-risk summary from transcript records
     grad_risk = {'critical': 0, 'at-risk': 0, 'warning': 0, 'on-track': 0}
     if my_student_ids:
@@ -269,14 +263,14 @@ def index():
         ).count()
         note_trend.append({'label': wk_start.strftime('%m/%d'), 'count': count})
 
-    # 2) Service type breakdown — all-time counts by service_type
-    svc_type_labels = dict(ServiceRecord.SERVICE_TYPES)
-    svc_rows = db.session.query(
-        ServiceRecord.service_type, sa_func.count(ServiceRecord.id)
-    ).filter_by(counselor_id=current_user.id).group_by(
-        ServiceRecord.service_type
+    # 2) Note category breakdown — all-time counts by note_type
+    note_type_labels = dict(Note.NOTE_TYPES)
+    note_type_rows = db.session.query(
+        Note.note_type, sa_func.count(Note.id)
+    ).filter_by(author_id=current_user.id).group_by(
+        Note.note_type
     ).all()
-    svc_breakdown = {svc_type_labels.get(k, k): v for k, v in svc_rows}
+    svc_breakdown = {note_type_labels.get(k, k): v for k, v in note_type_rows}
 
     return render_template('dashboard/index.html',
         today=today,
@@ -285,7 +279,6 @@ def index():
         external_events=[],
         all_event_count=len(todays_events),
         recent_notes=recent_notes,
-        recent_services=recent_services,
         follow_ups=follow_ups,
         archived_follow_ups=archived_follow_ups,
         total_minutes=total_minutes,

@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Note - {{ note.student.display_name }}{% endblock %}
-{% block page_title %}Counselor Note{% endblock %}
+{% block page_title %}Conference Note{% endblock %}
 {% block content %}
 <div class="ferpa-notice">&#128274; Confidential Record - Access Logged</div>
 
-<div class="card" style="max-width:800px;">
+<div class="card" style="max-width:860px;">
     <div class="card-header">
-        {{ note.title or note.note_type }}
+        {{ note.title or dict(note_types).get(note.note_type, note.note_type) }}
         <div class="btn-group">
-            <button type="button" class="btn btn-sm btn-outline" id="copy-synergy-btn" onclick="copyForSynergy()" title="Copy a formatted version to paste into Synergy's log">Copy for Synergy</button>
+            <button type="button" class="btn btn-sm btn-outline" id="copy-synergy-btn" onclick="copyForSynergy()" title="Copy a formatted version to paste into Synergy">Copy for Synergy</button>
             <a href="{{ url_for('notes.edit_note', id=note.id) }}" class="btn btn-sm btn-outline">Edit</a>
             <button class="btn btn-sm btn-outline btn-print">Print</button>
         </div>
@@ -17,21 +17,40 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
             <div><strong>Student:</strong> <a href="{{ url_for('caseload.view_student', id=note.student.id) }}">{{ note.student.display_name }}</a></div>
             <div><strong>Date:</strong> {{ note.session_date.strftime('%m/%d/%Y') }}</div>
-            <div><strong>Type:</strong> <span class="badge badge-info">{{ note.note_type }}</span></div>
+            <div><strong>Category:</strong> <span class="badge badge-info">{{ dict(note_types).get(note.note_type, note.note_type) }}</span></div>
             <div><strong>Duration:</strong> {{ note.duration_minutes or 'N/A' }} min</div>
             <div><strong>ASCA Domain:</strong> {{ note.asca_domain or 'N/A' }}</div>
             <div><strong>Delivery:</strong> {{ note.delivery_method or 'N/A' }}</div>
+            {% if note.setting %}<div><strong>Setting:</strong> {{ note.setting }}</div>{% endif %}
             {% if note.topic_category %}<div><strong>Topic:</strong> {{ note.topic_category }}</div>{% endif %}
+            {% if note.referred_by %}<div><strong>Referred By:</strong> {{ note.referred_by }}</div>{% endif %}
         </div>
 
-        <h3 style="font-size:0.95rem;margin-bottom:8px;">Notes</h3>
+        <h3 style="font-size:0.95rem;margin-bottom:8px;">Comment</h3>
         <div style="background:var(--bg);padding:16px;border-radius:6px;line-height:1.6;white-space:pre-wrap;">{{ note.content }}</div>
 
-        {% if note.follow_up_needed %}
+        {% if note.private_comment %}
+        <h3 style="font-size:0.95rem;margin:16px 0 8px;">Private Comment</h3>
+        <div style="background:#FFF8E1;padding:16px;border-radius:6px;line-height:1.6;white-space:pre-wrap;border:1px solid #FFE082;">{{ note.private_comment }}</div>
+        {% endif %}
+
+        {% if note.outcome %}
+        <div style="margin-top:16px;">
+            <strong>Outcome:</strong> {{ note.outcome }}
+        </div>
+        {% endif %}
+
+        {% if note.follow_up_needed or note.referral_made %}
         <div style="margin-top:20px;padding:12px;background:#FFF3D6;border-radius:6px;">
+            {% if note.follow_up_needed %}
             <strong>Follow-Up Required</strong>
             {% if note.follow_up_date %}<br>Date: {{ note.follow_up_date.strftime('%m/%d/%Y') }}{% endif %}
             {% if note.follow_up_notes %}<br>{{ note.follow_up_notes }}{% endif %}
+            {% endif %}
+            {% if note.referral_made %}
+            {% if note.follow_up_needed %}<br><br>{% endif %}
+            <strong>Referral Made</strong>{% if note.referral_to %}: {{ note.referral_to }}{% endif %}
+            {% endif %}
         </div>
         {% endif %}
 
@@ -43,7 +62,7 @@
 </div>
 
 <!-- AI Feedback Section -->
-<div class="card no-print" style="max-width:800px;" id="ai-feedback-card">
+<div class="card no-print" style="max-width:860px;" id="ai-feedback-card">
     <div class="card-header">
         AI Note Feedback
         <button class="btn btn-sm btn-primary" onclick="getNoteFeedback()" id="ai-feedback-btn">Get AI Feedback</button>
@@ -67,16 +86,25 @@ function copyForSynergy() {
     var btn = document.getElementById('copy-synergy-btn');
     var lines = [];
     lines.push('[Counselor Contact — ' + {{ (note.session_date.strftime('%m/%d/%Y') if note.session_date else '')|tojson }} + ']');
-    {% if note.note_type %}lines.push('Type: ' + {{ note.note_type|tojson }});{% endif %}
+    {% if note.note_type %}lines.push('Category: ' + {{ (dict(note_types).get(note.note_type, note.note_type))|tojson }});{% endif %}
     {% if note.duration_minutes %}lines.push('Duration: {{ note.duration_minutes }} min');{% endif %}
     {% if note.delivery_method %}lines.push('Delivery: ' + {{ note.delivery_method|tojson }});{% endif %}
+    {% if note.setting %}lines.push('Setting: ' + {{ note.setting|tojson }});{% endif %}
     {% if note.asca_domain %}lines.push('ASCA Domain: ' + {{ note.asca_domain|tojson }});{% endif %}
     {% if note.topic_category %}lines.push('Topic: ' + {{ note.topic_category|tojson }});{% endif %}
+    {% if note.referred_by %}lines.push('Referred By: ' + {{ note.referred_by|tojson }});{% endif %}
     lines.push('');
     lines.push({{ (note.content or '')|tojson }});
+    {% if note.outcome %}
+    lines.push('');
+    lines.push('Outcome: ' + {{ note.outcome|tojson }});
+    {% endif %}
     {% if note.follow_up_needed %}
     lines.push('');
     lines.push('Follow-up needed{% if note.follow_up_date %} by {{ note.follow_up_date.strftime("%m/%d/%Y") }}{% endif %}.' + {{ (' ' + note.follow_up_notes if note.follow_up_notes else '')|tojson }});
+    {% endif %}
+    {% if note.referral_made %}
+    lines.push('Referral made{% if note.referral_to %} to {{ note.referral_to }}{% endif %}.');
     {% endif %}
     var text = lines.join('\n');
 
