@@ -37,6 +37,10 @@
 .nc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
 .nc-title{font-weight:600;font-size:1rem;color:#1e293b;}
 .nc-date{font-size:.78rem;color:#64748b;white-space:nowrap;}
+.nc-actions{display:flex;align-items:center;gap:8px;}
+.nc-delete{background:none;border:none;color:#9ca3af;font-size:1.1rem;cursor:pointer;
+    padding:2px 6px;border-radius:6px;transition:all .15s;line-height:1;}
+.nc-delete:hover{color:#dc2626;background:#fef2f2;}
 .nc-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;}
 .nc-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600;}
 .nc-type{background:#e0e7ff;color:#3730a3;}
@@ -107,7 +111,16 @@
          onclick="window.location='{{ url_for('meeting_notes.view', note_id=note.id) }}'">
         <div class="nc-top">
             <div class="nc-title">{{ note.title }}</div>
-            <div class="nc-date">{{ note.meeting_date.strftime('%b %d, %Y') }}</div>
+            <div class="nc-actions">
+                <span class="nc-date">{{ note.meeting_date.strftime('%b %d, %Y') }}</span>
+                <form method="POST" action="{{ url_for('meeting_notes.delete', note_id=note.id) }}"
+                      onclick="event.stopPropagation();"
+                      onsubmit="return confirm('Delete this meeting note? This cannot be undone.');"
+                      style="margin:0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="nc-delete" title="Delete note">&#128465;</button>
+                </form>
+            </div>
         </div>
         <div class="nc-meta">
             <span class="nc-badge nc-type">{{ type_map.get(note.meeting_type, note.meeting_type) }}</span>
