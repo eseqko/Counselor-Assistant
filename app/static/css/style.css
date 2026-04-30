@@ -212,53 +212,53 @@ body {
 }
 
 .card-header {
-    padding: 16px 20px;
+    padding: 14px 20px;
     border-bottom: 1px solid #E8ECF0;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.88rem;
+    color: #475569;
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
 .card-body {
-    padding: 20px;
+    padding: 16px 20px;
 }
 
 /* Stats Grid */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
 }
 
 .stat-card {
     background: var(--white);
     border-radius: 8px;
-    padding: 20px;
+    padding: 14px 16px;
     border: 1px solid #E8ECF0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .stat-card .stat-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--primary);
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #475569;
 }
 
 .stat-card .stat-label {
-    font-size: 0.8rem;
-    color: var(--gray);
+    font-size: 0.75rem;
+    color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
-.stat-card.accent .stat-value { color: var(--accent); }
-.stat-card.success .stat-value { color: var(--success); }
-.stat-card.danger .stat-value { color: var(--danger); }
-.stat-card.info .stat-value { color: var(--info); }
+.stat-card.accent .stat-value { color: #7c8da0; }
+.stat-card.success .stat-value { color: #5a8a6a; }
+.stat-card.danger .stat-value { color: #b85c5c; }
+.stat-card.info .stat-value { color: #5a7fa0; }
 
 /* Tables */
 .table-responsive { overflow-x: auto; }
@@ -576,7 +576,7 @@ select.form-control {
 .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 
 /* Grid layouts */
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
 
 /* Responsive */
@@ -680,12 +680,12 @@ select.form-control {
 .quick-action:hover {
     border-color: var(--primary-light);
     background: #F0F6FF;
-    transform: translateY(-2px);
 }
 
 .quick-action .qa-icon {
-    font-size: 1.5rem;
-    margin-bottom: 6px;
+    font-size: 1.3rem;
+    margin-bottom: 4px;
+    opacity: 0.6;
 }
 
 /* Glossary */

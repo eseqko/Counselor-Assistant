@@ -8,33 +8,37 @@
         <div class="stat-value">{{ total_students }}</div>
         <div class="stat-label">Active Students</div>
     </div>
-    <div class="stat-card accent">
+    <div class="stat-card">
         <div class="stat-value">{{ all_event_count }}</div>
         <div class="stat-label">Today's Events</div>
     </div>
-    <div class="stat-card info">
-        <div class="stat-value">{{ (total_minutes / 60)|round(1) }}h</div>
-        <div class="stat-label">Hours This Week</div>
-    </div>
-    <div class="stat-card danger">
+    <div class="stat-card">
         <div class="stat-value" id="follow-up-count">{{ follow_ups|length }}</div>
         <div class="stat-label">Follow-Ups Due</div>
     </div>
     {% if grad_at_risk_total > 0 %}
-    <div class="stat-card danger">
+    <div class="stat-card">
         <a href="{{ url_for('graduation.index') }}" style="text-decoration:none;color:inherit;">
-            <div class="stat-value">{{ grad_at_risk_total }}</div>
+            <div class="stat-value" style="color:var(--danger);">{{ grad_at_risk_total }}</div>
             <div class="stat-label">Grad At-Risk</div>
         </a>
     </div>
     {% endif %}
 </div>
 
+<!-- Compact Quick Actions -->
+<div class="dash-actions">
+    <a href="{{ url_for('notes.add_note') }}" class="dash-action-btn">New Note</a>
+    <a href="{{ url_for('calendar.add_event') }}" class="dash-action-btn">Add Event</a>
+    <a href="{{ url_for('caseload.add_student') }}" class="dash-action-btn">Add Student</a>
+    <a href="{{ url_for('activity_log.add_activity') }}" class="dash-action-btn">Log Activity</a>
+</div>
+
 <!-- Action Items (Critical Alerts Only) -->
 {% if critical_alerts %}
 <div class="card" id="action-items-panel">
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleAlertPanel()">
-        <span>Critical Action Items
+        <span>Action Items
             {% if alert_counts.get('critical') %}<span class="alert-badge critical">{{ alert_counts.critical }} critical</span>{% endif %}
             {% if alert_counts.get('high') %}<span class="alert-badge high">{{ alert_counts.high }} high</span>{% endif %}
         </span>
@@ -96,66 +100,12 @@
 </div>
 {% endif %}
 
-<!-- Use of Time Bar -->
-{% if total_minutes > 0 %}
-<div class="card">
-    <div class="card-header">Weekly Use of Time</div>
-    <div class="card-body">
-        <div class="time-chart">
-            {% if direct_minutes > 0 %}
-            <div class="segment direct" style="flex:{{ direct_minutes }}">{{ (direct_minutes/total_minutes*100)|round|int }}%</div>
-            {% endif %}
-            {% if indirect_minutes > 0 %}
-            <div class="segment indirect" style="flex:{{ indirect_minutes }}">{{ (indirect_minutes/total_minutes*100)|round|int }}%</div>
-            {% endif %}
-            {% if mgmt_minutes > 0 %}
-            <div class="segment management" style="flex:{{ mgmt_minutes }}">{{ (mgmt_minutes/total_minutes*100)|round|int }}%</div>
-            {% endif %}
-            {% if non_minutes > 0 %}
-            <div class="segment non-counseling" style="flex:{{ non_minutes }}">{{ (non_minutes/total_minutes*100)|round|int }}%</div>
-            {% endif %}
-        </div>
-        <div class="time-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div> Direct ({{ (direct_minutes/60)|round(1) }}h)</div>
-            <div class="legend-item"><div class="legend-dot" style="background:var(--info)"></div> Indirect ({{ (indirect_minutes/60)|round(1) }}h)</div>
-            <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Management ({{ (mgmt_minutes/60)|round(1) }}h)</div>
-            <div class="legend-item"><div class="legend-dot" style="background:var(--gray)"></div> Non-Counseling ({{ (non_minutes/60)|round(1) }}h)</div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Dashboard Charts -->
-<div class="card">
-    <div class="card-header">Note Activity — Last 8 Weeks</div>
-    <div class="card-body" style="position:relative;height:200px;">
-        <canvas id="noteActivityChart"></canvas>
-    </div>
-</div>
-
+<!-- Primary focus: Schedule + Follow-Ups -->
 <div class="grid-2">
-    <div class="card">
-        <div class="card-header">Note Categories</div>
-        <div class="card-body" style="position:relative;height:240px;display:flex;align-items:center;justify-content:center;">
-            <canvas id="svcBreakdownChart"></canvas>
-        </div>
-    </div>
-    {% if grad_risk.critical or grad_risk['at-risk'] or grad_risk.warning or grad_risk['on-track'] %}
-    <div class="card">
-        <div class="card-header">Caseload Risk Snapshot</div>
-        <div class="card-body" style="position:relative;height:240px;">
-            <canvas id="riskSnapshotChart"></canvas>
-        </div>
-    </div>
-    {% endif %}
-</div>
-
-<div class="grid-2">
-    <!-- Today's Schedule -->
     <div class="card">
         <div class="card-header">
             Today's Schedule
-            <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary">+ Add Event</a>
+            <a href="{{ url_for('calendar.add_event') }}" class="btn btn-sm btn-primary" style="font-size:0.78rem;">+ Event</a>
         </div>
         <div class="card-body">
             {% if todays_events %}
@@ -173,21 +123,16 @@
                         </div>
                     </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                    <span class="badge badge-{{ 'success' if event.status == 'completed' else 'primary' }}">{{ event.event_type }}</span>
-                    <button class="sched-btn" onclick="window.open('https://calendar.google.com/calendar/r/eventedit','_blank')" title="Reschedule">&#128197;</button>
-                    <button class="sched-btn" onclick="window.open('https://mail.google.com/mail/?view=cm&fs=1','_blank')" title="Email">&#9993;</button>
-                </div>
+                <span class="badge badge-{{ 'success' if event.status == 'completed' else 'primary' }}" style="flex-shrink:0;">{{ event.event_type }}</span>
             </div>
             {% endfor %}
             {% else %}
-            <div class="empty-state" id="no-events-msg"><p>No events scheduled for today.</p></div>
+            <div class="empty-state" id="no-events-msg"><p>No events today.</p></div>
             {% endif %}
             <div id="external-events-container"></div>
         </div>
     </div>
 
-    <!-- Follow-Ups Due -->
     <div class="card">
         <div class="card-header">Follow-Ups Due</div>
         <div class="card-body">
@@ -204,13 +149,13 @@
             </div>
             {% endfor %}
             {% else %}
-            <div class="empty-state"><p>No follow-ups due this week.</p></div>
+            <div class="empty-state"><p>No follow-ups due.</p></div>
             {% endif %}
 
             {% if archived_follow_ups %}
             <details style="margin-top:12px;">
                 <summary style="font-size:0.82rem;color:var(--gray);cursor:pointer;font-weight:600;">
-                    Archived ({{ archived_follow_ups|length }}) — auto-deletes after 5 days
+                    Archived ({{ archived_follow_ups|length }})
                 </summary>
                 {% for note in archived_follow_ups %}
                 <div id="followup-{{ note.id }}" style="padding:6px 0;border-bottom:1px solid #E8ECF0;display:flex;align-items:flex-start;gap:8px;opacity:0.5;">
@@ -258,70 +203,144 @@
     </div>
 </div>
 
-<!-- Quick Actions -->
-<div class="card">
-    <div class="card-header">Quick Actions</div>
-    <div class="card-body">
-        <div class="quick-actions">
-            <a href="{{ url_for('caseload.add_student') }}" class="quick-action">
-                <span class="qa-icon">&#128100;</span> Add Student
-            </a>
-            <a href="{{ url_for('notes.add_note') }}" class="quick-action">
-                <span class="qa-icon">&#128221;</span> New Note
-            </a>
-            <a href="{{ url_for('calendar.add_event') }}" class="quick-action">
-                <span class="qa-icon">&#128197;</span> New Event
-            </a>
-            <a href="{{ url_for('activity_log.add_activity') }}" class="quick-action">
-                <span class="qa-icon">&#9202;</span> Log Activity
-            </a>
-            <a href="{{ url_for('reports.use_of_time') }}" class="quick-action">
-                <span class="qa-icon">&#128200;</span> Use of Time
-            </a>
-        </div>
-    </div>
-</div>
+<!-- Insights — collapsed by default, progressive disclosure -->
+<details class="dash-insights" id="dash-insights">
+    <summary class="dash-insights-toggle">
+        Insights & Charts
+        <span style="font-size:0.78rem;color:var(--gray);font-weight:400;margin-left:8px;">
+            {{ (total_minutes / 60)|round(1) }}h this week
+            {% if recent_notes %} &middot; {{ recent_notes|length }} recent notes{% endif %}
+        </span>
+    </summary>
+    <div class="dash-insights-body">
 
-<!-- Recent Activity -->
-<div class="grid-2">
-    <div class="card">
-        <div class="card-header">Recent Notes</div>
-        <div class="card-body">
-            {% for note in recent_notes %}
-            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;">
-                <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);">
-                    <strong>{{ note.student.display_name }}</strong>
-                    <span class="badge badge-info">{{ note.note_type }}</span>
-                    <div style="font-size:0.82rem;color:var(--gray);">{{ note.session_date.strftime('%m/%d/%Y') }}</div>
-                </a>
+        {% if total_minutes > 0 %}
+        <div class="card">
+            <div class="card-header">Weekly Use of Time</div>
+            <div class="card-body">
+                <div class="time-chart">
+                    {% if direct_minutes > 0 %}
+                    <div class="segment direct" style="flex:{{ direct_minutes }}">{{ (direct_minutes/total_minutes*100)|round|int }}%</div>
+                    {% endif %}
+                    {% if indirect_minutes > 0 %}
+                    <div class="segment indirect" style="flex:{{ indirect_minutes }}">{{ (indirect_minutes/total_minutes*100)|round|int }}%</div>
+                    {% endif %}
+                    {% if mgmt_minutes > 0 %}
+                    <div class="segment management" style="flex:{{ mgmt_minutes }}">{{ (mgmt_minutes/total_minutes*100)|round|int }}%</div>
+                    {% endif %}
+                    {% if non_minutes > 0 %}
+                    <div class="segment non-counseling" style="flex:{{ non_minutes }}">{{ (non_minutes/total_minutes*100)|round|int }}%</div>
+                    {% endif %}
+                </div>
+                <div class="time-legend">
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div> Direct ({{ (direct_minutes/60)|round(1) }}h)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--info)"></div> Indirect ({{ (indirect_minutes/60)|round(1) }}h)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Management ({{ (mgmt_minutes/60)|round(1) }}h)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:var(--gray)"></div> Non-Counseling ({{ (non_minutes/60)|round(1) }}h)</div>
+                </div>
             </div>
-            {% endfor %}
-            {% if not recent_notes %}
-            <div class="empty-state"><p>No notes yet.</p></div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">Note Activity — Last 8 Weeks</div>
+            <div class="card-body" style="position:relative;height:180px;">
+                <canvas id="noteActivityChart"></canvas>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">Note Categories</div>
+                <div class="card-body" style="position:relative;height:220px;display:flex;align-items:center;justify-content:center;">
+                    <canvas id="svcBreakdownChart"></canvas>
+                </div>
+            </div>
+            {% if grad_risk.critical or grad_risk['at-risk'] or grad_risk.warning or grad_risk['on-track'] %}
+            <div class="card">
+                <div class="card-header">Caseload Risk</div>
+                <div class="card-body" style="position:relative;height:220px;">
+                    <canvas id="riskSnapshotChart"></canvas>
+                </div>
+            </div>
             {% endif %}
         </div>
-    </div>
 
-    <div class="card">
-        <div class="card-header">Upcoming Follow-Ups</div>
-        <div class="card-body">
-            {% for note in follow_ups %}
-            <div style="padding:8px 0;border-bottom:1px solid #E8ECF0;">
-                <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);">
-                    <strong>{{ note.student.display_name }}</strong>
-                    <span class="badge badge-warning">{{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'Pending' }}</span>
-                    <div style="font-size:0.82rem;color:var(--gray);">{{ note.title or note.note_type }}</div>
-                </a>
+        {% if recent_notes %}
+        <div class="card">
+            <div class="card-header">Recent Notes</div>
+            <div class="card-body">
+                {% for note in recent_notes %}
+                <div style="padding:7px 0;border-bottom:1px solid #E8ECF0;">
+                    <a href="{{ url_for('notes.view_note', id=note.id) }}" style="text-decoration:none;color:var(--dark);font-size:0.88rem;">
+                        <strong>{{ note.student.display_name }}</strong>
+                        <span class="badge badge-info" style="font-size:0.68rem;">{{ note.note_type }}</span>
+                        <span style="font-size:0.78rem;color:var(--gray);float:right;">{{ note.session_date.strftime('%m/%d') }}</span>
+                    </a>
+                </div>
+                {% endfor %}
             </div>
-            {% endfor %}
-            {% if not follow_ups %}
-            <div class="empty-state"><p>No pending follow-ups.</p></div>
-            {% endif %}
         </div>
+        {% endif %}
     </div>
-</div>
+</details>
 
 <style>
+/* Compact quick actions strip */
+.dash-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.dash-action-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--primary);
+    border: 1px solid #dde3ea;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: all 0.15s;
+    background: var(--white);
+}
+.dash-action-btn:hover {
+    border-color: var(--primary-light);
+    background: #f0f6ff;
+}
+
+/* Collapsible Insights section */
+.dash-insights {
+    margin-top: 24px;
+    border-radius: 10px;
+}
+.dash-insights-toggle {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    padding: 10px 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+}
+.dash-insights-toggle::-webkit-details-marker { display: none; }
+.dash-insights-toggle::before {
+    content: '▸';
+    margin-right: 8px;
+    font-size: 0.75rem;
+    transition: transform 0.2s;
+    color: #94a3b8;
+}
+.dash-insights[open] .dash-insights-toggle::before {
+    transform: rotate(90deg);
+}
+.dash-insights-body {
+    padding-top: 8px;
+}
+
 /* Action Items / Smart Alerts */
 .alert-badge { font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:6px; }
 .alert-badge.critical { background:#fde8e8; color:#c62828; }
@@ -363,136 +382,127 @@
     gap: 8px;
     transition: opacity 0.3s;
 }
-.schedule-item.completed {
-    opacity: 0.5;
-}
-.schedule-item.completed .schedule-title {
-    text-decoration: line-through;
-    color: var(--gray);
-}
-.schedule-item.completed .schedule-time {
-    text-decoration: line-through;
-}
-.schedule-time {
-    font-size: 0.82rem;
-    color: var(--gray);
-}
+.schedule-item.completed { opacity: 0.5; }
+.schedule-item.completed .schedule-title { text-decoration: line-through; color: var(--gray); }
+.schedule-item.completed .schedule-time { text-decoration: line-through; }
+.schedule-time { font-size: 0.82rem; color: var(--gray); }
 .schedule-check {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-    accent-color: var(--success);
-    flex-shrink: 0;
-}
-.sched-btn {
-    background: none;
-    border: 1px solid #E8ECF0;
-    border-radius: 4px;
-    padding: 3px 6px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    line-height: 1;
-    transition: background 0.15s;
-}
-.sched-btn:hover {
-    background: #f0f2f5;
+    width: 18px; height: 18px;
+    cursor: pointer; accent-color: var(--success); flex-shrink: 0;
 }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // ── Charts ───────────────────────────────────────────────────
     var noteTrend = {{ note_trend_json|safe }};
     var svcBreakdown = {{ svc_breakdown_json|safe }};
     var gradRisk = {{ grad_risk_json|safe }};
 
-    // 1) Note Activity — line chart
-    var noteCtx = document.getElementById('noteActivityChart');
-    if (noteCtx) {
-        new Chart(noteCtx, {
-            type: 'line',
-            data: {
-                labels: noteTrend.map(function(d){ return d.label; }),
-                datasets: [{
-                    label: 'Notes',
-                    data: noteTrend.map(function(d){ return d.count; }),
-                    borderColor: '#2563eb',
-                    backgroundColor: 'rgba(37,99,235,0.08)',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#2563eb'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: 'rgba(0,0,0,0.04)' } },
-                    x: { grid: { display: false } }
-                }
-            }
-        });
+    // Restore insights open state from localStorage
+    var insights = document.getElementById('dash-insights');
+    if (localStorage.getItem('dash_insights_open') === '1') {
+        insights.open = true;
+        initCharts();
     }
+    insights.addEventListener('toggle', function() {
+        localStorage.setItem('dash_insights_open', insights.open ? '1' : '0');
+        if (insights.open) initCharts();
+    });
 
-    // 2) Service Type Breakdown — doughnut chart
-    var svcCtx = document.getElementById('svcBreakdownChart');
-    if (svcCtx) {
-        var svcLabels = Object.keys(svcBreakdown);
-        var svcValues = Object.values(svcBreakdown);
-        var svcColors = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#6366f1','#14b8a6','#e11d48','#a855f7','#0ea5e9','#eab308'];
-        if (svcLabels.length > 0) {
-            new Chart(svcCtx, {
-                type: 'doughnut',
+    function initCharts() {
+        // Only init once
+        if (window._chartsInit) return;
+        window._chartsInit = true;
+
+        // 1) Note Activity — line chart
+        var noteCtx = document.getElementById('noteActivityChart');
+        if (noteCtx) {
+            new Chart(noteCtx, {
+                type: 'line',
                 data: {
-                    labels: svcLabels,
+                    labels: noteTrend.map(function(d){ return d.label; }),
                     datasets: [{
-                        data: svcValues,
-                        backgroundColor: svcColors.slice(0, svcLabels.length),
-                        borderWidth: 2,
-                        borderColor: '#fff'
+                        label: 'Notes',
+                        data: noteTrend.map(function(d){ return d.count; }),
+                        borderColor: '#94a3b8',
+                        backgroundColor: 'rgba(148,163,184,0.06)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#64748b',
+                        borderWidth: 2
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 }, padding: 8 } }
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: 'rgba(0,0,0,0.03)' } },
+                        x: { grid: { display: false } }
                     }
                 }
             });
-        } else {
-            svcCtx.parentElement.innerHTML = '<div class="empty-state"><p>No service records yet.</p></div>';
         }
-    }
 
-    // 3) Caseload Risk Snapshot — horizontal bar chart
-    var riskCtx = document.getElementById('riskSnapshotChart');
-    if (riskCtx) {
-        new Chart(riskCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Critical', 'At-Risk', 'Warning', 'On-Track'],
-                datasets: [{
-                    data: [gradRisk.critical, gradRisk['at-risk'], gradRisk.warning, gradRisk['on-track']],
-                    backgroundColor: ['#c62828', '#e65100', '#f9a825', '#2e7d32'],
-                    borderRadius: 4,
-                    barThickness: 28
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: 'rgba(0,0,0,0.04)' } },
-                    y: { grid: { display: false } }
-                }
+        // 2) Note Categories — doughnut
+        var svcCtx = document.getElementById('svcBreakdownChart');
+        if (svcCtx) {
+            var svcLabels = Object.keys(svcBreakdown);
+            var svcValues = Object.values(svcBreakdown);
+            var svcColors = ['#64748b','#94a3b8','#a5b4c4','#7c9ab5','#6b8faa','#8ba4b8','#9fb6c8','#b0c4d4','#7899b0','#6683a0','#8dadc0','#a0bdd0','#758fa0','#6a849a','#b8c8d8'];
+            if (svcLabels.length > 0) {
+                new Chart(svcCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: svcLabels,
+                        datasets: [{
+                            data: svcValues,
+                            backgroundColor: svcColors.slice(0, svcLabels.length),
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 }, padding: 6 } }
+                        }
+                    }
+                });
+            } else {
+                svcCtx.parentElement.innerHTML = '<div class="empty-state"><p>No notes yet.</p></div>';
             }
-        });
+        }
+
+        // 3) Caseload Risk — horizontal bar
+        var riskCtx = document.getElementById('riskSnapshotChart');
+        if (riskCtx) {
+            new Chart(riskCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Critical', 'At-Risk', 'Warning', 'On-Track'],
+                    datasets: [{
+                        data: [gradRisk.critical, gradRisk['at-risk'], gradRisk.warning, gradRisk['on-track']],
+                        backgroundColor: ['#ef9a9a', '#ffcc80', '#fff59d', '#a5d6a7'],
+                        borderRadius: 4,
+                        barThickness: 24
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: 'rgba(0,0,0,0.03)' } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
     }
 
     // ── External calendar events ─────────────────────────────────
@@ -516,16 +526,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     + '<div style="min-width:0;"><strong class="schedule-title">' + ev.title + '</strong>'
                     + '<div class="schedule-time">' + time + loc + '</div></div></div>'
                     + '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'
-                    + '<span class="badge" style="background:#DB443720;color:#DB4437;">Google</span></div></div>';
+                    + '<span class="badge" style="background:#DB443720;color:#DB4437;font-size:0.7rem;">Google</span></div></div>';
             });
             container.querySelectorAll('.schedule-check').forEach(function(cb){
                 cb.addEventListener('change', handleCheckChange);
             });
-            var countEl = document.getElementById('event-count');
-            if (countEl) countEl.textContent = parseInt(countEl.textContent || '0') + data.events.length;
         }).catch(function(){});
 
-    // Handle checkbox clicks
     function handleCheckChange() {
         var item = this.closest('.schedule-item');
         var source = this.dataset.source;
@@ -546,7 +553,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-/* Alert controls */
 function toggleAlertPanel() {
     var body = document.getElementById('alert-body');
     var chev = document.getElementById('alert-chevron');
