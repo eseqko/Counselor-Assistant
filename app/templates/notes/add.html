@@ -20,6 +20,7 @@
                 <div class="form-group">
                     <label>Category *</label>
                     <select name="note_type" class="form-control" required>
+                        <option value="">-- Select --</option>
                         {% for val, label in note_types %}
                         <option value="{{ val }}">{{ label }}</option>
                         {% endfor %}
