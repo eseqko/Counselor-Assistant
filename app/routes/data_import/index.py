@@ -1,10 +1,10 @@
 """Data import hub page."""
 from flask import render_template
 from flask_login import login_required, current_user
-from app.models.student import Student
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
 from app.models.import_log import ImportLog
+from app.utils.caseload import caseload_student_ids
 from app.routes.data_import import data_import_bp
 
 
@@ -12,9 +12,7 @@ from app.routes.data_import import data_import_bp
 @login_required
 def index():
     """Data import hub page."""
-    # Count existing records
-    student_ids = [row[0] for row in Student.query.filter_by(
-        assigned_counselor_id=current_user.id).with_entities(Student.id).all()]
+    student_ids = caseload_student_ids(current_user)
     attendance_count = AttendanceRecord.query.filter(
         AttendanceRecord.student_id.in_(student_ids)).count() if student_ids else 0
     grade_count = GradeRecord.query.filter(

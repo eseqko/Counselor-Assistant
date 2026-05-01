@@ -1,4 +1,14 @@
-from datetime import datetime
+from datetime import datetime, date
+
+
+def current_school_year(today=None):
+    """Return the current school year as 'YYYY-YYYY' (e.g. '2025-2026').
+
+    Months July-December → year/year+1. January-June → year-1/year.
+    """
+    today = today or date.today()
+    yr = today.year if today.month >= 7 else today.year - 1
+    return f"{yr}-{yr + 1}"
 
 
 def parse_date(date_str):

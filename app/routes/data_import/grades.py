@@ -7,6 +7,8 @@ from app.models.grade import GradeRecord
 from app.models.import_log import ImportLog
 from app.utils.audit import log_action
 from app.utils.excel_helpers import build_import_workbook, workbook_response
+from app.utils.caseload import caseload_student_ids
+from app.utils.helpers import current_school_year
 from datetime import date
 from app.routes.data_import import (
     data_import_bp, HAS_OPENPYXL, VALID_GRADES,
@@ -168,11 +170,6 @@ def grades_preview():
                 'matched': bool(found),
             })
 
-    # Build current school year default
-    now = date.today()
-    yr = now.year if now.month >= 7 else now.year - 1
-    default_school_year = f"{yr}-{yr + 1}"
-
     return jsonify({
         'columns': detected,
         'quarter': header_quarter,
@@ -181,7 +178,7 @@ def grades_preview():
         'unmatched': unmatched,
         'empty_grade': empty_grade,
         'sample': sample_rows,
-        'default_school_year': default_school_year,
+        'default_school_year': current_school_year(),
     })
 
 
@@ -189,10 +186,10 @@ def grades_preview():
 @login_required
 def grades_upload():
     """Upload grades data from Excel or CSV."""
-    # Build school year options for the dropdown
+    # Build school year options for the dropdown (current + 3 previous)
     now = date.today()
-    yr = now.year if now.month >= 7 else now.year - 1
-    school_year_options = [f"{y}-{y + 1}" for y in range(yr, yr - 4, -1)]
+    base_yr = now.year if now.month >= 7 else now.year - 1
+    school_year_options = [f"{y}-{y + 1}" for y in range(base_yr, base_yr - 4, -1)]
     default_school_year = school_year_options[0]
 
     if request.method == 'POST':
@@ -427,8 +424,7 @@ def grades_upload():
 @login_required
 def clear_grades():
     """Clear all grade records for current counselor's students."""
-    student_ids = [row[0] for row in Student.query.filter_by(
-        assigned_counselor_id=current_user.id).with_entities(Student.id).all()]
+    student_ids = caseload_student_ids(current_user)
     count = GradeRecord.query.filter(
         GradeRecord.student_id.in_(student_ids)).delete(synchronize_session=False)
     db.session.commit()

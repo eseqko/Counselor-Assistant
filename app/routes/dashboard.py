@@ -7,6 +7,7 @@ from app.models.note import Note
 from app.models.activity import Activity
 from app.models.transcript import TranscriptRecord
 from app.utils.alert_engine import get_alerts
+from app.utils.caseload import caseload_student_ids
 from sqlalchemy import func as sa_func
 from datetime import datetime, date, timedelta, timezone
 import json
@@ -165,9 +166,7 @@ def index():
     week_end = week_start + timedelta(days=6)
 
     # Stats — single query for student IDs (reused for count + grad risk)
-    my_student_ids = [s.id for s in Student.query.filter_by(
-        assigned_counselor_id=current_user.id, status='active'
-    ).with_entities(Student.id).all()]
+    my_student_ids = caseload_student_ids(current_user, status='active')
     total_students = len(my_student_ids)
 
     todays_events = CalendarEvent.query.filter(

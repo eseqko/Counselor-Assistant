@@ -8,6 +8,7 @@ from app.models.import_log import ImportLog
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from app.utils.excel_helpers import build_import_workbook, workbook_response
+from app.utils.caseload import caseload_student_ids
 from app.routes.data_import import (
     data_import_bp, HAS_OPENPYXL, VALID_ATTENDANCE,
     Workbook, Font, PatternFill, Alignment, Border, Side,
@@ -225,8 +226,7 @@ def attendance_upload():
 @login_required
 def clear_attendance():
     """Clear all attendance records for current counselor's students."""
-    student_ids = [row[0] for row in Student.query.filter_by(
-        assigned_counselor_id=current_user.id).with_entities(Student.id).all()]
+    student_ids = caseload_student_ids(current_user)
     count = AttendanceRecord.query.filter(
         AttendanceRecord.student_id.in_(student_ids)).delete(synchronize_session=False)
     db.session.commit()
