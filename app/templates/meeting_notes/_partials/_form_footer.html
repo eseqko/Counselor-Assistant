@@ -1,0 +1,62 @@
+<!-- Collapsible details -->
+<details class="details-toggle" {% if note and (note.location or note.attendees or note.action_items) %}open{% endif %}>
+    <summary>Details &amp; action items</summary>
+    <div class="details-grid">
+        <div>
+            <label>Date</label>
+            <input type="date" name="meeting_date"
+                   value="{{ note.meeting_date.strftime('%Y-%m-%d') if note else today.strftime('%Y-%m-%d') }}">
+        </div>
+        <div>
+            <label>Duration (min)</label>
+            <input type="number" name="duration_minutes" id="durationInput" min="1" max="480"
+                   value="{{ note.duration_minutes if note and note.duration_minutes else '' }}"
+                   placeholder="Auto-tracked below">
+        </div>
+        <div>
+            <label>Location</label>
+            <input type="text" name="location"
+                   value="{{ note.location if note and note.location else '' }}"
+                   placeholder="Office, Room 204, Zoom...">
+        </div>
+        <div>
+            <label>Attendees (not students)</label>
+            <input type="text" name="attendees"
+                   value="{{ note.attendees if note and note.attendees else '' }}"
+                   placeholder="Mr. Smith (AP), Mrs. Garcia">
+        </div>
+        <div class="details-full">
+            <label>Action Items</label>
+            <textarea name="action_items" rows="3"
+                      placeholder="Or use #action tags inline above">{{ note.action_items if note and note.action_items else '' }}</textarea>
+        </div>
+    </div>
+</details>
+
+<!-- Bottom bar -->
+<div class="notepad-bottom">
+    <div style="display:flex;align-items:center;gap:16px;">
+        <div class="save-status">
+            <span class="save-dot" id="saveDot"></span>
+            <span id="saveLabel">Saved locally</span>
+        </div>
+        <div class="timer" id="timer" style="display:none;">
+            <span class="timer-dot"></span>
+            <span id="timerDisplay">00:00</span>
+        </div>
+    </div>
+    <div class="notepad-actions">
+        <label class="conf-label">
+            <input type="checkbox" name="is_confidential" {% if note and note.is_confidential %}checked{% endif %}>
+            Confidential
+        </label>
+        <button type="button" class="focus-btn" onclick="toggleFocus()" title="Focus mode (hide everything else)">Focus</button>
+        <button type="button" class="focus-btn" onclick="toggleTimer()" title="Start/stop meeting timer">Timer</button>
+        {% if note %}
+        <a href="{{ url_for('meeting_notes.view', note_id=note.id) }}" class="btn btn-secondary">Cancel</a>
+        {% else %}
+        <a href="{{ url_for('meeting_notes.index') }}" class="btn btn-secondary">Cancel</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">{{ 'Update' if note else 'Save' }}</button>
+    </div>
+</div>

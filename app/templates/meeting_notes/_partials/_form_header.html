@@ -1,0 +1,30 @@
+<!-- Top: Title + Type (minimal) -->
+<div class="notepad-top">
+    <div class="notepad-title">
+        <input type="text" name="title" id="noteTitle" required autofocus
+               value="{{ note.title if note else '' }}"
+               placeholder="What's this meeting about?">
+    </div>
+    <div class="notepad-type">
+        <select name="meeting_type">
+            {% for val, label in meeting_types %}
+            <option value="{{ val }}" {% if note and note.meeting_type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<!-- Format selector + Audio record -->
+<div class="format-tabs">
+    <button type="button" class="format-tab active" data-format="flow">Flow</button>
+    <button type="button" class="format-tab" data-format="structured">Structured</button>
+    <button type="button" class="format-tab" data-format="cornell">Cornell</button>
+    <button type="button" class="format-tab" data-format="outline">Outline</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+        <button type="button" class="record-btn" id="recordBtn" title="Record meeting audio">
+            <span class="rec-dot"></span> <span id="recordLabel">Record</span>
+        </button>
+        <span id="recordTimer" style="font-size:.75rem;color:#94a3b8;font-variant-numeric:tabular-nums;display:none;">00:00</span>
+    </div>
+</div>
+<input type="hidden" name="note_format" id="noteFormatInput" value="{{ note.note_format if note else 'flow' }}">

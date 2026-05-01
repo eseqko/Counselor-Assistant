@@ -1,0 +1,26 @@
+<!-- Quick-tag buttons -->
+<div class="tag-bar">
+    <button type="button" class="tag-btn" style="background:#fef2f2;color:#dc2626;" data-tag="action">action</button>
+    <button type="button" class="tag-btn" style="background:#f5f3ff;color:#7c3aed;" data-tag="decision">decision</button>
+    <button type="button" class="tag-btn" style="background:#fffbeb;color:#d97706;" data-tag="followup">followup</button>
+    <button type="button" class="tag-btn" style="background:#eff6ff;color:#2563eb;" data-tag="question">question</button>
+    <button type="button" class="tag-btn" style="background:#ecfdf5;color:#059669;" data-tag="idea">idea</button>
+    <button type="button" class="tag-btn" style="background:#fff1f2;color:#e11d48;" data-tag="concern">concern</button>
+    <button type="button" class="tag-btn" style="background:#f0fdf4;color:#16a34a;" data-tag="win">win</button>
+    <span class="tag-hint">click or type # &middot; @ to mention student</span>
+</div>
+
+<!-- Linked students -->
+<div class="linked-bar" id="linkedStudents"></div>
+
+<!-- Writing area -->
+<div class="notepad-body" id="notepadBody">
+    <textarea id="noteContent" name="content"
+              placeholder="Start typing... just let it flow.
+
+@ to mention a student    # for tags
+#action #decision #followup #question #idea #concern #win
+
+Everything auto-saves to your browser. Hit Save when ready.">{{ note.content if note else '' }}</textarea>
+    <div class="mention-dropdown" id="mentionDropdown"></div>
+</div>

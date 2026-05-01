@@ -1,0 +1,580 @@
+<script>
+(function(){
+    var ta = document.getElementById('noteContent');
+    var dd = document.getElementById('mentionDropdown');
+    var linked = document.getElementById('linkedStudents');
+    var mentionStart = -1;
+    var activeIdx = 0;
+    var items = [];
+    var mentionedStudents = {};
+    var STORAGE_KEY = 'meeting_note_draft_{{ note.id if note else "new" }}';
+
+    /* ---- Student data ---- */
+    var allStudents = [
+        {% for s in students %}
+        {id:{{ s.id }}, name:"{{ s.first_name }} {{ s.last_name }}", grade:{{ s.grade_level or 0 }},
+         sid:"{{ s.student_id_number }}", iep:{{ 'true' if s.iep_status else 'false' }},
+         five04:{{ 'true' if s.section_504 else 'false' }}},
+        {% endfor %}
+    ];
+
+    /* ---- Auto-resize textarea ---- */
+    function autoGrow() {
+        ta.style.height = 'auto';
+        ta.style.height = Math.max(340, ta.scrollHeight) + 'px';
+    }
+    ta.addEventListener('input', autoGrow);
+    autoGrow();
+
+    /* ---- Auto-save to localStorage ---- */
+    var saveTimeout;
+    function markUnsaved() {
+        document.getElementById('saveDot').classList.add('unsaved');
+        document.getElementById('saveLabel').textContent = 'Unsaved changes';
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(autoSave, 1500);
+    }
+    function autoSave() {
+        var data = {
+            title: document.getElementById('noteTitle').value,
+            content: ta.value,
+            ts: Date.now()
+        };
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){}
+        document.getElementById('saveDot').classList.remove('unsaved');
+        document.getElementById('saveLabel').textContent = 'Saved locally';
+    }
+    // Restore draft (only for new notes)
+    {% if not note %}
+    try {
+        var draft = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (draft && draft.content && !ta.value) {
+            ta.value = draft.content;
+            if (draft.title) document.getElementById('noteTitle').value = draft.title;
+            autoGrow();
+            renderChips();
+        }
+    } catch(e){}
+    {% endif %}
+
+    ta.addEventListener('input', markUnsaved);
+    document.getElementById('noteTitle').addEventListener('input', markUnsaved);
+
+    // Clear draft on successful save
+    document.getElementById('noteForm').addEventListener('submit', function() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
+    });
+
+    /* ---- Tag buttons ---- */
+    document.querySelectorAll('.tag-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var tag = '#' + this.dataset.tag + ' ';
+            var pos = ta.selectionStart;
+            var val = ta.value;
+            // Add on new line if cursor isn't at line start
+            var before = val.substring(0, pos);
+            var prefix = (pos > 0 && before[pos-1] !== '\n') ? '\n' : '';
+            ta.value = before + prefix + tag + val.substring(pos);
+            var newPos = pos + prefix.length + tag.length;
+            ta.setSelectionRange(newPos, newPos);
+            ta.focus();
+            autoGrow();
+            markUnsaved();
+        });
+    });
+
+    /* ---- @mention system ---- */
+    // Parse existing mentions
+    var existing = ta.value.match(/@\[([^\]]+)\]\((\d+)\)/g);
+    if (existing) {
+        existing.forEach(function(m) {
+            var parts = m.match(/@\[([^\]]+)\]\((\d+)\)/);
+            if (parts) mentionedStudents[parts[2]] = parts[1];
+        });
+        renderChips();
+    }
+
+    ta.addEventListener('input', function() {
+        var val = this.value;
+        var pos = this.selectionStart;
+        var before = val.substring(0, pos);
+        var atIdx = before.lastIndexOf('@');
+
+        if (atIdx >= 0 && (atIdx === 0 || /\s/.test(before[atIdx-1]))) {
+            var query = before.substring(atIdx + 1);
+            if (query.indexOf('[') === -1 && query.length < 30) {
+                mentionStart = atIdx;
+                showDropdown(query);
+                return;
+            }
+        }
+        hideDropdown();
+    });
+
+    ta.addEventListener('keydown', function(e) {
+        if (!dd.classList.contains('show')) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx+1, items.length-1); highlightItem(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx-1, 0); highlightItem(); }
+        else if (e.key === 'Enter' || e.key === 'Tab') { if(items.length){e.preventDefault();selectStudent(items[activeIdx]);} }
+        else if (e.key === 'Escape') { hideDropdown(); }
+    });
+
+    function showDropdown(query) {
+        var q = query.toLowerCase();
+        var filtered = allStudents.filter(function(s) {
+            return s.name.toLowerCase().indexOf(q)>=0 || s.sid.indexOf(q)>=0;
+        }).slice(0,10);
+        if (!filtered.length) { hideDropdown(); return; }
+        items = filtered; activeIdx = 0;
+
+        var html = '';
+        filtered.forEach(function(s, i) {
+            var badges = '';
+            if (s.iep) badges += '<span class="m-badge m-iep">IEP</span>';
+            if (s.five04) badges += '<span class="m-badge m-504">504</span>';
+            html += '<div class="mention-item'+(i===0?' active':'')+'" data-idx="'+i+'">' +
+                '<div><span class="m-name">'+esc(s.name)+'</span> ' +
+                '<span class="m-meta">Gr '+s.grade+' &middot; '+s.sid+'</span></div>' +
+                '<div class="m-badges">'+badges+'</div></div>';
+        });
+        dd.innerHTML = html;
+        dd.classList.add('show');
+        dd.style.bottom = (document.getElementById('notepadBody').offsetHeight - ta.offsetHeight + 10) + 'px';
+
+        dd.querySelectorAll('.mention-item').forEach(function(el) {
+            el.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                selectStudent(items[parseInt(this.dataset.idx)]);
+            });
+        });
+    }
+    function hideDropdown() { dd.classList.remove('show'); mentionStart=-1; items=[]; }
+    function highlightItem() {
+        dd.querySelectorAll('.mention-item').forEach(function(el,i){ el.classList.toggle('active',i===activeIdx); });
+    }
+    function selectStudent(student) {
+        var val=ta.value, pos=ta.selectionStart;
+        var mention='@['+student.name+']('+student.id+')';
+        ta.value = val.substring(0,mentionStart)+mention+' '+val.substring(pos);
+        var newPos = mentionStart+mention.length+1;
+        ta.setSelectionRange(newPos,newPos);
+        ta.focus();
+        mentionedStudents[student.id]=student.name;
+        renderChips(); hideDropdown(); autoGrow(); markUnsaved();
+    }
+
+    function renderChips() {
+        mentionedStudents = {};
+        var matches = ta.value.match(/@\[([^\]]+)\]\((\d+)\)/g);
+        if (matches) {
+            matches.forEach(function(m) {
+                var parts = m.match(/@\[([^\]]+)\]\((\d+)\)/);
+                if (parts) mentionedStudents[parts[2]] = parts[1];
+            });
+        }
+        var html = '';
+        for (var id in mentionedStudents) {
+            html += '<span class="student-chip">'+esc(mentionedStudents[id])+
+                    '<span class="chip-x" data-id="'+id+'">&times;</span></span>';
+        }
+        linked.innerHTML = html;
+        linked.querySelectorAll('.chip-x').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var sid=this.dataset.id, name=mentionedStudents[sid];
+                ta.value = ta.value.replace(new RegExp('@\\['+escRe(name)+'\\]\\('+sid+'\\)\\s?','g'),'');
+                delete mentionedStudents[sid];
+                renderChips(); autoGrow(); markUnsaved();
+            });
+        });
+    }
+    ta.addEventListener('input', function(){ setTimeout(renderChips,0); });
+
+    function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+    function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+    document.addEventListener('click',function(e){if(!ta.contains(e.target)&&!dd.contains(e.target))hideDropdown();});
+
+    /* ---- Focus mode ---- */
+    window.toggleFocus = function() {
+        document.body.classList.toggle('focus-mode');
+        ta.focus();
+    };
+    // Escape exits focus mode
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) {
+            document.body.classList.remove('focus-mode');
+        }
+    });
+
+    /* ---- Format switching ---- */
+    var currentFormat = document.getElementById('noteFormatInput').value || 'flow';
+    var flowArea = document.getElementById('notepadBody');
+    var structuredArea = document.getElementById('structuredArea');
+    var cornellArea = document.getElementById('cornellArea');
+    var outlineArea = document.getElementById('outlineArea');
+    var formatAreas = {flow: flowArea, structured: structuredArea, cornell: cornellArea, outline: outlineArea};
+
+    function switchFormat(fmt) {
+        // Serialize current format content into the hidden textarea before switching
+        serializeToContent();
+        currentFormat = fmt;
+        document.getElementById('noteFormatInput').value = fmt;
+        // Toggle visibility
+        for (var key in formatAreas) {
+            if (formatAreas[key]) formatAreas[key].style.display = (key === fmt) ? '' : 'none';
+        }
+        // For non-flow formats, show the area properly
+        if (fmt === 'cornell') cornellArea.classList.add('active');
+        else cornellArea.classList.remove('active');
+        if (fmt === 'structured') structuredArea.classList.add('active');
+        else structuredArea.classList.remove('active');
+        if (fmt === 'outline') outlineArea.classList.add('active');
+        else outlineArea.classList.remove('active');
+        // Hide flow-specific elements for non-flow
+        var tagBar = document.querySelector('.tag-bar');
+        var linkedBar = document.getElementById('linkedStudents');
+        if (fmt === 'flow') {
+            if (tagBar) tagBar.style.display = '';
+            if (linkedBar) linkedBar.style.display = '';
+        } else {
+            if (tagBar) tagBar.style.display = 'none';
+            if (linkedBar) linkedBar.style.display = 'none';
+        }
+        // Populate alt format fields from main content
+        populateFromContent(fmt);
+        // Update tab styling
+        document.querySelectorAll('.format-tab').forEach(function(t) {
+            t.classList.toggle('active', t.dataset.format === fmt);
+        });
+    }
+
+    function populateFromContent(fmt) {
+        var content = ta.value;
+        if (fmt === 'structured' && content && !document.getElementById('sf-discussion').value) {
+            document.getElementById('sf-discussion').value = content;
+        } else if (fmt === 'cornell' && content && !document.getElementById('cornell-notes').value) {
+            document.getElementById('cornell-notes').value = content;
+        } else if (fmt === 'outline' && content && !document.getElementById('outline-content').value) {
+            document.getElementById('outline-content').value = content;
+        }
+    }
+
+    function serializeToContent() {
+        if (currentFormat === 'structured') {
+            var parts = [];
+            var disc = document.getElementById('sf-discussion').value.trim();
+            var dec = document.getElementById('sf-decisions').value.trim();
+            var act = document.getElementById('sf-actions').value.trim();
+            var fol = document.getElementById('sf-followups').value.trim();
+            if (disc) parts.push('## Discussion\n' + disc);
+            if (dec) parts.push('## Decisions\n' + dec);
+            if (act) parts.push('## Action Items\n' + act);
+            if (fol) parts.push('## Follow-ups\n' + fol);
+            if (parts.length) ta.value = parts.join('\n\n');
+        } else if (currentFormat === 'cornell') {
+            var cue = document.getElementById('cornell-cue').value.trim();
+            var notes = document.getElementById('cornell-notes').value.trim();
+            var summary = document.getElementById('cornell-summary').value.trim();
+            var parts = [];
+            if (notes) parts.push(notes);
+            if (cue) parts.push('\n---\nKey Questions/Cues:\n' + cue);
+            if (summary) parts.push('\n---\nSummary:\n' + summary);
+            if (parts.length) ta.value = parts.join('\n');
+        } else if (currentFormat === 'outline') {
+            var outline = document.getElementById('outline-content').value.trim();
+            if (outline) ta.value = outline;
+        }
+    }
+
+    document.querySelectorAll('.format-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() { switchFormat(this.dataset.format); });
+    });
+
+    // Serialize before form submit — also remove 'required' from hidden textarea
+    // so the browser doesn't silently block submission when in non-flow formats
+    document.getElementById('noteForm').addEventListener('submit', function(e) {
+        serializeToContent();
+        var content = ta.value.trim();
+        var title = document.getElementById('noteTitle').value.trim();
+        if (!title || !content) {
+            e.preventDefault();
+            alert((!title ? 'Title' : 'Content') + ' is required.');
+            return false;
+        }
+    });
+
+    // Initialize format on load
+    if (currentFormat !== 'flow') switchFormat(currentFormat);
+
+    /* ---- Outline tab support ---- */
+    var outlineTA = document.getElementById('outline-content');
+    if (outlineTA) {
+        outlineTA.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                var start = this.selectionStart, end = this.selectionEnd;
+                if (e.shiftKey) {
+                    // Outdent: remove leading spaces on current line
+                    var before = this.value.substring(0, start);
+                    var lineStart = before.lastIndexOf('\n') + 1;
+                    var line = this.value.substring(lineStart);
+                    if (line.startsWith('   ')) {
+                        this.value = this.value.substring(0, lineStart) + line.substring(3);
+                        this.selectionStart = this.selectionEnd = Math.max(lineStart, start - 3);
+                    }
+                } else {
+                    this.value = this.value.substring(0, start) + '   ' + this.value.substring(end);
+                    this.selectionStart = this.selectionEnd = start + 3;
+                }
+            }
+        });
+    }
+
+    /* ---- Audio Recording (chunked WAV for memory efficiency) ---- */
+    var recordBtn = document.getElementById('recordBtn');
+    var recordLabel = document.getElementById('recordLabel');
+    var recordTimerEl = document.getElementById('recordTimer');
+    var audioContext = null;
+    var audioStream = null;
+    var recWorklet = null;
+    var recStartTime = 0;
+    var recInterval = null;
+    var isRecording = false;
+    var targetSampleRate = 16000;
+    var MAX_RECORD_MINUTES = 45;
+    // Instead of storing Float32Arrays, we convert to Int16 immediately to halve memory
+    var pcmChunks = [];   // stores Int16Array chunks
+    var totalSamples = 0;
+
+    recordBtn.addEventListener('click', function() {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    });
+
+    function float32ToInt16(float32Arr) {
+        var int16 = new Int16Array(float32Arr.length);
+        for (var i = 0; i < float32Arr.length; i++) {
+            var s = Math.max(-1, Math.min(1, float32Arr[i]));
+            int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return int16;
+    }
+
+    function startRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Your browser does not support audio recording.');
+            return;
+        }
+        navigator.mediaDevices.getUserMedia({audio: {sampleRate: targetSampleRate, channelCount: 1, echoCancellation: true, noiseSuppression: true}}).then(function(stream) {
+            audioStream = stream;
+            pcmChunks = [];
+            totalSamples = 0;
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({sampleRate: targetSampleRate});
+            var source = audioContext.createMediaStreamSource(stream);
+            var processor = audioContext.createScriptProcessor(8192, 1, 1);
+            processor.onaudioprocess = function(e) {
+                if (!isRecording) return;
+                var float32 = e.inputBuffer.getChannelData(0);
+                // Convert to Int16 immediately — uses half the memory of Float32
+                pcmChunks.push(float32ToInt16(float32));
+                totalSamples += float32.length;
+                // Auto-stop if too long
+                var minutes = totalSamples / (audioContext.sampleRate * 60);
+                if (minutes >= MAX_RECORD_MINUTES) {
+                    stopRecording();
+                }
+            };
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+            recWorklet = processor;
+
+            isRecording = true;
+            recordBtn.classList.add('recording');
+            recordLabel.textContent = 'Stop';
+            recStartTime = Date.now();
+            recordTimerEl.style.display = '';
+            recInterval = setInterval(function() {
+                var s = Math.floor((Date.now() - recStartTime) / 1000);
+                var m = Math.floor(s / 60); s = s % 60;
+                recordTimerEl.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+            }, 1000);
+        }).catch(function(err) {
+            alert('Microphone access denied. Please allow microphone access to record.');
+        });
+    }
+
+    function stopRecording() {
+        isRecording = false;
+        recordBtn.classList.remove('recording');
+        recordLabel.textContent = 'Record';
+        clearInterval(recInterval);
+        recordTimerEl.style.display = 'none';
+
+        if (recWorklet) { recWorklet.disconnect(); recWorklet = null; }
+        if (audioStream) { audioStream.getTracks().forEach(function(t) { t.stop(); }); audioStream = null; }
+
+        var rate = audioContext ? audioContext.sampleRate : targetSampleRate;
+        if (audioContext) { audioContext.close(); audioContext = null; }
+
+        // Build WAV from Int16 chunks (no extra memory copy needed)
+        var wavBlob = buildWAV(pcmChunks, totalSamples, rate);
+        pcmChunks = []; // free memory immediately
+        totalSamples = 0;
+        uploadAudio(wavBlob);
+    }
+
+    function buildWAV(int16Chunks, numSamples, rate) {
+        var dataSize = numSamples * 2;
+        var header = new ArrayBuffer(44);
+        var v = new DataView(header);
+        function wr(o, s) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
+        wr(0, 'RIFF');
+        v.setUint32(4, 36 + dataSize, true);
+        wr(8, 'WAVE');
+        wr(12, 'fmt ');
+        v.setUint32(16, 16, true);
+        v.setUint16(20, 1, true);
+        v.setUint16(22, 1, true);
+        v.setUint32(24, rate, true);
+        v.setUint32(28, rate * 2, true);
+        v.setUint16(32, 2, true);
+        v.setUint16(34, 16, true);
+        wr(36, 'data');
+        v.setUint32(40, dataSize, true);
+        // Build blob from header + chunks (avoids merging into one huge array)
+        var parts = [header];
+        for (var i = 0; i < int16Chunks.length; i++) {
+            parts.push(int16Chunks[i].buffer);
+        }
+        return new Blob(parts, {type: 'audio/wav'});
+    }
+
+    function uploadAudio(blob) {
+        if (blob.size < 2000) { alert('Recording too short.'); return; }
+
+        // Show processing modal
+        var modal = document.getElementById('audioModal');
+        var processing = document.getElementById('audioProcessing');
+        var result = document.getElementById('audioResult');
+        modal.classList.add('show');
+        processing.style.display = '';
+        result.style.display = 'none';
+
+        var fd = new FormData();
+        fd.append('audio', blob, 'recording.wav');
+        fd.append('meeting_type', document.querySelector('[name="meeting_type"]').value);
+
+        fetch('{{ url_for("meeting_notes.transcribe_audio_stream") }}', {method: 'POST', body: fd})
+        .then(function(response) {
+            if (!response.ok) {
+                return response.json().then(function(d) { throw new Error(d.error || 'Failed'); });
+            }
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            var summaryArea = document.getElementById('editableSummary');
+            function pump() {
+                reader.read().then(function(r) {
+                    if (r.done) return;
+                    buffer += decoder.decode(r.value, {stream: true});
+                    var lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    lines.forEach(function(line) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                var data = JSON.parse(line.slice(6));
+                                if (data.transcript) {
+                                    document.getElementById('rawTranscript').textContent = data.transcript;
+                                    processing.style.display = 'none';
+                                    result.style.display = '';
+                                    summaryArea.value = '';
+                                }
+                                if (data.token) summaryArea.value += data.token;
+                                if (data.done) {
+                                    if (!summaryArea.value.trim() && data.full_text) {
+                                        summaryArea.value = data.full_text;
+                                    }
+                                }
+                                if (data.error) {
+                                    alert(data.error);
+                                    modal.classList.remove('show');
+                                }
+                            } catch(e) {}
+                        }
+                    });
+                    pump();
+                });
+            }
+            pump();
+        })
+        .catch(function(err) {
+            processing.style.display = 'none';
+            modal.classList.remove('show');
+            alert('Transcription failed: ' + err.message);
+        });
+    }
+
+    window.closeAudioModal = function() {
+        document.getElementById('audioModal').classList.remove('show');
+    };
+    window.insertSummary = function() {
+        var summary = document.getElementById('editableSummary').value;
+        insertTextAtCursor(summary);
+        closeAudioModal();
+    };
+    window.insertTranscript = function() {
+        var transcript = document.getElementById('rawTranscript').textContent;
+        insertTextAtCursor(transcript);
+        closeAudioModal();
+    };
+    function insertTextAtCursor(text) {
+        if (currentFormat === 'flow') {
+            var pos = ta.selectionStart;
+            var before = ta.value.substring(0, pos);
+            var sep = (pos > 0 && before[pos - 1] !== '\n') ? '\n\n' : '';
+            ta.value = before + sep + text + ta.value.substring(pos);
+            ta.setSelectionRange(pos + sep.length + text.length, pos + sep.length + text.length);
+            ta.focus();
+            autoGrow();
+        } else if (currentFormat === 'structured') {
+            document.getElementById('sf-discussion').value += (document.getElementById('sf-discussion').value ? '\n\n' : '') + text;
+        } else if (currentFormat === 'cornell') {
+            document.getElementById('cornell-notes').value += (document.getElementById('cornell-notes').value ? '\n\n' : '') + text;
+        } else if (currentFormat === 'outline') {
+            document.getElementById('outline-content').value += (document.getElementById('outline-content').value ? '\n\n' : '') + text;
+        }
+        markUnsaved();
+    }
+
+    // Close modal on overlay click
+    document.getElementById('audioModal').addEventListener('click', function(e) {
+        if (e.target === this) closeAudioModal();
+    });
+
+    /* ---- Meeting timer ---- */
+    var timerEl = document.getElementById('timer');
+    var timerDisplay = document.getElementById('timerDisplay');
+    var timerRunning = false, timerStart = 0, timerInterval;
+    window.toggleTimer = function() {
+        if (timerRunning) {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            timerEl.style.display = 'none';
+            // Set duration field
+            var elapsed = Math.round((Date.now()-timerStart)/60000);
+            if (elapsed > 0) document.getElementById('durationInput').value = elapsed;
+        } else {
+            timerStart = Date.now();
+            timerRunning = true;
+            timerEl.style.display = 'flex';
+            timerInterval = setInterval(function() {
+                var s = Math.floor((Date.now()-timerStart)/1000);
+                var m = Math.floor(s/60); s = s%60;
+                timerDisplay.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+            }, 1000);
+        }
+    };
+})();
+</script>
