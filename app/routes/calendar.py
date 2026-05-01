@@ -306,7 +306,7 @@ def get_external_events():
         return jsonify([])
 
     try:
-        resp = http_requests.get(current_user.external_ical_url, timeout=10)
+        resp = http_requests.get(current_user.external_ical_url, timeout=3)
         resp.raise_for_status()
         events = _parse_ical_feed(resp.text)
         return jsonify(events)
