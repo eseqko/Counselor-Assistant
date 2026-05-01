@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import login_required, current_user
 from app import db
 from app.models.note import Note
@@ -130,6 +130,8 @@ def add_note():
 @login_required
 def view_note(id):
     note = Note.query.get_or_404(id)
+    if note.author_id != current_user.id:
+        abort(403)
     log_action('view', 'note', note.id)
     return render_template('notes/view.html', note=note,
         note_types=Note.NOTE_TYPES)
@@ -139,6 +141,8 @@ def view_note(id):
 @login_required
 def edit_note(id):
     note = Note.query.get_or_404(id)
+    if note.author_id != current_user.id:
+        abort(403)
 
     if request.method == 'POST':
         note.note_type = request.form['note_type']
@@ -188,6 +192,8 @@ def edit_note(id):
 @login_required
 def delete_note(id):
     note = Note.query.get_or_404(id)
+    if note.author_id != current_user.id:
+        abort(403)
     log_action('delete', 'note', note.id)
     db.session.delete(note)
     db.session.commit()
