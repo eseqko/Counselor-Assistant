@@ -466,53 +466,29 @@
         fd.append('audio', blob, 'recording.wav');
         fd.append('meeting_type', document.querySelector('[name="meeting_type"]').value);
 
-        fetch('{{ url_for("meeting_notes.transcribe_audio_stream") }}', {method: 'POST', body: fd})
-        .then(function(response) {
-            if (!response.ok) {
-                return response.json().then(function(d) { throw new Error(d.error || 'Failed'); });
+        var summaryArea = document.getElementById('editableSummary');
+        streamSSE({
+            url: '{{ url_for("meeting_notes.transcribe_audio_stream") }}',
+            body: fd,
+            onEvent: function(data) {
+                if (data.transcript) {
+                    document.getElementById('rawTranscript').textContent = data.transcript;
+                    processing.style.display = 'none';
+                    result.style.display = '';
+                    summaryArea.value = '';
+                }
+            },
+            onToken: function(token) { summaryArea.value += token; },
+            onDone: function(data) {
+                if (!summaryArea.value.trim() && data.full_text) {
+                    summaryArea.value = data.full_text;
+                }
+            },
+            onError: function(msg) {
+                processing.style.display = 'none';
+                modal.classList.remove('show');
+                alert('Transcription failed: ' + msg);
             }
-            var reader = response.body.getReader();
-            var decoder = new TextDecoder();
-            var buffer = '';
-            var summaryArea = document.getElementById('editableSummary');
-            function pump() {
-                reader.read().then(function(r) {
-                    if (r.done) return;
-                    buffer += decoder.decode(r.value, {stream: true});
-                    var lines = buffer.split('\n');
-                    buffer = lines.pop();
-                    lines.forEach(function(line) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                var data = JSON.parse(line.slice(6));
-                                if (data.transcript) {
-                                    document.getElementById('rawTranscript').textContent = data.transcript;
-                                    processing.style.display = 'none';
-                                    result.style.display = '';
-                                    summaryArea.value = '';
-                                }
-                                if (data.token) summaryArea.value += data.token;
-                                if (data.done) {
-                                    if (!summaryArea.value.trim() && data.full_text) {
-                                        summaryArea.value = data.full_text;
-                                    }
-                                }
-                                if (data.error) {
-                                    alert(data.error);
-                                    modal.classList.remove('show');
-                                }
-                            } catch(e) {}
-                        }
-                    });
-                    pump();
-                });
-            }
-            pump();
-        })
-        .catch(function(err) {
-            processing.style.display = 'none';
-            modal.classList.remove('show');
-            alert('Transcription failed: ' + err.message);
         });
     }
 

@@ -145,51 +145,33 @@ function getNoteFeedback() {
     result.style.display = 'none';
     error.style.display = 'none';
 
-    fetch('/ai/note-feedback-stream', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() }}'
+    var streamStarted = false;
+    streamSSE({
+        url: '/ai/note-feedback-stream',
+        body: { note_id: {{ note.id }} },
+        csrf: '{{ csrf_token() }}',
+        onToken: function(token) {
+            if (!streamStarted) {
+                streamStarted = true;
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.textContent = '';
+            }
+            result.textContent += token;
         },
-        body: JSON.stringify({ note_id: {{ note.id }} })
-    })
-    .then(function(response) {
-        if (!response.ok) {
-            return response.json().then(function(d) { throw new Error(d.error || 'Failed'); });
+        onDone: function() {
+            btn.disabled = false;
+            btn.textContent = 'Refresh Feedback';
+        },
+        onError: function(msg) {
+            loading.style.display = 'none';
+            error.style.display = 'block';
+            error.textContent = msg.indexOf('Connection') >= 0 || msg.indexOf('fetch') >= 0
+                ? 'Could not connect to Ollama. Make sure it is running (ollama serve).'
+                : msg;
+            btn.disabled = false;
+            btn.textContent = 'Retry';
         }
-        loading.style.display = 'none';
-        result.style.display = 'block';
-        result.textContent = '';
-        var reader = response.body.getReader();
-        var decoder = new TextDecoder();
-        var buffer = '';
-        function pump() {
-            reader.read().then(function(r) {
-                if (r.done) return;
-                buffer += decoder.decode(r.value, {stream: true});
-                var lines = buffer.split('\n');
-                buffer = lines.pop();
-                lines.forEach(function(line) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            var data = JSON.parse(line.slice(6));
-                            if (data.token) result.textContent += data.token;
-                            if (data.done) { btn.disabled = false; btn.textContent = 'Refresh Feedback'; }
-                            if (data.error) { error.style.display = 'block'; error.textContent = data.error; }
-                        } catch(e) {}
-                    }
-                });
-                pump();
-            });
-        }
-        pump();
-    })
-    .catch(function(err) {
-        loading.style.display = 'none';
-        error.style.display = 'block';
-        error.textContent = 'Could not connect to Ollama. Make sure it is running (ollama serve).';
-        btn.disabled = false;
-        btn.textContent = 'Retry';
     });
 }
 </script>
