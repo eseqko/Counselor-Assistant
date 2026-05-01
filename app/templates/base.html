@@ -48,36 +48,42 @@
             <a href="{{ url_for('calendar.index') }}" class="nav-item {% if request.blueprint == 'calendar' %}active{% endif %}">
                 <span class="nav-icon">&#128197;</span> Calendar
             </a>
+            <a href="{{ url_for('notes.index') }}" class="nav-item {% if request.blueprint == 'notes' %}active{% endif %}">
+                <span class="nav-icon">&#128221;</span> Notes
+            </a>
+            <a href="{{ url_for('followups.index') }}" class="nav-item {% if request.blueprint == 'followups' %}active{% endif %}">
+                <span class="nav-icon">&#128204;</span> Follow-Ups
+            </a>
 
-            <div class="nav-group" data-section="support">
+            <div class="nav-group" data-section="students">
                 <button type="button" class="nav-section nav-section-toggle">
-                    <span>Student Support</span>
+                    <span>Students</span>
                     <span class="nav-chevron">&#9662;</span>
                 </button>
                 <div class="nav-group-items">
-                    <a href="{{ url_for('notes.index') }}" class="nav-item {% if request.blueprint == 'notes' %}active{% endif %}">
-                        <span class="nav-icon">&#128221;</span> Notes
-                    </a>
-                    <a href="{{ url_for('followups.index') }}" class="nav-item {% if request.blueprint == 'followups' %}active{% endif %}">
-                        <span class="nav-icon">&#128204;</span> Follow-Ups
-                    </a>
-                    <a href="{{ url_for('referrals.index') }}" class="nav-item {% if request.blueprint == 'referrals' %}active{% endif %}">
-                        <span class="nav-icon">&#128231;</span> Referrals
-                    </a>
                     <a href="{{ url_for('goals.index') }}" class="nav-item {% if request.blueprint == 'goals' %}active{% endif %}">
                         <span class="nav-icon">&#127919;</span> Goals
                     </a>
-                    <a href="{{ url_for('communications.index') }}" class="nav-item {% if request.blueprint == 'communications' %}active{% endif %}">
-                        <span class="nav-icon">&#128241;</span> Comm Log
-                    </a>
                     <a href="{{ url_for('groups.index') }}" class="nav-item {% if request.blueprint == 'groups' %}active{% endif %}">
                         <span class="nav-icon">&#128101;</span> Groups
+                    </a>
+                    <a href="{{ url_for('referrals.index') }}" class="nav-item {% if request.blueprint == 'referrals' %}active{% endif %}">
+                        <span class="nav-icon">&#128231;</span> Referrals
                     </a>
                     <a href="{{ url_for('interventions.index') }}" class="nav-item {% if request.blueprint == 'interventions' %}active{% endif %}">
                         <span class="nav-icon">&#128202;</span> MTSS / RTI
                     </a>
                     <a href="{{ url_for('screenings.index') }}" class="nav-item {% if request.blueprint == 'screenings' %}active{% endif %}">
                         <span class="nav-icon">&#129504;</span> Screeners
+                    </a>
+                    <a href="{{ url_for('iep504.index') }}" class="nav-item {% if request.blueprint == 'iep504' %}active{% endif %}">
+                        <span class="nav-icon">&#9855;</span> IEP / 504
+                    </a>
+                    <a href="{{ url_for('consents.index') }}" class="nav-item {% if request.blueprint == 'consents' %}active{% endif %}">
+                        <span class="nav-icon">&#128221;</span> Consents
+                    </a>
+                    <a href="{{ url_for('documents.index') }}" class="nav-item {% if request.blueprint == 'documents' %}active{% endif %}">
+                        <span class="nav-icon">&#128193;</span> Documents
                     </a>
                 </div>
             </div>
@@ -106,30 +112,9 @@
                 </div>
             </div>
 
-            <div class="nav-group" data-section="records">
+            <div class="nav-group" data-section="meetings">
                 <button type="button" class="nav-section nav-section-toggle">
-                    <span>Records</span>
-                    <span class="nav-chevron">&#9662;</span>
-                </button>
-                <div class="nav-group-items">
-                    <a href="{{ url_for('activity_log.index') }}" class="nav-item {% if request.blueprint == 'activity_log' %}active{% endif %}">
-                        <span class="nav-icon">&#9202;</span> Activity Log
-                    </a>
-                    <a href="{{ url_for('iep504.index') }}" class="nav-item {% if request.blueprint == 'iep504' %}active{% endif %}">
-                        <span class="nav-icon">&#9855;</span> IEP / 504
-                    </a>
-                    <a href="{{ url_for('consents.index') }}" class="nav-item {% if request.blueprint == 'consents' %}active{% endif %}">
-                        <span class="nav-icon">&#128221;</span> Consents
-                    </a>
-                    <a href="{{ url_for('documents.index') }}" class="nav-item {% if request.blueprint == 'documents' %}active{% endif %}">
-                        <span class="nav-icon">&#128193;</span> Documents
-                    </a>
-                </div>
-            </div>
-
-            <div class="nav-group" data-section="comms">
-                <button type="button" class="nav-section nav-section-toggle">
-                    <span>Communication</span>
+                    <span>Meetings</span>
                     <span class="nav-chevron">&#9662;</span>
                 </button>
                 <div class="nav-group-items">
@@ -139,18 +124,18 @@
                     <a href="{{ url_for('meeting_prep.index') }}" class="nav-item {% if request.blueprint == 'meeting_prep' %}active{% endif %}">
                         <span class="nav-icon">&#128203;</span> Meeting Prep
                     </a>
+                    <a href="{{ url_for('communications.index') }}" class="nav-item {% if request.blueprint == 'communications' %}active{% endif %}">
+                        <span class="nav-icon">&#128241;</span> Comm Log
+                    </a>
                     <a href="{{ url_for('email_drafts.index') }}" class="nav-item {% if request.blueprint == 'email_drafts' %}active{% endif %}">
                         <span class="nav-icon">&#9993;</span> Comm Drafts
-                    </a>
-                    <a href="{{ url_for('mail_merge.index') }}" class="nav-item {% if request.blueprint == 'mail_merge' %}active{% endif %}">
-                        <span class="nav-icon">&#128220;</span> Mail Merge
                     </a>
                 </div>
             </div>
 
-            <div class="nav-group" data-section="tools">
+            <div class="nav-group" data-section="reports">
                 <button type="button" class="nav-section nav-section-toggle">
-                    <span>Reports & Tools</span>
+                    <span>Reports</span>
                     <span class="nav-chevron">&#9662;</span>
                 </button>
                 <div class="nav-group-items">
@@ -163,14 +148,29 @@
                     <a href="{{ url_for('analytics.index') }}" class="nav-item {% if request.blueprint == 'analytics' %}active{% endif %}">
                         <span class="nav-icon">&#128202;</span> Analytics
                     </a>
+                    <a href="{{ url_for('activity_log.index') }}" class="nav-item {% if request.blueprint == 'activity_log' %}active{% endif %}">
+                        <span class="nav-icon">&#9202;</span> Activity Log
+                    </a>
+                </div>
+            </div>
+
+            <div class="nav-group" data-section="more">
+                <button type="button" class="nav-section nav-section-toggle">
+                    <span>More</span>
+                    <span class="nav-chevron">&#9662;</span>
+                </button>
+                <div class="nav-group-items">
                     <a href="{{ url_for('ai_tools.index') }}" class="nav-item {% if request.blueprint == 'ai_tools' %}active{% endif %}">
                         <span class="nav-icon">&#9889;</span> AI Tools
                     </a>
-                    <a href="{{ url_for('knowledge_base.index') }}" class="nav-item {% if request.blueprint == 'knowledge_base' %}active{% endif %}">
-                        <span class="nav-icon">&#128218;</span> Knowledge Base
-                    </a>
                     <a href="{{ url_for('availability.index') }}" class="nav-item {% if request.blueprint == 'availability' %}active{% endif %}">
                         <span class="nav-icon">&#128197;</span> Scheduling
+                    </a>
+                    <a href="{{ url_for('mail_merge.index') }}" class="nav-item {% if request.blueprint == 'mail_merge' %}active{% endif %}">
+                        <span class="nav-icon">&#128220;</span> Mail Merge
+                    </a>
+                    <a href="{{ url_for('knowledge_base.index') }}" class="nav-item {% if request.blueprint == 'knowledge_base' %}active{% endif %}">
+                        <span class="nav-icon">&#128218;</span> Knowledge Base
                     </a>
                     <a href="{{ url_for('data_import.index') }}" class="nav-item {% if request.blueprint == 'data_import' %}active{% endif %}">
                         <span class="nav-icon">&#128229;</span> Data Import
@@ -191,14 +191,19 @@
 
     <script>
     (function(){
-        var key = 'sidebar_collapsed_sections';
+        var key = 'sidebar_collapsed_sections_v2';
         var state = {};
         try { state = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch(e) {}
 
         document.querySelectorAll('.nav-group').forEach(function(group){
             var id = group.dataset.section;
             var hasActive = !!group.querySelector('.nav-item.active');
-            if (state[id] && !hasActive) group.classList.add('is-collapsed');
+            // Default: collapsed unless this section contains the current page.
+            // User toggle overrides via saved state.
+            var saved = state[id];
+            var shouldCollapse = hasActive ? false :
+                (saved === undefined ? true : saved);
+            if (shouldCollapse) group.classList.add('is-collapsed');
             var toggle = group.querySelector('.nav-section-toggle');
             if (toggle) {
                 toggle.addEventListener('click', function(){
