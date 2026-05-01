@@ -137,6 +137,13 @@ def attendance_upload():
         not_on_caseload = 0
         errors = []
 
+        # Pre-load student lookup once: student_id_number → db id
+        student_cache = {
+            s.student_id_number: s.id
+            for s in Student.query.with_entities(
+                Student.student_id_number, Student.id).all()
+        }
+
         # Pre-load existing attendance keys to avoid per-row duplicate checks
         caseload_ids = list(student_cache.values())
         existing_keys = set()
@@ -187,9 +194,8 @@ def attendance_upload():
                     errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
-            student = Student.query.filter_by(
-                student_id_number=str(student_id_str).strip()).first()
-            if not student:
+            student_db_id = student_cache.get(str(student_id_str).strip())
+            if not student_db_id:
                 # For Synergy whole-school reports, silently skip non-caseload students
                 if is_synergy:
                     not_on_caseload += 1
@@ -198,14 +204,14 @@ def attendance_upload():
                 continue
 
             # Skip duplicates (check in-memory set instead of DB query)
-            att_key = (student.id, att_date, period_val)
+            att_key = (student_db_id, att_date, period_val)
             if att_key in existing_keys:
                 skipped += 1
                 continue
             existing_keys.add(att_key)  # Track newly added records too
 
             record = AttendanceRecord(
-                student_id=student.id,
+                student_id=student_db_id,
                 date=att_date,
                 period=period_val,
                 status=status_clean,
