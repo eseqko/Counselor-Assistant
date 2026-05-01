@@ -36,13 +36,17 @@ def index():
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
 
-    # Counts by status for the summary bar
+    # Counts by status for the summary bar (one grouped query instead of loading all rows)
+    from sqlalchemy import func
+    count_rows = db.session.query(
+        Referral.status, func.count(Referral.id)
+    ).filter_by(counselor_id=current_user.id).group_by(Referral.status).all()
     counts = {s: 0 for s, _ in Referral.STATUSES}
     counts['open'] = 0
-    for r in Referral.query.filter_by(counselor_id=current_user.id).all():
-        counts[r.status] = counts.get(r.status, 0) + 1
-        if r.is_open:
-            counts['open'] += 1
+    for status, n in count_rows:
+        counts[status] = counts.get(status, 0) + n
+        if status in ('pending', 'contacted', 'in_progress'):
+            counts['open'] += n
 
     return render_template('referrals/index.html',
         referrals=referrals, students=students,

@@ -210,13 +210,19 @@ def batch_delete():
         flash('No notes selected.', 'warning')
         return redirect(url_for('notes.index'))
 
-    count = 0
-    for nid in note_ids:
-        note = Note.query.get(int(nid))
-        if note and note.author_id == current_user.id:
-            db.session.delete(note)
-            count += 1
+    try:
+        ids = [int(nid) for nid in note_ids]
+    except (ValueError, TypeError):
+        flash('Invalid selection.', 'danger')
+        return redirect(url_for('notes.index'))
 
+    notes = Note.query.filter(
+        Note.id.in_(ids),
+        Note.author_id == current_user.id,
+    ).all()
+    count = len(notes)
+    for note in notes:
+        db.session.delete(note)
     db.session.commit()
     log_action('delete', 'note', details=f'Batch deleted {count} notes')
     flash(f'Deleted {count} notes.', 'warning')

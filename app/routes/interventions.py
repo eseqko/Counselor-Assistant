@@ -28,10 +28,13 @@ def index():
     plans = query.order_by(InterventionPlan.tier.desc(),
                            InterventionPlan.start_date.desc()).all()
 
-    # Build pyramid counts (active only)
+    # Build pyramid counts (active only — one grouped query)
+    from sqlalchemy import func
     pyramid = {1: 0, 2: 0, 3: 0}
-    for p in InterventionPlan.query.filter_by(counselor_id=current_user.id, status='active').all():
-        pyramid[p.tier] = pyramid.get(p.tier, 0) + 1
+    for tier_val, n in db.session.query(
+        InterventionPlan.tier, func.count(InterventionPlan.id)
+    ).filter_by(counselor_id=current_user.id, status='active').group_by(InterventionPlan.tier).all():
+        pyramid[tier_val] = pyramid.get(tier_val, 0) + n
 
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
