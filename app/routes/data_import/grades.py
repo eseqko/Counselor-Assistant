@@ -1,12 +1,12 @@
 """Grades import: template download, preview, upload, clear."""
-import io
-from flask import render_template, request, redirect, url_for, flash, send_file, jsonify
+from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import db, csrf
 from app.models.student import Student
 from app.models.grade import GradeRecord
 from app.models.import_log import ImportLog
 from app.utils.audit import log_action
+from app.utils.excel_helpers import build_import_workbook, workbook_response
 from datetime import date
 from app.routes.data_import import (
     data_import_bp, HAS_OPENPYXL, VALID_GRADES,
@@ -18,6 +18,13 @@ from app.routes.data_import._parsers import (
 )
 
 
+_OPENPYXL_KIT = {
+    'Workbook': Workbook, 'Font': Font, 'PatternFill': PatternFill,
+    'Alignment': Alignment, 'Border': Border, 'Side': Side,
+    'get_column_letter': get_column_letter, 'DataValidation': DataValidation,
+}
+
+
 @data_import_bp.route('/grades/template')
 @login_required
 def grades_template():
@@ -26,109 +33,66 @@ def grades_template():
         flash('Excel support requires openpyxl.', 'danger')
         return redirect(url_for('data_import.index'))
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Grades Import"
-
-    header_font = Font(name='Calibri', bold=True, size=11, color='FFFFFF')
-    header_fill = PatternFill(start_color='2C5F8A', end_color='2C5F8A', fill_type='solid')
-    thin_border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin'),
+    wb = build_import_workbook(
+        _OPENPYXL_KIT,
+        sheet_title='Grades Import',
+        header_wrap=True,
+        columns=[
+            ('School Year', 14),
+            ('Perm ID', 12),
+            ('Grade Level', 12),
+            ('Grade', 8),
+            ('Mark Order', 12),
+            ('Mark Name', 14),
+            ('Course Title', 30),
+            ('Course ID', 12),
+            ('Period', 8),
+            ('C1', 6), ('C2', 6), ('C3', 6),
+            ('Staff Name', 20),
+            ('Audit Class', 12),
+            ('Student Name', 22),
+            ('SPED', 8), ('SigDis', 8), ('SLE', 8),
+        ],
+        validations=[
+            {'formula1': '"A+,A,A-,B+,B,B-,C+,C,C-,D+,D,D-,F,P,NP,I,W"',
+             'sqref': 'D2:D5000', 'allow_blank': True,
+             'error_title': 'Invalid Grade',
+             'error_message': 'Enter a valid letter grade'},
+            {'formula1': '"N,Y"', 'sqref': 'N2:N5000', 'allow_blank': True},
+        ],
+        instructions=[
+            ('GRADES IMPORT TEMPLATE — SYNERGY FORMAT', ''),
+            ('', ''),
+            ('This template matches the Synergy SIS grade export.', ''),
+            ('Export from Synergy and paste or upload directly.', ''),
+            ('', ''),
+            ('Column', 'Instructions'),
+            ('School Year', 'e.g., 2025-2026.'),
+            ('Perm ID', 'Required. Student permanent ID — must match a student in your caseload.'),
+            ('Grade Level', 'Student grade level (9, 10, 11, 12). Informational.'),
+            ('Grade', 'Required. Letter grade (A+, A, A-, B+, … F, P, NP, I, W).'),
+            ('Mark Order', 'Numeric mark sequence (1, 2, etc.). Optional.'),
+            ('Mark Name', 'e.g., "Quarter 3". The quarter number is extracted automatically.'),
+            ('Course Title', 'Required. Full course title from Synergy (e.g., "Spanish 1 CP [S1]").'),
+            ('Course ID', 'Synergy course ID number. Used to match to your Course Catalog.'),
+            ('Period', 'Class period (1-4).'),
+            ('C1, C2, C3', 'Citizenship grades. Stored for reference but not analyzed.'),
+            ('Staff Name', 'Teacher name. Stored for reference.'),
+            ('Audit Class', 'N or Y. Audit classes are skipped during import.'),
+            ('Student Name', 'For reference. Not used for matching (Perm ID is used).'),
+            ('SPED', 'Special education flag. Informational.'),
+            ('SigDis', 'Significant disability flag. Informational.'),
+            ('SLE', 'Structured Learning Experience flag. Informational.'),
+            ('', ''),
+            ('TIPS:', ''),
+            ('', 'You can paste your Synergy export directly — no reformatting needed.'),
+            ('', 'One row per student per course per quarter.'),
+            ('', 'The AI will use this data to recommend courses for next year.'),
+        ],
     )
 
-    columns = [
-        ('School Year', 14),
-        ('Perm ID', 12),
-        ('Grade Level', 12),
-        ('Grade', 8),
-        ('Mark Order', 12),
-        ('Mark Name', 14),
-        ('Course Title', 30),
-        ('Course ID', 12),
-        ('Period', 8),
-        ('C1', 6),
-        ('C2', 6),
-        ('C3', 6),
-        ('Staff Name', 20),
-        ('Audit Class', 12),
-        ('Student Name', 22),
-        ('SPED', 8),
-        ('SigDis', 8),
-        ('SLE', 8),
-    ]
-
-    for col_idx, (name, width) in enumerate(columns, 1):
-        cell = ws.cell(row=1, column=col_idx, value=name)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        cell.border = thin_border
-        ws.column_dimensions[get_column_letter(col_idx)].width = width
-
-    # Validations
-    grade_dv = DataValidation(
-        type='list',
-        formula1='"A+,A,A-,B+,B,B-,C+,C,C-,D+,D,D-,F,P,NP,I,W"',
-        allow_blank=True, showErrorMessage=True, errorTitle='Invalid Grade',
-        error='Enter a valid letter grade')
-    grade_dv.sqref = 'D2:D5000'
-    ws.add_data_validation(grade_dv)
-
-    audit_dv = DataValidation(
-        type='list', formula1='"N,Y"', allow_blank=True)
-    audit_dv.sqref = 'N2:N5000'
-    ws.add_data_validation(audit_dv)
-
-    # Instructions
-    instr = wb.create_sheet('Instructions')
-    instr.sheet_properties.tabColor = 'E8A838'
-    instructions = [
-        ('GRADES IMPORT TEMPLATE — SYNERGY FORMAT', ''),
-        ('', ''),
-        ('This template matches the Synergy SIS grade export.', ''),
-        ('Export from Synergy and paste or upload directly.', ''),
-        ('', ''),
-        ('Column', 'Instructions'),
-        ('School Year', 'e.g., 2025-2026.'),
-        ('Perm ID', 'Required. Student permanent ID — must match a student in your caseload.'),
-        ('Grade Level', 'Student grade level (9, 10, 11, 12). Informational.'),
-        ('Grade', 'Required. Letter grade (A+, A, A-, B+, … F, P, NP, I, W).'),
-        ('Mark Order', 'Numeric mark sequence (1, 2, etc.). Optional.'),
-        ('Mark Name', 'e.g., "Quarter 3". The quarter number is extracted automatically.'),
-        ('Course Title', 'Required. Full course title from Synergy (e.g., "Spanish 1 CP [S1]").'),
-        ('Course ID', 'Synergy course ID number. Used to match to your Course Catalog.'),
-        ('Period', 'Class period (1-4).'),
-        ('C1, C2, C3', 'Citizenship grades. Stored for reference but not analyzed.'),
-        ('Staff Name', 'Teacher name. Stored for reference.'),
-        ('Audit Class', 'N or Y. Audit classes are skipped during import.'),
-        ('Student Name', 'For reference. Not used for matching (Perm ID is used).'),
-        ('SPED', 'Special education flag. Informational.'),
-        ('SigDis', 'Significant disability flag. Informational.'),
-        ('SLE', 'Structured Learning Experience flag. Informational.'),
-        ('', ''),
-        ('TIPS:', ''),
-        ('', 'You can paste your Synergy export directly — no reformatting needed.'),
-        ('', 'One row per student per course per quarter.'),
-        ('', 'The AI will use this data to recommend courses for next year.'),
-    ]
-    for row_idx, (a, b) in enumerate(instructions, 1):
-        instr.cell(row=row_idx, column=1, value=a).font = Font(
-            name='Calibri', bold=bool(a), size=14 if row_idx == 1 else 11,
-            color='2C5F8A' if row_idx == 1 else '000000')
-        instr.cell(row=row_idx, column=2, value=b).font = Font(name='Calibri', size=11)
-    instr.column_dimensions['A'].width = 18
-    instr.column_dimensions['B'].width = 75
-
-    ws.freeze_panes = 'A2'
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-
     log_action('export', 'grades_template', details='Downloaded grades template')
-    return send_file(buffer,
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                     as_attachment=True, download_name='Grades_Import_Template.xlsx')
+    return workbook_response(wb, 'Grades_Import_Template.xlsx')
 
 
 @data_import_bp.route('/grades/preview', methods=['POST'])

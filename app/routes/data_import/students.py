@@ -1,17 +1,25 @@
 """Student info bulk update: template download, upload."""
-import io
-from flask import render_template, request, redirect, url_for, flash, send_file
+from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student
 from app.models.import_log import ImportLog
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.excel_helpers import build_import_workbook, workbook_response
 from app.routes.data_import import (
     data_import_bp, HAS_OPENPYXL, STUDENT_UPDATE_FIELDS,
     Workbook, Font, PatternFill, Alignment, Border, Side, get_column_letter,
+    DataValidation,
 )
 from app.routes.data_import._parsers import parse_upload_file
+
+
+_OPENPYXL_KIT = {
+    'Workbook': Workbook, 'Font': Font, 'PatternFill': PatternFill,
+    'Alignment': Alignment, 'Border': Border, 'Side': Side,
+    'get_column_letter': get_column_letter, 'DataValidation': DataValidation,
+}
 
 
 @data_import_bp.route('/students/template')
@@ -22,57 +30,12 @@ def student_update_template():
         flash('Excel support requires openpyxl. Install it with: pip install openpyxl', 'danger')
         return redirect(url_for('data_import.index'))
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Student Update"
-
-    header_font = Font(name='Calibri', bold=True, color='FFFFFF', size=11)
-    header_fill = PatternFill(start_color='2C5F8A', end_color='2C5F8A', fill_type='solid')
-    thin_border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin'))
-
-    # Column order: Student ID (key), then all updatable fields
-    columns = [
-        ('Student ID #', 18),
-        ('First Name', 16),
-        ('Last Name', 16),
-        ('Grade Level', 12),
-        ('Gender', 14),
-        ('Ethnicity', 16),
-        ('Date of Birth', 14),
-        ('Advisory', 14),
-        ('Student Email', 26),
-        ('Phone', 16),
-        ('Parent/Guardian', 22),
-        ('Parent Phone', 16),
-        ('Parent Email', 26),
-        ('Address', 30),
-        ('EL Status', 14),
-        ('EL Level', 10),
-        ('IEP', 6),
-        ('504', 6),
-    ]
-
-    # Map column header to db field name
-    HEADER_TO_FIELD = {label: field for field, (label, _) in STUDENT_UPDATE_FIELDS.items()}
-    HEADER_TO_FIELD['Student ID #'] = 'student_id_number'
-
-    for col_idx, (name, width) in enumerate(columns, 1):
-        cell = ws.cell(row=1, column=col_idx, value=name)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.border = thin_border
-        cell.alignment = Alignment(horizontal='center')
-        ws.column_dimensions[get_column_letter(col_idx)].width = width
-
-    # Pre-fill with current student data from caseload
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id
     ).filter(Student.status == 'active').order_by(Student.last_name, Student.first_name).all()
 
-    for row_idx, s in enumerate(students, start=2):
-        row_data = [
+    prefill_rows = [
+        [
             s.student_id_number,
             s.first_name,
             s.last_name,
@@ -92,49 +55,54 @@ def student_update_template():
             'Yes' if s.iep_status else '',
             'Yes' if s.section_504 else '',
         ]
-        for col_idx, val in enumerate(row_data, 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=val)
-            cell.border = thin_border
-
-    # Lock the Student ID column (light gray background to indicate read-only)
-    lock_fill = PatternFill(start_color='F0F0F0', end_color='F0F0F0', fill_type='solid')
-    for row_idx in range(2, len(students) + 2):
-        ws.cell(row=row_idx, column=1).fill = lock_fill
-
-    # Instructions sheet
-    instr = wb.create_sheet('Instructions')
-    instructions = [
-        ('Student Info Bulk Update', ''),
-        ('', ''),
-        ('How it works', 'Edit any cells in the Student Update sheet, then upload the file. '
-                         'Students are matched by Student ID #. Only changed fields are updated.'),
-        ('Student ID #', 'DO NOT change this column — it is the key used to match students.'),
-        ('Adding new columns', 'You can delete columns you do not need. '
-                               'Only columns with recognized headers will be processed.'),
-        ('Blank cells', 'Blank cells are skipped (existing value is kept). '
-                        'To clear a field, enter a single dash (-).'),
-        ('IEP / 504', 'Enter "Yes" to enable, "No" to disable, or leave blank to keep current value.'),
-        ('EL Status', 'Valid values: EO, Newcomer, LTEL, RFEP'),
-        ('Date of Birth', 'Format: MM/DD/YYYY or YYYY-MM-DD'),
-        ('Grade Level', 'Enter the number only (e.g. 9, 10, 11, 12)'),
+        for s in students
     ]
-    for row_idx, (a, b) in enumerate(instructions, 1):
-        instr.cell(row=row_idx, column=1, value=a).font = Font(
-            name='Calibri', bold=bool(a), size=14 if row_idx == 1 else 11,
-            color='2C5F8A' if row_idx == 1 else '000000')
-        instr.cell(row=row_idx, column=2, value=b).font = Font(name='Calibri', size=11)
-    instr.column_dimensions['A'].width = 20
-    instr.column_dimensions['B'].width = 80
 
-    ws.freeze_panes = 'A2'
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
+    wb = build_import_workbook(
+        _OPENPYXL_KIT,
+        sheet_title='Student Update',
+        columns=[
+            ('Student ID #', 18),
+            ('First Name', 16),
+            ('Last Name', 16),
+            ('Grade Level', 12),
+            ('Gender', 14),
+            ('Ethnicity', 16),
+            ('Date of Birth', 14),
+            ('Advisory', 14),
+            ('Student Email', 26),
+            ('Phone', 16),
+            ('Parent/Guardian', 22),
+            ('Parent Phone', 16),
+            ('Parent Email', 26),
+            ('Address', 30),
+            ('EL Status', 14),
+            ('EL Level', 10),
+            ('IEP', 6),
+            ('504', 6),
+        ],
+        prefill_rows=prefill_rows,
+        lock_first_column=True,
+        instructions_col_widths=(20, 80),
+        instructions=[
+            ('Student Info Bulk Update', ''),
+            ('', ''),
+            ('How it works', 'Edit any cells in the Student Update sheet, then upload the file. '
+                             'Students are matched by Student ID #. Only changed fields are updated.'),
+            ('Student ID #', 'DO NOT change this column — it is the key used to match students.'),
+            ('Adding new columns', 'You can delete columns you do not need. '
+                                   'Only columns with recognized headers will be processed.'),
+            ('Blank cells', 'Blank cells are skipped (existing value is kept). '
+                            'To clear a field, enter a single dash (-).'),
+            ('IEP / 504', 'Enter "Yes" to enable, "No" to disable, or leave blank to keep current value.'),
+            ('EL Status', 'Valid values: EO, Newcomer, LTEL, RFEP'),
+            ('Date of Birth', 'Format: MM/DD/YYYY or YYYY-MM-DD'),
+            ('Grade Level', 'Enter the number only (e.g. 9, 10, 11, 12)'),
+        ],
+    )
 
     log_action('export', 'student_update_template', details='Downloaded student update template')
-    return send_file(buffer,
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                     as_attachment=True, download_name='Student_Info_Update.xlsx')
+    return workbook_response(wb, 'Student_Info_Update.xlsx')
 
 
 @data_import_bp.route('/students/upload', methods=['GET', 'POST'])

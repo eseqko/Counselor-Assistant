@@ -1,6 +1,5 @@
 """Attendance import: template download, upload, clear."""
-import io
-from flask import render_template, request, redirect, url_for, flash, send_file
+from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student
@@ -8,6 +7,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.import_log import ImportLog
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.excel_helpers import build_import_workbook, workbook_response
 from app.routes.data_import import (
     data_import_bp, HAS_OPENPYXL, VALID_ATTENDANCE,
     Workbook, Font, PatternFill, Alignment, Border, Side,
@@ -18,6 +18,13 @@ from app.routes.data_import._parsers import (
 )
 
 
+_OPENPYXL_KIT = {
+    'Workbook': Workbook, 'Font': Font, 'PatternFill': PatternFill,
+    'Alignment': Alignment, 'Border': Border, 'Side': Side,
+    'get_column_letter': get_column_letter, 'DataValidation': DataValidation,
+}
+
+
 @data_import_bp.route('/attendance/template')
 @login_required
 def attendance_template():
@@ -26,88 +33,47 @@ def attendance_template():
         flash('Excel support requires openpyxl. Install with: pip install openpyxl', 'danger')
         return redirect(url_for('data_import.index'))
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Attendance Import"
-
-    header_font = Font(name='Calibri', bold=True, size=11, color='FFFFFF')
-    header_fill = PatternFill(start_color='2C5F8A', end_color='2C5F8A', fill_type='solid')
-    thin_border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin'),
+    wb = build_import_workbook(
+        _OPENPYXL_KIT,
+        sheet_title='Attendance Import',
+        columns=[
+            ('Student ID #', 16),
+            ('Date', 14),
+            ('Period', 8),
+            ('Status', 14),
+            ('Course Name', 30),
+            ('Reason', 30),
+        ],
+        validations=[
+            {'formula1': '"Present,Absent,Tardy,Excused"', 'sqref': 'D2:D5000',
+             'allow_blank': False,
+             'error_title': 'Invalid Status',
+             'error_message': 'Choose: Present, Absent, Tardy, or Excused'},
+            {'formula1': '"0,1,2,3,4,5,6,7,8,9,10"', 'sqref': 'C2:C5000',
+             'allow_blank': True,
+             'error_title': 'Invalid Period',
+             'error_message': 'Enter period 0-10'},
+        ],
+        instructions=[
+            ('ATTENDANCE IMPORT TEMPLATE', ''),
+            ('', ''),
+            ('Column', 'Instructions'),
+            ('Student ID #', 'Required. Must match a student in your caseload.'),
+            ('Date', 'Required. Format: MM/DD/YYYY or YYYY-MM-DD'),
+            ('Period', 'Optional. Class period 0-10. (1-4 core, 5 extracurricular, 6 advisory)'),
+            ('Status', 'Required. Present, Absent, Tardy, or Excused.'),
+            ('Course Name', 'Optional. Name of the class.'),
+            ('Reason', 'Optional. Reason for absence/tardy.'),
+            ('', ''),
+            ('TIPS:', ''),
+            ('', 'You can paste data exported from your SIS (Synergy, Aeries, PowerSchool, etc.)'),
+            ('', 'One row per student per period. Daily attendance = one row per student.'),
+            ('', 'Duplicate rows (same student+date+period) will be skipped.'),
+        ],
     )
-
-    columns = [
-        ('Student ID #', 16),
-        ('Date', 14),
-        ('Period', 8),
-        ('Status', 14),
-        ('Course Name', 30),
-        ('Reason', 30),
-    ]
-
-    for col_idx, (name, width) in enumerate(columns, 1):
-        cell = ws.cell(row=1, column=col_idx, value=name)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.border = thin_border
-        ws.column_dimensions[get_column_letter(col_idx)].width = width
-
-    # Data validation for Status
-    status_dv = DataValidation(
-        type='list', formula1='"Present,Absent,Tardy,Excused"', allow_blank=False,
-        showErrorMessage=True, errorTitle='Invalid Status',
-        error='Choose: Present, Absent, Tardy, or Excused'
-    )
-    status_dv.sqref = 'D2:D5000'
-    ws.add_data_validation(status_dv)
-
-    # Period validation (0-10 to support Synergy periods)
-    period_dv = DataValidation(
-        type='list', formula1='"0,1,2,3,4,5,6,7,8,9,10"', allow_blank=True,
-        showErrorMessage=True, errorTitle='Invalid Period',
-        error='Enter period 0-10'
-    )
-    period_dv.sqref = 'C2:C5000'
-    ws.add_data_validation(period_dv)
-
-    # Instructions sheet
-    instr = wb.create_sheet('Instructions')
-    instr.sheet_properties.tabColor = 'E8A838'
-    instructions = [
-        ('ATTENDANCE IMPORT TEMPLATE', ''),
-        ('', ''),
-        ('Column', 'Instructions'),
-        ('Student ID #', 'Required. Must match a student in your caseload.'),
-        ('Date', 'Required. Format: MM/DD/YYYY or YYYY-MM-DD'),
-        ('Period', 'Optional. Class period 0-10. (1-4 core, 5 extracurricular, 6 advisory)'),
-        ('Status', 'Required. Present, Absent, Tardy, or Excused.'),
-        ('Course Name', 'Optional. Name of the class.'),
-        ('Reason', 'Optional. Reason for absence/tardy.'),
-        ('', ''),
-        ('TIPS:', ''),
-        ('', 'You can paste data exported from your SIS (Synergy, Aeries, PowerSchool, etc.)'),
-        ('', 'One row per student per period. Daily attendance = one row per student.'),
-        ('', 'Duplicate rows (same student+date+period) will be skipped.'),
-    ]
-    for row_idx, (a, b) in enumerate(instructions, 1):
-        instr.cell(row=row_idx, column=1, value=a).font = Font(
-            name='Calibri', bold=bool(a), size=14 if row_idx == 1 else 11,
-            color='2C5F8A' if row_idx == 1 else '000000')
-        instr.cell(row=row_idx, column=2, value=b).font = Font(name='Calibri', size=11)
-    instr.column_dimensions['A'].width = 18
-    instr.column_dimensions['B'].width = 75
-
-    ws.freeze_panes = 'A2'
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
 
     log_action('export', 'attendance_template', details='Downloaded attendance template')
-    return send_file(buffer,
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                     as_attachment=True, download_name='Attendance_Import_Template.xlsx')
+    return workbook_response(wb, 'Attendance_Import_Template.xlsx')
 
 
 @data_import_bp.route('/attendance/upload', methods=['GET', 'POST'])
