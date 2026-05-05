@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_partials/_pagination.html" import render_pagination %}
 {% block title %}Caseload Manager{% endblock %}
 {% block page_title %}Caseload Manager{% endblock %}
 {% block content %}
@@ -56,7 +57,7 @@
 
 <div class="card">
     <div class="card-header">
-        Students (<span id="student-count">{{ students|length }}</span>)
+        Students (<span id="student-count">{{ pagination.total }}</span>)
         <div class="btn-group">
             <a href="{{ url_for('caseload.add_student') }}" class="btn btn-sm btn-primary">+ Add Student</a>
             <a href="{{ url_for('caseload.upload_caseload') }}" class="btn btn-sm btn-success">Upload Caseload</a>
@@ -121,6 +122,7 @@
             </tbody>
         </table>
     </div>
+    {{ render_pagination(pagination, label='students') }}
 </div>
 
 <script>

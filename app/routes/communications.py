@@ -22,14 +22,17 @@ def index():
     if contact_type:
         query = query.filter_by(contact_type=contact_type)
 
-    logs = query.order_by(CommunicationLog.contact_date.desc(),
-                          CommunicationLog.created_at.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(
+        CommunicationLog.contact_date.desc(),
+        CommunicationLog.created_at.desc()
+    ).paginate(page=max(1, page), per_page=50, error_out=False)
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
 
     return render_template('communications/index.html',
-        logs=logs, students=students,
+        logs=pagination.items, pagination=pagination, students=students,
         student_id=student_id, contact_type=contact_type,
         contact_types=CommunicationLog.CONTACT_TYPES)
 

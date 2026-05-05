@@ -66,13 +66,17 @@ def index():
     if date_to:
         query = query.filter(Note.session_date <= parse_date(date_to))
 
-    notes = query.order_by(Note.session_date.desc(), Note.created_at.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(
+        Note.session_date.desc(), Note.created_at.desc()
+    ).paginate(page=max(1, page), per_page=50, error_out=False)
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
 
     return render_template('notes/index.html',
-        notes=notes, search=search, note_type=note_type,
+        notes=pagination.items, pagination=pagination,
+        search=search, note_type=note_type,
         student_id=student_id, students=students,
         note_types=Note.NOTE_TYPES)
 

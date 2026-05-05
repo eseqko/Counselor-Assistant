@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_partials/_pagination.html" import render_pagination %}
 {% block title %}Communication Log{% endblock %}
 {% block page_title %}Communication Log{% endblock %}
 {% block content %}
@@ -56,6 +57,7 @@
             </tbody>
         </table>
     </div>
+    {{ render_pagination(pagination, label='communications') }}
 </div>
 
 {% endblock %}

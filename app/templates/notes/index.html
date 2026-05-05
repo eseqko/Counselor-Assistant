@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_partials/_pagination.html" import render_pagination %}
 {% block title %}Conference Notes{% endblock %}
 {% block page_title %}Conference Notes{% endblock %}
 {% block content %}
@@ -87,6 +88,7 @@
             </table>
         </div>
     </form>
+    {{ render_pagination(pagination, label='notes') }}
 </div>
 
 <script>
