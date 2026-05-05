@@ -175,195 +175,228 @@ def _parse_date(val):
         return None
 
 
+# Row → dict converters used by export_data. Keep field names stable;
+# import_data reads them by exact key.
+
+def _student_to_dict(s):
+    return {
+        'student_id_number': s.student_id_number,
+        'first_name': s.first_name,
+        'last_name': s.last_name,
+        'grade_level': s.grade_level,
+        'date_of_birth': _serialize_date(s.date_of_birth),
+        'gender': s.gender,
+        'ethnicity': s.ethnicity,
+        'email': s.email,
+        'phone': s.phone,
+        'parent_guardian_name': s.parent_guardian_name,
+        'parent_guardian_phone': s.parent_guardian_phone,
+        'parent_guardian_email': s.parent_guardian_email,
+        'address': s.address,
+        'homeroom': s.homeroom,
+        'status': s.status,
+        'enrollment_date': _serialize_date(s.enrollment_date),
+        'iep_status': s.iep_status,
+        'section_504': s.section_504,
+        'el_status': s.el_status,
+        'el_level': s.el_level,
+        'special_programs': s.special_programs,
+        'notes_text': s.notes_text,
+        'tags': [t.name for t in s.tags],
+    }
+
+
+def _note_to_dict(n):
+    return {
+        'student_id_number': n.student.student_id_number if n.student else None,
+        'note_type': n.note_type,
+        'title': n.title,
+        'content': n.content,
+        'session_date': _serialize_date(n.session_date),
+        'duration_minutes': n.duration_minutes,
+        'asca_domain': n.asca_domain,
+        'asca_standard': n.asca_standard,
+        'topic_category': n.topic_category,
+        'delivery_method': n.delivery_method,
+        'follow_up_needed': n.follow_up_needed,
+        'follow_up_date': _serialize_date(n.follow_up_date),
+        'follow_up_notes': n.follow_up_notes,
+        'follow_up_completed': n.follow_up_completed,
+        'follow_up_completed_date': _serialize_date(n.follow_up_completed_date),
+        'is_confidential': n.is_confidential,
+        'restricted_access': n.restricted_access,
+        'created_at': _serialize_date(n.created_at),
+    }
+
+
+def _service_record_to_dict(sr):
+    return {
+        'student_id_number': sr.student.student_id_number if sr.student else None,
+        'date': _serialize_date(sr.date),
+        'service_type': sr.service_type,
+        'topic': sr.topic,
+        'description': sr.description,
+        'duration_minutes': sr.duration_minutes,
+        'asca_domain': sr.asca_domain,
+        'asca_standard': sr.asca_standard,
+        'delivery_method': sr.delivery_method,
+        'setting': sr.setting,
+        'outcome': sr.outcome,
+        'follow_up_required': sr.follow_up_required,
+        'follow_up_date': _serialize_date(sr.follow_up_date),
+        'referral_made': sr.referral_made,
+        'referral_to': sr.referral_to,
+        'created_at': _serialize_date(sr.created_at),
+    }
+
+
+def _transcript_to_dict(tr):
+    return {
+        'student_id_number': tr.student.student_id_number if tr.student else None,
+        'quarter': tr.quarter,
+        'total_completed': tr.total_completed,
+        'total_wip': tr.total_wip,
+        'total_needed': tr.total_needed,
+        'risk_level': tr.risk_level,
+        'ag_status': tr.ag_status,
+        'ag_areas_met': tr.ag_areas_met,
+        'ag_areas_deficient': tr.ag_areas_deficient,
+        'cte_completed': tr.cte_completed,
+        'cte_level': tr.cte_level,
+        'cte_is_completer': tr.cte_is_completer,
+        'credits_json': tr.credits_json,
+        'ag_json': tr.ag_json,
+        'import_date': _serialize_date(tr.import_date),
+    }
+
+
+def _department_to_dict(d):
+    return {
+        'name': d.name,
+        'description': d.description,
+        'head': d.head,
+        'color': d.color,
+        'sort_order': d.sort_order,
+    }
+
+
+def _course_to_dict(c):
+    return {
+        'department_name': c.department.name if c.department else None,
+        'course_number': c.course_number,
+        'title': c.title,
+        'description': c.description,
+        'credits': c.credits,
+        'grade_levels': c.grade_levels,
+        'prerequisites': c.prerequisites,
+        'corequisites': c.corequisites,
+        'course_type': c.course_type,
+        'subject_area': c.subject_area,
+        'is_weighted': c.is_weighted,
+        'weight': c.weight,
+        'meets_requirement': c.meets_requirement,
+        'ncaa_approved': c.ncaa_approved,
+        'max_enrollment': c.max_enrollment,
+        'semesters': c.semesters,
+        'instructor': c.instructor,
+        'room': c.room,
+        'detailed_description': c.detailed_description,
+        'resources': c.resources,
+        'notes': c.notes,
+        'is_active': c.is_active,
+        'school_year': c.school_year,
+    }
+
+
+def _grad_req_to_dict(gr):
+    return {
+        'name': gr.name,
+        'credits_required': gr.credits_required,
+        'description': gr.description,
+        'qualifying_courses': gr.qualifying_courses,
+        'sort_order': gr.sort_order,
+    }
+
+
 @settings_bp.route('/export-data')
 @login_required
 def export_data():
-    """Export caseload and course catalog data as a portable JSON file."""
-    data = {
-        'export_version': 1,
-        'exported_at': datetime.now(timezone.utc).isoformat(),
-        'exported_by': current_user.display_name or current_user.username,
-    }
+    """Export caseload and course catalog data as a portable JSON file.
 
-    # --- School Config (catalog setup: name, colors, mascot) ---
-    if current_user.school_config_json:
-        try:
-            data['school_config'] = json.loads(current_user.school_config_json)
-        except (json.JSONDecodeError, TypeError):
-            pass
+    Streams the response so the file starts downloading immediately and
+    we never hold the full output as a single string in memory. Per-table
+    queries use eager loads to avoid N+1 lookups against Student.
+    """
+    from flask import stream_with_context
+    from sqlalchemy.orm import joinedload, selectinload
 
-    # --- Tags ---
-    data['tags'] = [
-        {'name': t.name, 'color': t.color}
-        for t in Tag.query.all()
-    ]
-
-    # --- Students ---
-    students_list = []
-    for s in Student.query.all():
-        students_list.append({
-            'student_id_number': s.student_id_number,
-            'first_name': s.first_name,
-            'last_name': s.last_name,
-            'grade_level': s.grade_level,
-            'date_of_birth': _serialize_date(s.date_of_birth),
-            'gender': s.gender,
-            'ethnicity': s.ethnicity,
-            'email': s.email,
-            'phone': s.phone,
-            'parent_guardian_name': s.parent_guardian_name,
-            'parent_guardian_phone': s.parent_guardian_phone,
-            'parent_guardian_email': s.parent_guardian_email,
-            'address': s.address,
-            'homeroom': s.homeroom,
-            'status': s.status,
-            'enrollment_date': _serialize_date(s.enrollment_date),
-            'iep_status': s.iep_status,
-            'section_504': s.section_504,
-            'el_status': s.el_status,
-            'el_level': s.el_level,
-            'special_programs': s.special_programs,
-            'notes_text': s.notes_text,
-            'tags': [t.name for t in s.tags],
-        })
-    data['students'] = students_list
-
-    # --- Notes ---
-    data['notes'] = [
-        {
-            'student_id_number': n.student.student_id_number if n.student else None,
-            'note_type': n.note_type,
-            'title': n.title,
-            'content': n.content,
-            'session_date': _serialize_date(n.session_date),
-            'duration_minutes': n.duration_minutes,
-            'asca_domain': n.asca_domain,
-            'asca_standard': n.asca_standard,
-            'topic_category': n.topic_category,
-            'delivery_method': n.delivery_method,
-            'follow_up_needed': n.follow_up_needed,
-            'follow_up_date': _serialize_date(n.follow_up_date),
-            'follow_up_notes': n.follow_up_notes,
-            'follow_up_completed': n.follow_up_completed,
-            'follow_up_completed_date': _serialize_date(n.follow_up_completed_date),
-            'is_confidential': n.is_confidential,
-            'restricted_access': n.restricted_access,
-            'created_at': _serialize_date(n.created_at),
-        }
-        for n in Note.query.all()
-    ]
-
-    # --- Service Records ---
-    data['service_records'] = [
-        {
-            'student_id_number': sr.student.student_id_number if sr.student else None,
-            'date': _serialize_date(sr.date),
-            'service_type': sr.service_type,
-            'topic': sr.topic,
-            'description': sr.description,
-            'duration_minutes': sr.duration_minutes,
-            'asca_domain': sr.asca_domain,
-            'asca_standard': sr.asca_standard,
-            'delivery_method': sr.delivery_method,
-            'setting': sr.setting,
-            'outcome': sr.outcome,
-            'follow_up_required': sr.follow_up_required,
-            'follow_up_date': _serialize_date(sr.follow_up_date),
-            'referral_made': sr.referral_made,
-            'referral_to': sr.referral_to,
-            'created_at': _serialize_date(sr.created_at),
-        }
-        for sr in ServiceRecord.query.all()
-    ]
-
-    # --- Transcript Records ---
-    data['transcript_records'] = [
-        {
-            'student_id_number': tr.student.student_id_number if tr.student else None,
-            'quarter': tr.quarter,
-            'total_completed': tr.total_completed,
-            'total_wip': tr.total_wip,
-            'total_needed': tr.total_needed,
-            'risk_level': tr.risk_level,
-            'ag_status': tr.ag_status,
-            'ag_areas_met': tr.ag_areas_met,
-            'ag_areas_deficient': tr.ag_areas_deficient,
-            'cte_completed': tr.cte_completed,
-            'cte_level': tr.cte_level,
-            'cte_is_completer': tr.cte_is_completer,
-            'credits_json': tr.credits_json,
-            'ag_json': tr.ag_json,
-            'import_date': _serialize_date(tr.import_date),
-        }
-        for tr in TranscriptRecord.query.all()
-    ]
-
-    # --- Departments ---
-    data['departments'] = [
-        {
-            'name': d.name,
-            'description': d.description,
-            'head': d.head,
-            'color': d.color,
-            'sort_order': d.sort_order,
-        }
-        for d in Department.query.all()
-    ]
-
-    # --- Courses ---
-    data['courses'] = [
-        {
-            'department_name': c.department.name if c.department else None,
-            'course_number': c.course_number,
-            'title': c.title,
-            'description': c.description,
-            'credits': c.credits,
-            'grade_levels': c.grade_levels,
-            'prerequisites': c.prerequisites,
-            'corequisites': c.corequisites,
-            'course_type': c.course_type,
-            'subject_area': c.subject_area,
-            'is_weighted': c.is_weighted,
-            'weight': c.weight,
-            'meets_requirement': c.meets_requirement,
-            'ncaa_approved': c.ncaa_approved,
-            'max_enrollment': c.max_enrollment,
-            'semesters': c.semesters,
-            'instructor': c.instructor,
-            'room': c.room,
-            'detailed_description': c.detailed_description,
-            'resources': c.resources,
-            'notes': c.notes,
-            'is_active': c.is_active,
-            'school_year': c.school_year,
-        }
-        for c in Course.query.all()
-    ]
-
-    # --- Graduation Requirements ---
-    data['graduation_requirements'] = [
-        {
-            'name': gr.name,
-            'credits_required': gr.credits_required,
-            'description': gr.description,
-            'qualifying_courses': gr.qualifying_courses,
-            'sort_order': gr.sort_order,
-        }
-        for gr in GraduationRequirement.query.all()
-    ]
-
-    # Build filename
     school = (current_user.school_name or 'export').replace(' ', '_')
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     filename = f'counselor_data_{school}_{timestamp}.json'
 
-    json_str = json.dumps(data, indent=2, ensure_ascii=False)
     log_action('export', 'data_transfer', details=f'Exported portable data file: {filename}')
 
+    # Capture user fields up front; current_user proxies the request context
+    # and we want stable values to use inside the generator.
+    exported_by = current_user.display_name or current_user.username
+    school_config_raw = current_user.school_config_json
+
+    def emit_array(name, rows, to_dict, leading_comma=True):
+        """Yield a JSON array element 'name': [ ... ] with rows streamed in."""
+        prefix = ',\n' if leading_comma else '\n'
+        yield f'{prefix}  "{name}": ['
+        first = True
+        for row in rows:
+            sep = '\n    ' if first else ',\n    '
+            yield sep + json.dumps(to_dict(row), ensure_ascii=False)
+            first = False
+        yield ('\n  ]' if not first else ']')
+
+    def generate():
+        yield '{\n'
+        yield f'  "export_version": 1,\n'
+        yield f'  "exported_at": {json.dumps(datetime.now(timezone.utc).isoformat())},\n'
+        yield f'  "exported_by": {json.dumps(exported_by)}'
+
+        # Optional school config block
+        if school_config_raw:
+            try:
+                cfg = json.loads(school_config_raw)
+                yield ',\n  "school_config": ' + json.dumps(cfg, ensure_ascii=False)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        yield from emit_array('tags', Tag.query.all(),
+                              lambda t: {'name': t.name, 'color': t.color})
+
+        students = Student.query.options(selectinload(Student.tags)).all()
+        yield from emit_array('students', students, _student_to_dict)
+
+        notes = Note.query.options(joinedload(Note.student)).all()
+        yield from emit_array('notes', notes, _note_to_dict)
+
+        services = ServiceRecord.query.options(joinedload(ServiceRecord.student)).all()
+        yield from emit_array('service_records', services, _service_record_to_dict)
+
+        transcripts = TranscriptRecord.query.options(
+            joinedload(TranscriptRecord.student)).all()
+        yield from emit_array('transcript_records', transcripts, _transcript_to_dict)
+
+        yield from emit_array('departments', Department.query.all(),
+                              _department_to_dict)
+
+        courses = Course.query.options(joinedload(Course.department)).all()
+        yield from emit_array('courses', courses, _course_to_dict)
+
+        yield from emit_array('graduation_requirements',
+                              GraduationRequirement.query.all(), _grad_req_to_dict)
+
+        yield '\n}\n'
+
     return Response(
-        json_str,
+        stream_with_context(generate()),
         mimetype='application/json',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
 
 
