@@ -561,49 +561,27 @@
         spinner.classList.add('visible');
         pdfStatus.textContent = 'Extracting accommodations...';
 
-        fetch(BASE + '/api/' + recordId + '/parse-stream', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        }).then(function(response) {
-            if (!response.ok) {
-                return response.json().then(function(d) { throw new Error(d.error || 'Failed'); });
+        var streamStarted = false;
+        streamSSE({
+            url: BASE + '/api/' + recordId + '/parse-stream',
+            onToken: function(token) {
+                if (!streamStarted) {
+                    streamStarted = true;
+                    textarea.value = '';
+                    pdfStatus.textContent = 'Streaming extraction...';
+                }
+                textarea.value += token;
+            },
+            onDone: function(data) {
+                spinner.classList.remove('visible');
+                pdfStatus.textContent = 'Accommodations extracted successfully';
+                var i = allData.findIndex(function(x){return x.id===parseInt(recordId);});
+                if (i>=0) allData[i].accommodations_text = data.full_text;
+            },
+            onError: function(msg) {
+                spinner.classList.remove('visible');
+                pdfStatus.textContent = 'Error: ' + msg;
             }
-            textarea.value = '';
-            pdfStatus.textContent = 'Streaming extraction...';
-            var reader = response.body.getReader();
-            var decoder = new TextDecoder();
-            var buffer = '';
-            function pump() {
-                reader.read().then(function(r) {
-                    if (r.done) return;
-                    buffer += decoder.decode(r.value, {stream: true});
-                    var lines = buffer.split('\n');
-                    buffer = lines.pop();
-                    lines.forEach(function(line) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                var data = JSON.parse(line.slice(6));
-                                if (data.token) textarea.value += data.token;
-                                if (data.done) {
-                                    spinner.classList.remove('visible');
-                                    pdfStatus.textContent = 'Accommodations extracted successfully';
-                                    var i = allData.findIndex(function(x){return x.id===parseInt(recordId);});
-                                    if (i>=0) allData[i].accommodations_text = data.full_text;
-                                }
-                                if (data.error) {
-                                    spinner.classList.remove('visible');
-                                    pdfStatus.textContent = 'Error: ' + data.error;
-                                }
-                            } catch(e) {}
-                        }
-                    });
-                    pump();
-                });
-            }
-            pump();
-        }).catch(function(err) {
-            spinner.classList.remove('visible');
-            pdfStatus.textContent = err.message || 'Failed to parse PDF.';
         });
     };
 

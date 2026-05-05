@@ -7,6 +7,7 @@ from app.models.note import Note
 from app.models.activity import Activity
 from app.models.transcript import TranscriptRecord
 from app.utils.alert_engine import get_alerts
+from app.utils.caseload import caseload_student_ids
 from sqlalchemy import func as sa_func
 from datetime import datetime, date, timedelta, timezone
 import json
@@ -165,9 +166,7 @@ def index():
     week_end = week_start + timedelta(days=6)
 
     # Stats — single query for student IDs (reused for count + grad risk)
-    my_student_ids = [s.id for s in Student.query.filter_by(
-        assigned_counselor_id=current_user.id, status='active'
-    ).with_entities(Student.id).all()]
+    my_student_ids = caseload_student_ids(current_user, status='active')
     total_students = len(my_student_ids)
 
     todays_events = CalendarEvent.query.filter(
@@ -251,17 +250,24 @@ def index():
     critical_alerts = [a for a in alerts if a.get('priority_label') in ('critical', 'high')]
 
     # ── Chart data ────────────────────────────────────────────────
-    # 1) Note activity trend — notes per week for last 8 weeks
+    # 1) Note activity trend — notes per week for last 8 weeks (one query, bucket in Python)
+    trend_start = today - timedelta(days=today.weekday() + 7 * 7)
+    trend_dates = db.session.query(Note.session_date).filter(
+        Note.author_id == current_user.id,
+        Note.session_date >= trend_start,
+        Note.session_date <= today,
+    ).all()
+    week_counts = {}
+    for (sd,) in trend_dates:
+        if sd is None:
+            continue
+        wk_start = sd - timedelta(days=sd.weekday())
+        week_counts[wk_start] = week_counts.get(wk_start, 0) + 1
     note_trend = []
     for i in range(7, -1, -1):
         wk_start = today - timedelta(days=today.weekday() + 7 * i)
-        wk_end = wk_start + timedelta(days=6)
-        count = Note.query.filter(
-            Note.author_id == current_user.id,
-            Note.session_date >= wk_start,
-            Note.session_date <= wk_end
-        ).count()
-        note_trend.append({'label': wk_start.strftime('%m/%d'), 'count': count})
+        note_trend.append({'label': wk_start.strftime('%m/%d'),
+                           'count': week_counts.get(wk_start, 0)})
 
     # 2) Note category breakdown — all-time counts by note_type
     note_type_labels = dict(Note.NOTE_TYPES)

@@ -73,8 +73,8 @@ if __name__ == '__main__':
     print()
     if mode == 'tailscale':
         print(f"  Tailscale detected. Server bound to: {host}")
-        print(f"  On this PC:   http://{host}:5000")
-        print(f"  On iPhone:    http://{host}:5000 (via Tailscale)")
+        print(f"  On this PC:   http://127.0.0.1:5000")
+        print(f"  On iPhone:    http://{tailscale_ip}:5000 (via Tailscale)")
         print("  The school LAN cannot see this port.")
     elif mode == 'manual':
         print(f"  Server bound to: {host}:5000 (HOST env var)")

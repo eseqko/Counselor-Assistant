@@ -98,12 +98,12 @@ def add_student():
             ab_transfer_date=parse_date(request.form.get('ab_transfer_date')),
             ab_exemption_date=parse_date(request.form.get('ab_exemption_date')),
         )
-        # Handle tags
-        tag_names = request.form.get('tags', '').split(',')
-        for name in tag_names:
-            name = name.strip()
-            if name:
-                tag = Tag.query.filter_by(name=name).first()
+        # Handle tags — bulk-load existing names in one query
+        wanted = {n.strip() for n in request.form.get('tags', '').split(',') if n.strip()}
+        if wanted:
+            existing = {t.name: t for t in Tag.query.filter(Tag.name.in_(wanted)).all()}
+            for name in wanted:
+                tag = existing.get(name)
                 if not tag:
                     tag = Tag(name=name)
                     db.session.add(tag)

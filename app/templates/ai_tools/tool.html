@@ -194,36 +194,6 @@
 <script>
 var csrfToken = '{{ csrf_token() }}';
 
-function readSSEStream(response, outputEl, onDone, onError) {
-    var reader = response.body.getReader();
-    var decoder = new TextDecoder();
-    var buffer = '';
-    outputEl.textContent = '';
-
-    function pump() {
-        reader.read().then(function(result) {
-            if (result.done) return;
-            buffer += decoder.decode(result.value, {stream: true});
-            var lines = buffer.split('\n');
-            buffer = lines.pop();
-            lines.forEach(function(line) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        var data = JSON.parse(line.slice(6));
-                        if (data.token) outputEl.textContent += data.token;
-                        if (data.done && onDone) onDone(data.full_text || outputEl.textContent);
-                        if (data.error && onError) onError(data.error);
-                    } catch(e) {}
-                }
-            });
-            pump();
-        }).catch(function(err) {
-            if (onError) onError(err.message);
-        });
-    }
-    pump();
-}
-
 document.getElementById('tool-form').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('generate-btn');
@@ -247,28 +217,26 @@ document.getElementById('tool-form').addEventListener('submit', function(e) {
     if (actionBar) actionBar.style.opacity = '0.4';
     if (actionBar) actionBar.style.pointerEvents = 'none';
 
-    fetch('{{ url_for("ai_tools.generate_stream") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({
-            tool_id: '{{ tool.id }}',
-            student_id: studentId || null,
-            inputs: inputs
-        })
-    })
-    .then(function(response) {
-        if (!response.ok) {
-            return response.json().then(function(d) { throw new Error(d.error || 'Generation failed'); });
-        }
-        loading.style.display = 'none';
-        outputPanel.style.display = 'block';
-        outputPanel.scrollIntoView({behavior: 'smooth'});
-
-        readSSEStream(response, outputContent, function(fullText) {
+    var streamStarted = false;
+    streamSSE({
+        url: '{{ url_for("ai_tools.generate_stream") }}',
+        body: { tool_id: '{{ tool.id }}', student_id: studentId || null, inputs: inputs },
+        csrf: csrfToken,
+        onToken: function(token) {
+            if (!streamStarted) {
+                streamStarted = true;
+                loading.style.display = 'none';
+                outputPanel.style.display = 'block';
+                outputPanel.scrollIntoView({behavior: 'smooth'});
+                outputContent.textContent = '';
+            }
+            outputContent.textContent += token;
+        },
+        onDone: function(data) {
             btn.disabled = false;
             btn.innerHTML = '&#9889; Generate';
             if (actionBar) { actionBar.style.opacity = '1'; actionBar.style.pointerEvents = 'auto'; }
-
+            var fullText = data.full_text || outputContent.textContent;
             fetch('{{ url_for("ai_tools.save_history") }}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
@@ -279,19 +247,15 @@ document.getElementById('tool-form').addEventListener('submit', function(e) {
                     output: fullText
                 })
             }).catch(function() {});
-        }, function(errMsg) {
+        },
+        onError: function(errMsg) {
+            loading.style.display = 'none';
+            outputPanel.style.display = 'block';
+            outputContent.textContent = 'Error: ' + errMsg;
             btn.disabled = false;
             btn.innerHTML = '&#9889; Generate';
-            outputContent.textContent = 'Error: ' + errMsg;
             if (actionBar) { actionBar.style.opacity = '1'; actionBar.style.pointerEvents = 'auto'; }
-        });
-    })
-    .catch(function(err) {
-        loading.style.display = 'none';
-        btn.disabled = false;
-        btn.innerHTML = '&#9889; Generate';
-        outputContent.textContent = 'Request failed: ' + err.message;
-        outputPanel.style.display = 'block';
+        }
     });
 });
 
@@ -505,34 +469,30 @@ function submitAction(action) {
         var modalBtn = document.querySelector('#action-modal-body button');
         if (modalBtn) { modalBtn.disabled = true; modalBtn.textContent = 'Translating...'; }
 
-        fetch('{{ url_for("ai_tools.action_translate_stream") }}', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-            body: JSON.stringify({ content: output, language: language })
-        }).then(function(response) {
-            if (!response.ok) {
-                return response.json().then(function(d) { throw new Error(d.error || 'Translation failed'); });
-            }
-            var outEl = document.getElementById('output-content');
-            readSSEStream(response, outEl, function() {
+        var outEl = document.getElementById('output-content');
+        var streamStarted = false;
+        streamSSE({
+            url: '{{ url_for("ai_tools.action_translate_stream") }}',
+            body: { content: output, language: language },
+            csrf: csrfToken,
+            onToken: function(token) {
+                if (!streamStarted) { streamStarted = true; outEl.textContent = ''; }
+                outEl.textContent += token;
+            },
+            onDone: function() {
                 status.style.background = '#d4edda';
                 status.style.color = '#155724';
                 status.textContent = 'Translated to ' + language + '. Output updated above.';
                 status.style.display = 'block';
                 if (modalBtn) { modalBtn.disabled = false; modalBtn.innerHTML = '\u{1F310} Translate'; }
-            }, function(errMsg) {
+            },
+            onError: function(errMsg) {
                 status.style.background = '#f8d7da';
                 status.style.color = '#721c24';
                 status.textContent = 'Translation failed: ' + errMsg;
                 status.style.display = 'block';
                 if (modalBtn) { modalBtn.disabled = false; modalBtn.textContent = 'Try Again'; }
-            });
-        }).catch(function(err) {
-            status.style.background = '#f8d7da';
-            status.style.color = '#721c24';
-            status.textContent = 'Request failed: ' + err.message;
-            status.style.display = 'block';
-            if (modalBtn) { modalBtn.disabled = false; modalBtn.textContent = 'Try Again'; }
+            }
         });
         return;
     }

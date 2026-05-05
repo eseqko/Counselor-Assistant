@@ -1,0 +1,24 @@
+<div class="card">
+    <div class="card-header">
+        Recent Notes
+        <a href="{{ url_for('notes.index', student_id=student.id) }}" class="btn btn-sm btn-outline">View All</a>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Follow-Up</th></tr></thead>
+            <tbody>
+                {% for note in notes %}
+                <tr>
+                    <td>{{ note.session_date.strftime('%m/%d/%Y') }}</td>
+                    <td><span class="badge badge-info">{{ note.note_type }}</span></td>
+                    <td><a href="{{ url_for('notes.view_note', id=note.id) }}">{{ note.title or 'View Note' }}</a></td>
+                    <td>{% if note.follow_up_needed %}<span class="badge badge-warning">Due {{ note.follow_up_date.strftime('%m/%d') if note.follow_up_date else 'TBD' }}</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                {% if not notes %}
+                <tr><td colspan="4"><div class="empty-state"><p>No notes yet.</p></div></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
