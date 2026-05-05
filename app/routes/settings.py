@@ -711,8 +711,10 @@ def alerts():
 def factory_reset():
     """Delete all data and restart the setup wizard."""
     from flask_login import logout_user
+    from flask import current_app
     log_action('delete', 'factory_reset', details='Full factory reset initiated')
     logout_user()
+    db.session.remove()  # close connections so we can delete the file
     db_path = Config.SQLALCHEMY_DATABASE_URI.replace('sqlite:///', '')
     if os.path.exists(db_path):
         os.remove(db_path)
@@ -723,4 +725,9 @@ def factory_reset():
     schema_hash = os.path.join(Config.BASE_DIR, 'data', '.schema_hash')
     if os.path.exists(schema_hash):
         os.remove(schema_hash)
+    # Re-create the empty schema so the next request can query users/students
+    db.create_all()
+    # Force the before_request handler to re-check setup status
+    if hasattr(current_app, '_setup_done'):
+        current_app._setup_done = False
     return redirect('/setup')
