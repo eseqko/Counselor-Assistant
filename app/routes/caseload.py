@@ -52,11 +52,15 @@ def index():
     if el_filter:
         query = query.filter_by(el_status=el_filter)
 
-    students = query.order_by(Student.last_name, Student.first_name).all()
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(
+        Student.last_name, Student.first_name
+    ).paginate(page=max(1, page), per_page=50, error_out=False)
     tags = Tag.query.order_by(Tag.name).all()
 
     return render_template('caseload/index.html',
-        students=students, search=search, grade=grade,
+        students=pagination.items, pagination=pagination,
+        search=search, grade=grade,
         status=status, tag_filter=tag_filter, el_filter=el_filter, tags=tags)
 
 

@@ -298,4 +298,87 @@ function saveOllamaSettings() {
         </p>
     </div>
 </div>
+
+<div class="card" style="border:1px solid #fecaca;background:#fef2f2;">
+    <div class="card-header" style="color:#991b1b;">Danger Zone</div>
+    <div class="card-body">
+        <p style="font-size:0.88rem;color:#7f1d1d;margin-bottom:6px;"><strong>Factory Reset</strong></p>
+        <p style="font-size:0.84rem;color:#7f1d1d;margin-bottom:12px;">
+            Permanently deletes all students, notes, calendar events, attendance, grades,
+            documents, and your account. The app restarts at the setup wizard.
+            <strong>This cannot be undone.</strong> Make a backup first if you might want
+            this data back.
+        </p>
+        <button type="button" class="btn" id="open-reset-modal"
+                style="background:#dc2626;color:#fff;font-weight:600;">
+            Reset App
+        </button>
+    </div>
+</div>
+
+<div id="reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
+     z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:24px;max-width:480px;width:90%;
+         box-shadow:0 10px 40px rgba(0,0,0,0.25);">
+        <h3 style="margin:0 0 8px 0;color:#991b1b;">Reset App</h3>
+        <p style="font-size:0.88rem;color:#374151;margin-bottom:14px;">
+            Type <code style="background:#fef2f2;padding:1px 6px;border-radius:4px;
+            color:#991b1b;font-weight:700;">RESET</code> below to confirm. All data on this
+            machine will be deleted and you will be logged out.
+        </p>
+        <form method="POST" action="{{ url_for('settings.factory_reset') }}" id="reset-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" id="reset-confirm-input" autocomplete="off"
+                   placeholder="Type RESET to confirm"
+                   style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:6px;
+                   font-size:0.95rem;letter-spacing:0.05em;margin-bottom:14px;">
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button type="button" id="cancel-reset" class="btn"
+                        style="background:#e5e7eb;color:#374151;">Cancel</button>
+                <button type="submit" id="confirm-reset" class="btn" disabled
+                        style="background:#dc2626;color:#fff;font-weight:600;opacity:0.5;">
+                    Permanently Reset
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    var modal = document.getElementById('reset-modal');
+    var openBtn = document.getElementById('open-reset-modal');
+    var cancelBtn = document.getElementById('cancel-reset');
+    var input = document.getElementById('reset-confirm-input');
+    var submitBtn = document.getElementById('confirm-reset');
+
+    openBtn.addEventListener('click', function() {
+        input.value = '';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
+        modal.style.display = 'flex';
+        setTimeout(function() { input.focus(); }, 50);
+    });
+
+    cancelBtn.addEventListener('click', function() {
+        modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+            modal.style.display = 'none';
+        }
+    });
+
+    input.addEventListener('input', function() {
+        var ok = this.value === 'RESET';
+        submitBtn.disabled = !ok;
+        submitBtn.style.opacity = ok ? '1' : '0.5';
+    });
+})();
+</script>
 {% endblock %}

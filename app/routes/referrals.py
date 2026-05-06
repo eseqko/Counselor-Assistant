@@ -31,7 +31,10 @@ def index():
     if referral_type:
         query = query.filter_by(referral_type=referral_type)
 
-    referrals = query.order_by(Referral.referral_date.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(Referral.referral_date.desc()).paginate(
+        page=max(1, page), per_page=50, error_out=False)
+    referrals = pagination.items
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
@@ -49,7 +52,7 @@ def index():
             counts['open'] += n
 
     return render_template('referrals/index.html',
-        referrals=referrals, students=students,
+        referrals=referrals, pagination=pagination, students=students,
         student_id=student_id, status=status, urgency=urgency, referral_type=referral_type,
         statuses=Referral.STATUSES, urgency_levels=Referral.URGENCY_LEVELS,
         referral_types=Referral.REFERRAL_TYPES, counts=counts)
