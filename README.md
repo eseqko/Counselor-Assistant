@@ -279,4 +279,4 @@ This project is in active development. If you're a school counselor with feature
 
 ## License
 
-License terms are still being formalized. For now, this project is shared as-is for the counseling community; please open an issue if you'd like to fork or redistribute it for your district.
+[MIT](LICENSE) — free to use, modify, and distribute. See the `LICENSE` file for the full text.
