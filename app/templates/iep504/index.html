@@ -223,10 +223,12 @@
             </div>
             <div id="pdf-status" class="pdf-status"></div>
             <div style="margin-top:8px;display:flex;gap:6px;" id="pdf-actions" class="hidden">
+                {% if app_state.has_ai %}
                 <button class="btn btn-primary btn-sm" onclick="parsePDF()">
                     Extract Accommodations
                     <span class="parse-spinner" id="parse-spinner">...</span>
                 </button>
+                {% endif %}
                 <a class="btn btn-outline btn-sm" id="pdf-view-link" href="#" target="_blank">View PDF</a>
             </div>
         </div>

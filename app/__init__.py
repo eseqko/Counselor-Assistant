@@ -219,6 +219,16 @@ def create_app(config_class=Config):
                 return 0
         return {'static_v': static_v}
 
+    # Per-request data-state flags for progressive disclosure (sidebar
+    # gating, dashboard sections, AI button visibility).
+    @app.context_processor
+    def inject_app_state():
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            return {'app_state': {}}
+        from app.utils.app_state import compute_state
+        return {'app_state': compute_state(current_user)}
+
     # Security + cache headers
     @app.after_request
     def set_headers(response):

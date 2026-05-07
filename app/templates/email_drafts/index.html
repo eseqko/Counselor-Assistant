@@ -133,8 +133,10 @@
                 {% endfor %}
             </select>
             <button class="btn btn-primary" onclick="mergeFields()">Merge Fields</button>
-            <button class="btn btn-outline" onclick="aiDraft()" id="btn-ai" title="Requires Ollama">AI Draft</button>
-            <button class="btn btn-outline" onclick="aiImprove()" id="btn-ai-improve" title="Requires Ollama">AI Improve</button>
+            {% if app_state.has_ai %}
+            <button class="btn btn-outline" onclick="aiDraft()" id="btn-ai" title="Local AI">AI Draft</button>
+            <button class="btn btn-outline" onclick="aiImprove()" id="btn-ai-improve" title="Local AI">AI Improve</button>
+            {% endif %}
         </div>
 
         <!-- Merge field reference -->

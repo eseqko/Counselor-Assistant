@@ -61,6 +61,7 @@
     </div>
 </div>
 
+{% if app_state.has_ai %}
 <!-- AI Feedback Section -->
 <div class="card no-print" style="max-width:860px;" id="ai-feedback-card">
     <div class="card-header">
@@ -81,6 +82,7 @@
     </div>
 </div>
 <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+{% endif %}
 <script>
 function copyForSynergy() {
     var btn = document.getElementById('copy-synergy-btn');

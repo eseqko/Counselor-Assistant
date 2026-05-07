@@ -3,19 +3,41 @@
 {% block page_title %}Dashboard{% endblock %}
 {% block content %}
 
+{% if not app_state.has_students %}
+<!-- New-install onboarding panel — no caseload yet -->
+<div class="card" style="border:1px solid #bfdbfe;background:#eff6ff;">
+    <div class="card-header" style="color:#1e40af;">Get Started</div>
+    <div class="card-body" style="font-size:0.92rem;color:#1e3a8a;">
+        <p style="margin:0 0 12px 0;">
+            Welcome! Most of the app unlocks once you import your caseload.
+            Upload a CSV from your SIS, or add students one by one.
+        </p>
+        <div class="btn-group">
+            <a href="{{ url_for('caseload.upload_caseload') }}" class="btn btn-sm btn-primary">Upload Caseload</a>
+            <a href="{{ url_for('caseload.add_student') }}" class="btn btn-sm btn-outline">Add Student Manually</a>
+            <a href="{{ url_for('data_import.index') }}" class="btn btn-sm btn-outline">Other Imports</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="stats-grid">
+    {% if app_state.has_students %}
     <div class="stat-card">
         <div class="stat-value">{{ total_students }}</div>
         <div class="stat-label">Active Students</div>
     </div>
+    {% endif %}
     <div class="stat-card">
         <div class="stat-value">{{ all_event_count }}</div>
         <div class="stat-label">Today's Events</div>
     </div>
+    {% if app_state.has_students %}
     <div class="stat-card">
         <div class="stat-value" id="follow-up-count">{{ follow_ups|length }}</div>
         <div class="stat-label">Follow-Ups Due</div>
     </div>
+    {% endif %}
     {% if grad_at_risk_total > 0 %}
     <div class="stat-card">
         <a href="{{ url_for('graduation.index') }}" style="text-decoration:none;color:inherit;">
@@ -28,7 +50,9 @@
 
 <!-- Compact Quick Actions -->
 <div class="dash-actions">
+    {% if app_state.has_students %}
     <a href="{{ url_for('notes.add_note') }}" class="dash-action-btn">New Note</a>
+    {% endif %}
     <a href="{{ url_for('calendar.add_event') }}" class="dash-action-btn">Add Event</a>
     <a href="{{ url_for('caseload.add_student') }}" class="dash-action-btn">Add Student</a>
     <a href="{{ url_for('activity_log.add_activity') }}" class="dash-action-btn">Log Activity</a>
@@ -204,6 +228,7 @@
 </div>
 
 <!-- Insights — collapsed by default, progressive disclosure -->
+{% if app_state.has_students %}
 <details class="dash-insights" id="dash-insights">
     <summary class="dash-insights-toggle">
         Insights & Charts
@@ -284,6 +309,7 @@
         {% endif %}
     </div>
 </details>
+{% endif %}
 
 <style>
 /* Compact quick actions strip */
