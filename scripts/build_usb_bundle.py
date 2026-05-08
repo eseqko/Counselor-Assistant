@@ -39,8 +39,8 @@ from pathlib import Path
 # Pin a known-good python-build-standalone release. Update by browsing
 # https://github.com/astral-sh/python-build-standalone/releases — pick the
 # tag, copy the tarball name pattern (the date suffix). Triples below.
-PBS_RELEASE = '20250409'
-PBS_PYTHON = '3.12.10'  # ship the 3.12.x line for ABI stability
+PBS_RELEASE = '20260504'
+PBS_PYTHON = '3.12.13'  # ship the 3.12.x line for ABI stability
 
 PLATFORMS = {
     'windows': {
@@ -99,9 +99,14 @@ def download(url, dest, retries=4):
 
 
 def fetch_pbs(platform):
-    """Download the python-build-standalone tarball for one platform."""
+    """Download the python-build-standalone tarball for one platform.
+
+    Uses the install_only_stripped variant — drops debug symbols (saves
+    ~600 MB on Linux, smaller savings on Windows/Mac). Functionality is
+    identical to the full install_only variant for our use.
+    """
     triple = PLATFORMS[platform]['pbs_triple']
-    fname = f'cpython-{PBS_PYTHON}+{PBS_RELEASE}-{triple}-install_only.tar.gz'
+    fname = f'cpython-{PBS_PYTHON}+{PBS_RELEASE}-{triple}-install_only_stripped.tar.gz'
     url = (
         f'https://github.com/astral-sh/python-build-standalone/releases/download/'
         f'{PBS_RELEASE}/{fname}'
@@ -142,22 +147,32 @@ def fetch_wheels(platform, requirements_file):
 
 
 def install_wheels(platform, runtime_dir, requirements_file):
-    """Install wheels into runtime_dir/site-packages."""
+    """Install wheels from the cache into runtime_dir/site-packages.
+
+    The build host's Python differs from the target's, so we pass
+    --platform/--python-version/--implementation to make pip resolve the
+    cache wheels for the TARGET. --no-index forces resolution from the
+    local cache only — transitive deps were already pulled by
+    fetch_wheels().
+    """
     site_packages = runtime_dir / 'site-packages'
     if site_packages.exists():
         shutil.rmtree(site_packages)
     site_packages.mkdir(parents=True)
     cache = CACHE_ROOT / 'wheels' / platform
+    plat = PLATFORMS[platform]['pip_platform']
     log('install', f'installing into {site_packages}')
     cmd = [
         sys.executable, '-m', 'pip', 'install',
         '-r', str(requirements_file),
         '--target', str(site_packages),
+        '--platform', plat,
+        '--python-version', PBS_PYTHON.rsplit('.', 1)[0],
+        '--implementation', 'cp',
+        '--only-binary=:all:',
         '--no-index', '--find-links', str(cache),
-        '--no-deps', '--quiet', '--disable-pip-version-check',
+        '--quiet', '--disable-pip-version-check',
     ]
-    # --no-deps because we already resolved the full set during pip download;
-    # this avoids accidentally pulling host-machine wheels for transitive deps.
     subprocess.run(cmd, check=True)
 
 
