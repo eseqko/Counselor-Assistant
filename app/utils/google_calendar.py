@@ -1,11 +1,11 @@
 """Google Calendar API wrapper — list, create, update, delete events + free/busy."""
 from datetime import datetime, timedelta, timezone
-from googleapiclient.discovery import build
 from app.utils.google_client import get_credentials
 
 
 def _service(user):
     """Build a Google Calendar API service for the given user."""
+    from googleapiclient.discovery import build
     creds = get_credentials(user)
     if not creds:
         return None

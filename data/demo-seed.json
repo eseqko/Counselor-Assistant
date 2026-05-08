@@ -1,0 +1,215 @@
+{
+  "_comment": "Demo seed data. Loaded by app/utils/demo_seed.py when COUNSELOR_DEMO=1. Dates are offsets from 'now' so demo always looks fresh.",
+
+  "students": [
+    {"student_id_number": "100001", "first_name": "Maya", "last_name": "Chen", "grade_level": 9, "gender": "Female", "ethnicity": "Asian", "email": "maya.chen@lincolndemo.edu", "phone": "555-0101", "parent_guardian_name": "Wei Chen", "parent_guardian_phone": "555-0102", "parent_guardian_email": "wchen@example.com", "homeroom": "Rm 102", "el_status": "EO"},
+    {"student_id_number": "100002", "first_name": "Diego", "last_name": "Rodriguez", "grade_level": 9, "gender": "Male", "ethnicity": "Hispanic/Latino", "email": "diego.rodriguez@lincolndemo.edu", "phone": "555-0103", "parent_guardian_name": "Carmen Rodriguez", "parent_guardian_phone": "555-0104", "homeroom": "Rm 102", "el_status": "Newcomer", "el_level": "EL 2"},
+    {"student_id_number": "100003", "first_name": "Aaliyah", "last_name": "Williams", "grade_level": 9, "gender": "Female", "ethnicity": "Black/African American", "email": "aaliyah.williams@lincolndemo.edu", "phone": "555-0105", "parent_guardian_name": "Tasha Williams", "parent_guardian_phone": "555-0106", "homeroom": "Rm 104", "section_504": true},
+    {"student_id_number": "100004", "first_name": "Lucas", "last_name": "Park", "grade_level": 9, "gender": "Male", "ethnicity": "Asian", "email": "lucas.park@lincolndemo.edu", "phone": "555-0107", "parent_guardian_name": "Sun Park", "parent_guardian_phone": "555-0108", "homeroom": "Rm 104"},
+    {"student_id_number": "100005", "first_name": "Sofia", "last_name": "Patel", "grade_level": 9, "gender": "Female", "ethnicity": "Asian", "email": "sofia.patel@lincolndemo.edu", "phone": "555-0109", "parent_guardian_name": "Ravi Patel", "parent_guardian_phone": "555-0110", "homeroom": "Rm 106"},
+
+    {"student_id_number": "100006", "first_name": "Jordan", "last_name": "Taylor", "grade_level": 10, "gender": "Non-binary", "ethnicity": "White", "email": "jordan.taylor@lincolndemo.edu", "phone": "555-0111", "parent_guardian_name": "Erin Taylor", "parent_guardian_phone": "555-0112", "homeroom": "Rm 201"},
+    {"student_id_number": "100007", "first_name": "Emma", "last_name": "Johnson", "grade_level": 10, "gender": "Female", "ethnicity": "White", "email": "emma.johnson@lincolndemo.edu", "phone": "555-0113", "parent_guardian_name": "Beth Johnson", "parent_guardian_phone": "555-0114", "homeroom": "Rm 201"},
+    {"student_id_number": "100008", "first_name": "Marcus", "last_name": "Davis", "grade_level": 10, "gender": "Male", "ethnicity": "Black/African American", "email": "marcus.davis@lincolndemo.edu", "phone": "555-0115", "parent_guardian_name": "James Davis", "parent_guardian_phone": "555-0116", "homeroom": "Rm 203", "iep_status": true},
+    {"student_id_number": "100009", "first_name": "Isabella", "last_name": "Garcia", "grade_level": 10, "gender": "Female", "ethnicity": "Hispanic/Latino", "email": "isabella.garcia@lincolndemo.edu", "phone": "555-0117", "parent_guardian_name": "Maria Garcia", "parent_guardian_phone": "555-0118", "homeroom": "Rm 203", "el_status": "RFEP"},
+    {"student_id_number": "100010", "first_name": "Tyler", "last_name": "Brown", "grade_level": 10, "gender": "Male", "ethnicity": "White", "email": "tyler.brown@lincolndemo.edu", "phone": "555-0119", "parent_guardian_name": "Greg Brown", "parent_guardian_phone": "555-0120", "homeroom": "Rm 205"},
+    {"student_id_number": "100011", "first_name": "Zara", "last_name": "Ahmed", "grade_level": 10, "gender": "Female", "ethnicity": "Asian", "email": "zara.ahmed@lincolndemo.edu", "phone": "555-0121", "parent_guardian_name": "Fatima Ahmed", "parent_guardian_phone": "555-0122", "homeroom": "Rm 205"},
+    {"student_id_number": "100012", "first_name": "Ethan", "last_name": "Kim", "grade_level": 10, "gender": "Male", "ethnicity": "Asian", "email": "ethan.kim@lincolndemo.edu", "phone": "555-0123", "parent_guardian_name": "Jin Kim", "parent_guardian_phone": "555-0124", "homeroom": "Rm 207"},
+
+    {"student_id_number": "100013", "first_name": "Olivia", "last_name": "Nguyen", "grade_level": 11, "gender": "Female", "ethnicity": "Asian", "email": "olivia.nguyen@lincolndemo.edu", "phone": "555-0125", "parent_guardian_name": "Linh Nguyen", "parent_guardian_phone": "555-0126", "homeroom": "Rm 301"},
+    {"student_id_number": "100014", "first_name": "Jaden", "last_name": "Thompson", "grade_level": 11, "gender": "Male", "ethnicity": "Black/African American", "email": "jaden.thompson@lincolndemo.edu", "phone": "555-0127", "parent_guardian_name": "Denise Thompson", "parent_guardian_phone": "555-0128", "homeroom": "Rm 301", "iep_status": true},
+    {"student_id_number": "100015", "first_name": "Camila", "last_name": "Lopez", "grade_level": 11, "gender": "Female", "ethnicity": "Hispanic/Latino", "email": "camila.lopez@lincolndemo.edu", "phone": "555-0129", "parent_guardian_name": "Rosa Lopez", "parent_guardian_phone": "555-0130", "homeroom": "Rm 303", "el_status": "LTEL"},
+    {"student_id_number": "100016", "first_name": "Mateo", "last_name": "Hernandez", "grade_level": 11, "gender": "Male", "ethnicity": "Hispanic/Latino", "email": "mateo.hernandez@lincolndemo.edu", "phone": "555-0131", "parent_guardian_name": "Ana Hernandez", "parent_guardian_phone": "555-0132", "homeroom": "Rm 303"},
+    {"student_id_number": "100017", "first_name": "Aisha", "last_name": "Singh", "grade_level": 11, "gender": "Female", "ethnicity": "Asian", "email": "aisha.singh@lincolndemo.edu", "phone": "555-0133", "parent_guardian_name": "Priya Singh", "parent_guardian_phone": "555-0134", "homeroom": "Rm 305"},
+    {"student_id_number": "100018", "first_name": "Brandon", "last_name": "Wilson", "grade_level": 11, "gender": "Male", "ethnicity": "White", "email": "brandon.wilson@lincolndemo.edu", "phone": "555-0135", "parent_guardian_name": "Kelly Wilson", "parent_guardian_phone": "555-0136", "homeroom": "Rm 305", "section_504": true},
+    {"student_id_number": "100019", "first_name": "Lily", "last_name": "Yamamoto", "grade_level": 11, "gender": "Female", "ethnicity": "Asian", "email": "lily.yamamoto@lincolndemo.edu", "phone": "555-0137", "parent_guardian_name": "Hiroshi Yamamoto", "parent_guardian_phone": "555-0138", "homeroom": "Rm 307"},
+
+    {"student_id_number": "100020", "first_name": "Aiden", "last_name": "Rivera", "grade_level": 12, "gender": "Male", "ethnicity": "Hispanic/Latino", "email": "aiden.rivera@lincolndemo.edu", "phone": "555-0139", "parent_guardian_name": "Luis Rivera", "parent_guardian_phone": "555-0140", "homeroom": "Rm 401"},
+    {"student_id_number": "100021", "first_name": "Sophia", "last_name": "Martinez", "grade_level": 12, "gender": "Female", "ethnicity": "Hispanic/Latino", "email": "sophia.martinez@lincolndemo.edu", "phone": "555-0141", "parent_guardian_name": "Elena Martinez", "parent_guardian_phone": "555-0142", "homeroom": "Rm 401"},
+    {"student_id_number": "100022", "first_name": "Caleb", "last_name": "Anderson", "grade_level": 12, "gender": "Male", "ethnicity": "White", "email": "caleb.anderson@lincolndemo.edu", "phone": "555-0143", "parent_guardian_name": "Mark Anderson", "parent_guardian_phone": "555-0144", "homeroom": "Rm 403", "iep_status": true},
+    {"student_id_number": "100023", "first_name": "Naomi", "last_name": "Goldberg", "grade_level": 12, "gender": "Female", "ethnicity": "White", "email": "naomi.goldberg@lincolndemo.edu", "phone": "555-0145", "parent_guardian_name": "Sarah Goldberg", "parent_guardian_phone": "555-0146", "homeroom": "Rm 403"},
+    {"student_id_number": "100024", "first_name": "Devon", "last_name": "Carter", "grade_level": 12, "gender": "Male", "ethnicity": "Black/African American", "email": "devon.carter@lincolndemo.edu", "phone": "555-0147", "parent_guardian_name": "Monica Carter", "parent_guardian_phone": "555-0148", "homeroom": "Rm 405"},
+    {"student_id_number": "100025", "first_name": "Hannah", "last_name": "Cohen", "grade_level": 12, "gender": "Female", "ethnicity": "White", "email": "hannah.cohen@lincolndemo.edu", "phone": "555-0149", "parent_guardian_name": "David Cohen", "parent_guardian_phone": "555-0150", "homeroom": "Rm 405"}
+  ],
+
+  "notes": [
+    {"student_idx": 0, "note_type": "academic", "title": "Q1 check-in", "content": "Maya is settling into 9th grade. Strong in English, finding Algebra challenging. Discussed study habits and joining Math Lab on Tuesdays.", "session_date_offset_days": -14, "duration_minutes": 25, "asca_domain": "academic", "delivery_method": "in_person"},
+    {"student_idx": 0, "note_type": "social_emotional", "title": "Friendship transition", "content": "Maya shared concerns about losing touch with middle-school friends. Validated feelings, shared list of clubs, encouraged Anime Club next week.", "session_date_offset_days": -3, "duration_minutes": 20, "asca_domain": "social_emotional", "delivery_method": "in_person", "follow_up_needed": true, "follow_up_offset_days": 14, "follow_up_notes": "Check whether Maya attended Anime Club"},
+
+    {"student_idx": 1, "note_type": "eld_program", "title": "EL services orientation", "content": "Walked through ELD class schedule with Diego and reviewed ELPAC timeline. Mom present via phone, translated by bilingual aide.", "session_date_offset_days": -10, "duration_minutes": 35, "asca_domain": "academic", "delivery_method": "in_person"},
+    {"student_idx": 1, "note_type": "academic", "title": "Course load adjustment", "content": "Switched Diego from Geometry to Algebra 1 to align with prerequisite gap. Confirmed transcript update with registrar.", "session_date_offset_days": -2, "duration_minutes": 15, "asca_domain": "academic", "delivery_method": "in_person"},
+
+    {"student_idx": 2, "note_type": "504_plan", "title": "504 accommodations review", "content": "Reviewed Aaliyah's 504 plan with mom. Updated extended-time accommodation to apply to all assessments. ADHD diagnosis on file.", "session_date_offset_days": -8, "duration_minutes": 40, "asca_domain": "academic", "delivery_method": "in_person"},
+    {"student_idx": 2, "note_type": "academic", "title": "Grade check", "content": "Aaliyah is on track. Used Pomodoro app since last meeting and feels more focused.", "session_date_offset_days": -1, "duration_minutes": 15, "asca_domain": "academic"},
+
+    {"student_idx": 3, "note_type": "scheduling", "title": "Schedule conflict resolution", "content": "Lucas's PE conflicted with band rehearsal. Moved PE to period 4. Confirmed with Mr. Olsen.", "session_date_offset_days": -22, "duration_minutes": 10, "asca_domain": "academic"},
+
+    {"student_idx": 4, "note_type": "social_emotional", "title": "Anxiety around testing", "content": "Sofia disclosed test anxiety after first quiz. Taught box-breathing, shared school's free counselor-on-call drop-in.", "session_date_offset_days": -5, "duration_minutes": 30, "asca_domain": "social_emotional", "delivery_method": "in_person", "follow_up_needed": true, "follow_up_offset_days": 7},
+
+    {"student_idx": 5, "note_type": "social_emotional", "title": "Identity & belonging conversation", "content": "Jordan came in to share they updated their pronouns. Discussed name use with teachers — Jordan will email teachers themselves with my support.", "session_date_offset_days": -12, "duration_minutes": 35, "asca_domain": "social_emotional"},
+    {"student_idx": 5, "note_type": "academic", "title": "AP US History pacing", "content": "Jordan struggling with AP USH reading load. Connected with peer tutor Ms. Patel-Lee runs.", "session_date_offset_days": -4, "duration_minutes": 20},
+
+    {"student_idx": 6, "note_type": "college_career", "title": "Sophomore college roadmap", "content": "Reviewed PSAT prep options with Emma. She's curious about engineering — flagged STEM Camp scholarship deadline.", "session_date_offset_days": -6, "duration_minutes": 30, "asca_domain": "career"},
+
+    {"student_idx": 7, "note_type": "behavior", "title": "Classroom incident debrief", "content": "Marcus removed from English class for verbal altercation. Talked through trigger (perceived disrespect from peer). Restorative circle scheduled.", "session_date_offset_days": -9, "duration_minutes": 45, "asca_domain": "social_emotional", "follow_up_needed": true, "follow_up_offset_days": 3, "follow_up_notes": "Confirm restorative circle happened"},
+    {"student_idx": 7, "note_type": "sped_program", "title": "IEP progress check", "content": "Reviewed reading goals on Marcus's IEP. Resource teacher reports steady gains. Annual IEP scheduled in 5 weeks.", "session_date_offset_days": -1, "duration_minutes": 25},
+
+    {"student_idx": 8, "note_type": "academic", "title": "AP enrollment conversation", "content": "Isabella interested in adding AP Spanish next year. Reviewed credit projection — on track.", "session_date_offset_days": -7, "duration_minutes": 20, "asca_domain": "academic"},
+
+    {"student_idx": 9, "note_type": "attendance", "title": "Attendance pattern intervention", "content": "Tyler missed 6 days in 3 weeks. Reached out to mom — family member illness. Connected with district homeless/family liaison out of caution.", "session_date_offset_days": -11, "duration_minutes": 30, "asca_domain": "social_emotional", "follow_up_needed": true, "follow_up_offset_days": 5, "follow_up_completed": true},
+
+    {"student_idx": 10, "note_type": "social_emotional", "title": "Friend group conflict", "content": "Zara navigating friend-group exclusion. Discussed boundary scripts. Encouraged volleyball intramural for new connections.", "session_date_offset_days": -13, "duration_minutes": 25, "asca_domain": "social_emotional"},
+
+    {"student_idx": 11, "note_type": "academic", "title": "Honors track inquiry", "content": "Ethan wanting to add Honors Chem. Reviewed schedule, no conflicts. Approved.", "session_date_offset_days": -2, "duration_minutes": 10},
+
+    {"student_idx": 12, "note_type": "college_career", "title": "Junior year college planning", "content": "Olivia interested in UC system. Reviewed a-g status (on track), SAT prep options, summer programs. Sent UC application timeline.", "session_date_offset_days": -4, "duration_minutes": 45, "asca_domain": "career", "delivery_method": "in_person"},
+    {"student_idx": 12, "note_type": "academic", "title": "AP Bio difficulty", "content": "Olivia worried about her B in AP Bio. Reviewed study strategies, recommended Thursday tutoring.", "session_date_offset_days": -1, "duration_minutes": 15},
+
+    {"student_idx": 13, "note_type": "sped_program", "title": "Triennial IEP planning", "content": "Jaden's triennial IEP is in 8 weeks. Reviewed assessment plan with mom. She gave consent to evaluate.", "session_date_offset_days": -16, "duration_minutes": 30, "follow_up_needed": true, "follow_up_offset_days": 21},
+
+    {"student_idx": 14, "note_type": "eld_program", "title": "Reclassification check", "content": "Camila wants to reclassify but ELPAC scores not yet at threshold. Discussed targeted vocab work and check-in next semester.", "session_date_offset_days": -8, "duration_minutes": 25, "asca_domain": "academic"},
+
+    {"student_idx": 15, "note_type": "college_career", "title": "Career interest assessment", "content": "Mateo took RIASEC inventory — strong Realistic and Investigative. Discussed engineering and trades pathways. Sharing CTE program info.", "session_date_offset_days": -5, "duration_minutes": 35, "asca_domain": "career"},
+
+    {"student_idx": 16, "note_type": "social_emotional", "title": "Family stress check-in", "content": "Aisha's grandfather passed last month. Grief support resources shared. Bereavement group at community center referred.", "session_date_offset_days": -10, "duration_minutes": 40, "asca_domain": "social_emotional", "follow_up_needed": true, "follow_up_offset_days": 7},
+
+    {"student_idx": 17, "note_type": "504_plan", "title": "504 plan annual review", "content": "Reviewed Brandon's 504 (anxiety, learning differences) with parents and resource teacher. Added preferential seating accommodation.", "session_date_offset_days": -6, "duration_minutes": 50},
+
+    {"student_idx": 18, "note_type": "college_career", "title": "Junior college list", "content": "Lily building college list — strong fit Liberal Arts colleges. Reviewed FAFSA-prep timeline (senior year).", "session_date_offset_days": -3, "duration_minutes": 30, "asca_domain": "career"},
+
+    {"student_idx": 19, "note_type": "college_career", "title": "Senior fall application audit", "content": "Aiden applying to 8 schools. Reviewed essay drafts and Common App progress. ED1 deadline in 4 weeks.", "session_date_offset_days": -2, "duration_minutes": 50, "asca_domain": "career"},
+    {"student_idx": 19, "note_type": "financial_aid", "title": "FAFSA + CSS Profile", "content": "Walked Aiden's parents through FAFSA timeline. Sent CSS Profile checklist for private schools.", "session_date_offset_days": -9, "duration_minutes": 35, "asca_domain": "career"},
+
+    {"student_idx": 20, "note_type": "college_career", "title": "Career pivot — community college", "content": "Sophia decided community college + transfer is better fit financially. Reviewed local CC transfer agreements with UCs.", "session_date_offset_days": -7, "duration_minutes": 40, "asca_domain": "career"},
+
+    {"student_idx": 21, "note_type": "four_year_plan", "title": "Senior credit audit", "content": "Caleb 5 credits short for graduation due to last year's withdrawal. Enrolled in night-school Health course to recover credit. AB exemption discussed.", "session_date_offset_days": -15, "duration_minutes": 45, "follow_up_needed": true, "follow_up_offset_days": 14, "follow_up_notes": "Check night-school enrollment confirmed"},
+
+    {"student_idx": 22, "note_type": "college_career", "title": "Application strategy", "content": "Naomi targeting 4-year, applying to 6 schools. Strong essays. Letters of rec from Mr. Vance and Coach Nguyen confirmed.", "session_date_offset_days": -4, "duration_minutes": 40, "asca_domain": "career"},
+
+    {"student_idx": 23, "note_type": "post_secondary", "title": "Military ASVAB prep", "content": "Devon committed to Marines after graduation. ASVAB scheduled at recruiter office next month. Discussed continued GED-vs-diploma timing (he'll graduate on time).", "session_date_offset_days": -8, "duration_minutes": 35, "asca_domain": "career"},
+
+    {"student_idx": 24, "note_type": "social_emotional", "title": "Senior stress check", "content": "Hannah feeling overwhelmed balancing AP load + college apps + part-time job. Helped prioritize. Encouraged dropping one club temporarily.", "session_date_offset_days": -2, "duration_minutes": 30, "asca_domain": "social_emotional"}
+  ],
+
+  "grades": [
+    {"student_idx": 0, "course_name": "English 9", "course_number": "ENG09", "period": 1, "letter_grade": "A-", "percent_grade": 91.5, "subject_area": "English", "is_ag": true},
+    {"student_idx": 0, "course_name": "Algebra 1", "course_number": "MAT09", "period": 2, "letter_grade": "C+", "percent_grade": 78.0, "subject_area": "Math", "is_ag": true},
+    {"student_idx": 0, "course_name": "Biology", "course_number": "SCI09", "period": 3, "letter_grade": "B", "percent_grade": 84.0, "subject_area": "Science", "is_ag": true},
+    {"student_idx": 0, "course_name": "World History", "course_number": "HIS09", "period": 4, "letter_grade": "B+", "percent_grade": 88.0, "subject_area": "History/Social Science", "is_ag": true},
+
+    {"student_idx": 7, "course_name": "English 10", "course_number": "ENG10", "period": 1, "letter_grade": "D", "percent_grade": 64.0, "subject_area": "English", "is_ag": true},
+    {"student_idx": 7, "course_name": "Geometry", "course_number": "MAT10", "period": 2, "letter_grade": "F", "percent_grade": 52.0, "subject_area": "Math"},
+    {"student_idx": 7, "course_name": "Chemistry", "course_number": "SCI10", "period": 3, "letter_grade": "C", "percent_grade": 73.0, "subject_area": "Science", "is_ag": true},
+    {"student_idx": 7, "course_name": "World History", "course_number": "HIS10", "period": 4, "letter_grade": "B-", "percent_grade": 80.0, "subject_area": "History/Social Science", "is_ag": true},
+
+    {"student_idx": 9, "course_name": "English 10", "course_number": "ENG10", "period": 1, "letter_grade": "C-", "percent_grade": 71.0, "subject_area": "English"},
+    {"student_idx": 9, "course_name": "Geometry", "course_number": "MAT10", "period": 2, "letter_grade": "D+", "percent_grade": 67.0, "subject_area": "Math"},
+    {"student_idx": 9, "course_name": "Chemistry", "course_number": "SCI10", "period": 3, "letter_grade": "C", "percent_grade": 74.0, "subject_area": "Science"},
+    {"student_idx": 9, "course_name": "World History", "course_number": "HIS10", "period": 4, "letter_grade": "C+", "percent_grade": 78.0, "subject_area": "History/Social Science"},
+
+    {"student_idx": 12, "course_name": "AP English Lang", "course_number": "ENG11AP", "period": 1, "letter_grade": "A", "percent_grade": 94.0, "subject_area": "English", "is_ag": true, "is_honors_ap": true},
+    {"student_idx": 12, "course_name": "Algebra 2", "course_number": "MAT11", "period": 2, "letter_grade": "A-", "percent_grade": 91.0, "subject_area": "Math", "is_ag": true},
+    {"student_idx": 12, "course_name": "AP Biology", "course_number": "SCI11AP", "period": 3, "letter_grade": "B", "percent_grade": 84.0, "subject_area": "Science", "is_ag": true, "is_honors_ap": true},
+    {"student_idx": 12, "course_name": "US History", "course_number": "HIS11", "period": 4, "letter_grade": "A", "percent_grade": 95.0, "subject_area": "History/Social Science", "is_ag": true},
+
+    {"student_idx": 13, "course_name": "English 11", "course_number": "ENG11", "period": 1, "letter_grade": "C", "percent_grade": 73.0, "subject_area": "English"},
+    {"student_idx": 13, "course_name": "Algebra 2", "course_number": "MAT11", "period": 2, "letter_grade": "D", "percent_grade": 65.0, "subject_area": "Math"},
+    {"student_idx": 13, "course_name": "Biology", "course_number": "SCI09", "period": 3, "letter_grade": "C", "percent_grade": 72.0, "subject_area": "Science"},
+    {"student_idx": 13, "course_name": "US History", "course_number": "HIS11", "period": 4, "letter_grade": "C+", "percent_grade": 78.0, "subject_area": "History/Social Science"},
+
+    {"student_idx": 14, "course_name": "English 11 ELD", "course_number": "ENG11E", "period": 1, "letter_grade": "B", "percent_grade": 85.0, "subject_area": "English"},
+    {"student_idx": 14, "course_name": "Algebra 2", "course_number": "MAT11", "period": 2, "letter_grade": "B-", "percent_grade": 81.0, "subject_area": "Math", "is_ag": true},
+    {"student_idx": 14, "course_name": "Chemistry", "course_number": "SCI10", "period": 3, "letter_grade": "B", "percent_grade": 84.0, "subject_area": "Science", "is_ag": true},
+    {"student_idx": 14, "course_name": "US History", "course_number": "HIS11", "period": 4, "letter_grade": "B+", "percent_grade": 88.0, "subject_area": "History/Social Science", "is_ag": true},
+
+    {"student_idx": 19, "course_name": "AP English Lit", "course_number": "ENG12AP", "period": 1, "letter_grade": "A", "percent_grade": 96.0, "subject_area": "English", "is_ag": true, "is_honors_ap": true},
+    {"student_idx": 19, "course_name": "AP Calculus", "course_number": "MAT12AP", "period": 2, "letter_grade": "A-", "percent_grade": 92.0, "subject_area": "Math", "is_ag": true, "is_honors_ap": true},
+    {"student_idx": 19, "course_name": "AP Physics", "course_number": "SCI12AP", "period": 3, "letter_grade": "B+", "percent_grade": 89.0, "subject_area": "Science", "is_ag": true, "is_honors_ap": true},
+    {"student_idx": 19, "course_name": "Government", "course_number": "GOV12", "period": 4, "letter_grade": "A", "percent_grade": 95.0, "subject_area": "History/Social Science", "is_ag": true},
+
+    {"student_idx": 21, "course_name": "English 12", "course_number": "ENG12", "period": 1, "letter_grade": "B-", "percent_grade": 80.0, "subject_area": "English"},
+    {"student_idx": 21, "course_name": "Statistics", "course_number": "MAT12S", "period": 2, "letter_grade": "C+", "percent_grade": 78.0, "subject_area": "Math"},
+    {"student_idx": 21, "course_name": "Anatomy", "course_number": "SCI12A", "period": 3, "letter_grade": "C", "percent_grade": 73.0, "subject_area": "Science"},
+    {"student_idx": 21, "course_name": "Government", "course_number": "GOV12", "period": 4, "letter_grade": "C+", "percent_grade": 77.0, "subject_area": "History/Social Science"},
+
+    {"student_idx": 22, "course_name": "English 12", "course_number": "ENG12", "period": 1, "letter_grade": "F", "percent_grade": 51.0, "subject_area": "English"},
+    {"student_idx": 22, "course_name": "Algebra 2", "course_number": "MAT11", "period": 2, "letter_grade": "D", "percent_grade": 62.0, "subject_area": "Math"},
+    {"student_idx": 22, "course_name": "Earth Science", "course_number": "SCI09E", "period": 3, "letter_grade": "C", "percent_grade": 73.0, "subject_area": "Science"},
+    {"student_idx": 22, "course_name": "Government", "course_number": "GOV12", "period": 4, "letter_grade": "D+", "percent_grade": 67.0, "subject_area": "History/Social Science"},
+
+    {"student_idx": 23, "course_name": "English 12", "course_number": "ENG12", "period": 1, "letter_grade": "A", "percent_grade": 94.0, "subject_area": "English", "is_ag": true},
+    {"student_idx": 23, "course_name": "Pre-Calculus", "course_number": "MAT11P", "period": 2, "letter_grade": "A-", "percent_grade": 91.0, "subject_area": "Math", "is_ag": true},
+    {"student_idx": 23, "course_name": "Physics", "course_number": "SCI12", "period": 3, "letter_grade": "B+", "percent_grade": 88.0, "subject_area": "Science", "is_ag": true},
+    {"student_idx": 23, "course_name": "Economics", "course_number": "ECO12", "period": 4, "letter_grade": "A", "percent_grade": 95.0, "subject_area": "History/Social Science", "is_ag": true}
+  ],
+
+  "attendance": [
+    {"student_idx": 0, "date_offset_days": -1, "status": "present"},
+    {"student_idx": 0, "date_offset_days": -3, "status": "tardy", "reason": "Late bus"},
+    {"student_idx": 7, "date_offset_days": -1, "status": "absent", "reason": "Unverified"},
+    {"student_idx": 7, "date_offset_days": -2, "status": "absent", "reason": "Unverified"},
+    {"student_idx": 7, "date_offset_days": -5, "status": "absent", "reason": "Unverified"},
+    {"student_idx": 9, "date_offset_days": -1, "status": "absent", "reason": "Family illness"},
+    {"student_idx": 9, "date_offset_days": -2, "status": "absent", "reason": "Family illness"},
+    {"student_idx": 9, "date_offset_days": -4, "status": "absent", "reason": "Family illness"},
+    {"student_idx": 9, "date_offset_days": -6, "status": "tardy"},
+    {"student_idx": 13, "date_offset_days": -1, "status": "tardy"},
+    {"student_idx": 13, "date_offset_days": -3, "status": "tardy"},
+    {"student_idx": 13, "date_offset_days": -8, "status": "absent", "reason": "Excused — appointment"},
+    {"student_idx": 14, "date_offset_days": -1, "status": "present"},
+    {"student_idx": 16, "date_offset_days": -1, "status": "excused", "reason": "Family loss"},
+    {"student_idx": 16, "date_offset_days": -2, "status": "excused", "reason": "Family loss"},
+    {"student_idx": 16, "date_offset_days": -3, "status": "excused", "reason": "Family loss"},
+    {"student_idx": 19, "date_offset_days": -1, "status": "present"},
+    {"student_idx": 19, "date_offset_days": -3, "status": "present"},
+    {"student_idx": 21, "date_offset_days": -1, "status": "tardy"},
+    {"student_idx": 22, "date_offset_days": -1, "status": "absent", "reason": "Unverified"},
+    {"student_idx": 22, "date_offset_days": -4, "status": "absent", "reason": "Unverified"},
+    {"student_idx": 22, "date_offset_days": -7, "status": "tardy"},
+    {"student_idx": 23, "date_offset_days": -1, "status": "present"},
+    {"student_idx": 24, "date_offset_days": -1, "status": "present"},
+    {"student_idx": 24, "date_offset_days": -2, "status": "tardy"}
+  ],
+
+  "goals": [
+    {"student_idx": 0, "title": "Raise Algebra 1 grade to B by end of Q2", "description": "Maya is currently at C+ in Algebra. Target a B by attending Math Lab weekly.", "asca_domain": "academic", "asca_mindset": "Self-confidence in ability to succeed", "baseline": "C+ (78%)", "target": "B (85%)", "measurement_method": "Quarterly grade report", "strategy": "Attend Math Lab Tuesdays. Use Khan Academy 30 min/day.", "start_offset_days": -14, "target_offset_days": 60, "status": "in_progress", "progress_percent": 30},
+    {"student_idx": 7, "title": "Pass Geometry by end of semester", "description": "Marcus currently failing Geometry. Goal: pass with C- or better.", "asca_domain": "academic", "baseline": "F (52%)", "target": "C- (70%)", "measurement_method": "Semester grade", "strategy": "Daily resource room support, peer tutor, weekly check-ins.", "start_offset_days": -9, "target_offset_days": 75, "status": "active", "progress_percent": 15},
+    {"student_idx": 9, "title": "Reach 95% attendance rate", "description": "Tyler missed 6 days in 3 weeks. Restore consistent attendance.", "asca_domain": "social_emotional", "baseline": "70% attendance", "target": "95% attendance", "measurement_method": "Daily attendance log", "strategy": "Daily morning check-in with counselor. Family liaison support.", "start_offset_days": -11, "target_offset_days": 30, "status": "in_progress", "progress_percent": 50},
+    {"student_idx": 16, "title": "Engage in grief support resources", "description": "Aisha processing grandfather's death. Connect with bereavement group.", "asca_domain": "social_emotional", "baseline": "No external support", "target": "Attend 4 bereavement group sessions", "measurement_method": "Self-report + parent confirmation", "strategy": "Weekly check-ins, attend community center group Mondays.", "start_offset_days": -10, "target_offset_days": 45, "status": "in_progress", "progress_percent": 25},
+    {"student_idx": 19, "title": "Submit 8 college applications by 12/1", "description": "Aiden applying ED1 + 7 RD. Track each app to completion.", "asca_domain": "career", "baseline": "0 of 8 submitted", "target": "8 of 8 submitted", "measurement_method": "Common App + portal status", "strategy": "Weekly app-status meeting. Essay review with English teacher.", "start_offset_days": -30, "target_offset_days": 30, "status": "in_progress", "progress_percent": 60},
+    {"student_idx": 21, "title": "Apply to local community college and 2 transfer-target UCs", "description": "Sophia's pivot to CC + transfer plan.", "asca_domain": "career", "baseline": "Plan undecided", "target": "All 3 applications submitted", "measurement_method": "Application portals", "strategy": "Calendar checkpoints monthly.", "start_offset_days": -7, "target_offset_days": 90, "status": "active", "progress_percent": 20},
+    {"student_idx": 22, "title": "Complete graduation credit recovery (5 credits)", "description": "Caleb 5 credits short. Enroll + complete night-school Health.", "asca_domain": "academic", "baseline": "5 credits short", "target": "On track to graduate", "measurement_method": "Transcript audit at end of semester", "strategy": "Night school Tue/Thu. Bi-weekly check-ins.", "start_offset_days": -15, "target_offset_days": 100, "status": "in_progress", "progress_percent": 25},
+    {"student_idx": 23, "title": "Submit 6 college applications", "description": "Naomi targeting Liberal Arts colleges.", "asca_domain": "career", "baseline": "0 of 6 submitted", "target": "6 of 6 submitted", "measurement_method": "Common App", "strategy": "Weekly check-ins, essay drafts reviewed.", "start_offset_days": -25, "target_offset_days": 35, "status": "in_progress", "progress_percent": 50}
+  ],
+
+  "referrals": [
+    {"student_idx": 4, "referral_type": "mental_health", "referred_to": "School-based therapist (Dr. Jensen)", "reason": "Sofia disclosed test anxiety + racing thoughts. Counselor support insufficient — therapy referral.", "urgency": "routine", "status": "in_progress", "consent_obtained": true, "referral_offset_days": -5},
+    {"student_idx": 7, "referral_type": "academic_support", "referred_to": "After-school tutoring center", "reason": "Marcus failing Geometry, has IEP — needs targeted academic support.", "urgency": "routine", "status": "contacted", "consent_obtained": true, "referral_offset_days": -7},
+    {"student_idx": 9, "referral_type": "housing", "referred_to": "District homeless/family liaison", "reason": "Family disclosed temporary housing instability. Connecting for McKinney-Vento services.", "urgency": "urgent", "status": "in_progress", "consent_obtained": true, "referral_offset_days": -11},
+    {"student_idx": 16, "referral_type": "community_resource", "referred_to": "Westside Bereavement Group", "reason": "Aisha processing grandfather's death. Community grief group.", "urgency": "routine", "status": "completed", "consent_obtained": true, "referral_offset_days": -10},
+    {"student_idx": 22, "referral_type": "academic_support", "referred_to": "Adult School credit recovery", "reason": "Caleb 5 credits short for graduation. Night-school Health course.", "urgency": "urgent", "status": "completed", "consent_obtained": true, "referral_offset_days": -14}
+  ],
+
+  "calendar_events": [
+    {"title": "Maya Chen — follow-up", "student_idx": 0, "start_offset_hours": 24, "duration_minutes": 25, "event_type": "appointment", "location": "Counselor Office"},
+    {"title": "Sophomore College Roadmap (group)", "start_offset_hours": 48, "duration_minutes": 45, "event_type": "classroom_lesson", "location": "Library Conference Rm"},
+    {"title": "IEP Triennial — Jaden Thompson", "student_idx": 13, "start_offset_hours": 96, "duration_minutes": 60, "event_type": "meeting", "location": "SPED Office"},
+    {"title": "FAFSA Night (parents)", "start_offset_hours": 168, "duration_minutes": 90, "event_type": "parent_conference", "location": "Cafeteria"},
+    {"title": "Aiden Rivera — ED1 essay review", "student_idx": 19, "start_offset_hours": 72, "duration_minutes": 30, "event_type": "appointment", "location": "Counselor Office"}
+  ],
+
+  "activities": [
+    {"title": "Individual counseling block", "date_offset_days": -1, "start_time": "09:00", "end_time": "11:30", "duration_minutes": 150, "service_type": "direct_student", "category": "individual_counseling", "delivery_type": "individual", "num_students": 5},
+    {"title": "Sophomore college roadmap classroom lesson", "date_offset_days": -2, "start_time": "13:00", "end_time": "13:55", "duration_minutes": 55, "service_type": "direct_student", "category": "classroom_instruction", "topic": "College planning", "delivery_type": "classroom", "num_students": 28, "grade_levels": "10"},
+    {"title": "Crisis response — student in distress", "date_offset_days": -5, "start_time": "10:30", "end_time": "12:00", "duration_minutes": 90, "service_type": "direct_student", "category": "crisis_response", "delivery_type": "individual", "num_students": 1},
+    {"title": "Department meeting", "date_offset_days": -2, "start_time": "15:30", "end_time": "16:30", "duration_minutes": 60, "service_type": "program_management", "category": "school_committees"},
+    {"title": "Parent contact calls (block)", "date_offset_days": -3, "start_time": "14:00", "end_time": "15:30", "duration_minutes": 90, "service_type": "indirect_student", "category": "parent_outreach"},
+    {"title": "IEP team consultation (Marcus)", "date_offset_days": -1, "start_time": "08:00", "end_time": "08:45", "duration_minutes": 45, "service_type": "indirect_student", "category": "consultation"},
+    {"title": "Senior college essay review block", "date_offset_days": -4, "start_time": "13:00", "end_time": "15:00", "duration_minutes": 120, "service_type": "direct_student", "category": "advisement", "delivery_type": "individual", "num_students": 4, "grade_levels": "12"},
+    {"title": "504 plan review meeting", "date_offset_days": -6, "start_time": "11:00", "end_time": "11:50", "duration_minutes": 50, "service_type": "indirect_student", "category": "consultation"},
+    {"title": "Master schedule planning", "date_offset_days": -7, "start_time": "08:00", "end_time": "10:00", "duration_minutes": 120, "service_type": "non_counseling", "category": "scheduling_classes"},
+    {"title": "Restorative circle — Marcus + peer", "date_offset_days": -8, "start_time": "13:30", "end_time": "14:30", "duration_minutes": 60, "service_type": "direct_student", "category": "individual_counseling", "delivery_type": "small_group", "num_students": 2},
+    {"title": "ASCA program planning", "date_offset_days": -9, "start_time": "15:00", "end_time": "16:00", "duration_minutes": 60, "service_type": "program_management", "category": "program_planning"},
+    {"title": "FAFSA night planning", "date_offset_days": -3, "start_time": "16:00", "end_time": "16:45", "duration_minutes": 45, "service_type": "program_management", "category": "program_planning"}
+  ]
+}

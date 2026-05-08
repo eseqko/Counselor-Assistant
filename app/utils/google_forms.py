@@ -1,9 +1,9 @@
 """Google Forms API wrapper — create forms from screening templates and import responses."""
-from googleapiclient.discovery import build
 from app.utils.google_client import get_credentials
 
 
 def _service(user):
+    from googleapiclient.discovery import build
     creds = get_credentials(user)
     if not creds:
         return None

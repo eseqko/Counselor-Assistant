@@ -30,6 +30,7 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    {% include '_partials/_demo_banner.html' %}
     {% if current_user.is_authenticated %}
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header" id="sidebar-header">

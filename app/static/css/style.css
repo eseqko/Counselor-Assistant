@@ -753,3 +753,34 @@ body::after {
     .print-letterhead div:last-child > div:first-child { font-size: 14pt; font-weight: 700; }
     .print-letterhead div:last-child > div:last-child { font-size: 8pt; color: #555; margin-top: 2px; }
 }
+
+/* Demo-mode banner — shown only when COUNSELOR_DEMO=1 is set on the server. */
+.demo-banner {
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: #fde68a;
+    color: #78350f;
+    border-bottom: 1px solid #f59e0b;
+    font-size: 0.9rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.demo-banner-text strong { letter-spacing: 0.5px; }
+.demo-banner-form { margin: 0; }
+.demo-banner-button {
+    background: #78350f;
+    color: #fff;
+    border: 0;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+.demo-banner-button:hover { background: #92400e; }
+@media print { .demo-banner { display: none !important; } }

@@ -1,5 +1,7 @@
 # Data directory (contains sensitive student data - NEVER commit)
-data/
+data/*
+# Exception: demo seed dataset is the canonical fixture, ships with the app
+!data/demo-seed.json
 *.db
 
 # Flask instance folder (runtime cache)

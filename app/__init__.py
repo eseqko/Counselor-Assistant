@@ -117,12 +117,20 @@ def create_app(config_class=Config):
     from app.routes.iep504 import iep504_bp
     from app.routes.meeting_prep import meeting_prep_bp
     from app.routes.email_drafts import email_drafts_bp
-    from app.routes.google_auth import google_auth_bp
+    try:
+        from app.routes.google_auth import google_auth_bp
+    except ImportError as e:
+        google_auth_bp = None
+        app.logger.info(f"Google integration unavailable: {e}")
     from app.routes.availability import availability_bp
     from app.routes.alerts import alerts_bp
     from app.routes.analytics import analytics_bp
     from app.routes.setup import setup_bp
-    from app.routes.meeting_notes import meeting_notes_bp
+    try:
+        from app.routes.meeting_notes import meeting_notes_bp
+    except ImportError as e:
+        meeting_notes_bp = None
+        app.logger.info(f"Meeting notes (audio transcription) unavailable: {e}")
     from app.routes.search import search_bp
     from app.routes.mail_merge import mail_merge_bp
     from app.routes.academic_plan import academic_plan_bp
@@ -159,12 +167,14 @@ def create_app(config_class=Config):
     app.register_blueprint(iep504_bp, url_prefix='/iep504')
     app.register_blueprint(meeting_prep_bp, url_prefix='/meeting-prep')
     app.register_blueprint(email_drafts_bp, url_prefix='/email-drafts')
-    app.register_blueprint(google_auth_bp, url_prefix='/google')
+    if google_auth_bp:
+        app.register_blueprint(google_auth_bp, url_prefix='/google')
     app.register_blueprint(availability_bp, url_prefix='/scheduling')
     app.register_blueprint(alerts_bp, url_prefix='/alerts')
     app.register_blueprint(analytics_bp, url_prefix='/analytics')
     app.register_blueprint(setup_bp)
-    app.register_blueprint(meeting_notes_bp, url_prefix='/meeting-notes')
+    if meeting_notes_bp:
+        app.register_blueprint(meeting_notes_bp, url_prefix='/meeting-notes')
     app.register_blueprint(search_bp)
     app.register_blueprint(mail_merge_bp, url_prefix='/mail-merge')
     app.register_blueprint(academic_plan_bp, url_prefix='/academic-plan')
@@ -182,6 +192,11 @@ def create_app(config_class=Config):
     app.register_blueprint(screenings_bp, url_prefix='/screenings')
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(post_grad_bp, url_prefix='/post-grad')
+
+    # Demo mode: register zero-friction auto-login + reset routes
+    if os.environ.get('COUNSELOR_DEMO') == '1':
+        from app.routes.demo import demo_bp
+        app.register_blueprint(demo_bp)
 
     # First-run setup redirect (cached after first successful check)
     @app.before_request
@@ -228,6 +243,12 @@ def create_app(config_class=Config):
             return {'app_state': {}}
         from app.utils.app_state import compute_state
         return {'app_state': compute_state(current_user)}
+
+    # Demo-mode flag: drives the yellow banner and the visible "Reset Demo"
+    # button. Set by the USB launcher; never set in real installs.
+    @app.context_processor
+    def inject_demo_mode():
+        return {'demo_mode': os.environ.get('COUNSELOR_DEMO') == '1'}
 
     # Security + cache headers
     @app.after_request
@@ -277,9 +298,13 @@ def create_app(config_class=Config):
         _add_missing_columns(app)
         _add_missing_indexes(app)
 
-        # Create default admin user if none exists
+        # Demo mode: seed curated dataset and skip the default-counselor setup
         from app.models.user import User
-        if not User.query.first():
+        if os.environ.get('COUNSELOR_DEMO') == '1':
+            from app.utils.demo_seed import ensure_seeded
+            ensure_seeded(app)
+        elif not User.query.first():
+            # Create default admin user if none exists
             default_user = User(
                 username='counselor',
                 display_name='School Counselor',
