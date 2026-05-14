@@ -8,29 +8,38 @@
     </div>
     {% if latest_transcript %}
     <div class="card-body">
+        {% if uses_state_min %}
+        <div style="padding:10px 14px;background:#eff6ff;border-left:3px solid #2563eb;border-radius:4px;margin-bottom:14px;font-size:13px;">
+            <strong>CA state minimum graduation requirements active</strong> — this student qualifies for AB exemption ({{ student.ab_bills|join(', ') }})
+            and has it <strong>{{ student.ab_exemption_status|capitalize }}</strong>. Showing <strong>{{ total_required }} credits</strong> (Ed Code 51225.3)
+            instead of the {{ 225 }}-credit district requirement.
+        </div>
+        {% endif %}
         <!-- ── Summary Cards ── -->
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+            {% set display_completed = latest_transcript.total_completed %}
+            {% set display_risk = state_min_risk if uses_state_min and state_min_risk else latest_transcript.risk_level %}
             <div style="flex:1;min-width:200px;padding:14px;border-radius:8px;border:1px solid #e5e7eb;
-                {% if latest_transcript.risk_level == 'critical' %}background:#fef2f2;border-color:#fecaca;
-                {% elif latest_transcript.risk_level in ('at-risk', 'warning') %}background:#fffbeb;border-color:#fde68a;
+                {% if display_risk == 'critical' %}background:#fef2f2;border-color:#fecaca;
+                {% elif display_risk in ('at-risk', 'warning') %}background:#fffbeb;border-color:#fde68a;
                 {% else %}background:#f0fdf4;border-color:#bbf7d0;{% endif %}">
-                <div style="font-size:0.72rem;text-transform:uppercase;font-weight:700;color:#6b7280;letter-spacing:0.5px;">Graduation</div>
+                <div style="font-size:0.72rem;text-transform:uppercase;font-weight:700;color:#6b7280;letter-spacing:0.5px;">Graduation{% if uses_state_min %} (CA Min){% endif %}</div>
                 <div style="font-size:1.5rem;font-weight:700;margin:4px 0;
-                    {% if latest_transcript.risk_level == 'critical' %}color:#dc2626;
-                    {% elif latest_transcript.risk_level in ('at-risk', 'warning') %}color:#d97706;
+                    {% if display_risk == 'critical' %}color:#dc2626;
+                    {% elif display_risk in ('at-risk', 'warning') %}color:#d97706;
                     {% else %}color:#059669;{% endif %}">
-                    {{ latest_transcript.total_completed|int }} / 225
+                    {{ display_completed|int }} / {{ total_required }}
                 </div>
                 <div style="font-size:0.78rem;color:#6b7280;">
                     {% if latest_transcript.total_wip %}+ {{ latest_transcript.total_wip|int }} WIP | {% endif %}
-                    <span class="badge badge-{{ 'danger' if latest_transcript.risk_level == 'critical' else 'warning' if latest_transcript.risk_level in ('at-risk', 'warning') else 'success' }}">
-                        {{ latest_transcript.risk_level|upper|replace('-', ' ') }}
+                    <span class="badge badge-{{ 'danger' if display_risk == 'critical' else 'warning' if display_risk in ('at-risk', 'warning') else 'success' }}">
+                        {{ display_risk|upper|replace('-', ' ') }}
                     </span>
                 </div>
                 <div style="height:6px;background:#e5e7eb;border-radius:3px;margin-top:8px;overflow:hidden;">
-                    <div style="height:100%;border-radius:3px;width:{{ [((latest_transcript.total_completed / 225) * 100)|round|int, 100]|min }}%;
-                        {% if latest_transcript.risk_level == 'critical' %}background:#dc2626;
-                        {% elif latest_transcript.risk_level in ('at-risk', 'warning') %}background:#d97706;
+                    <div style="height:100%;border-radius:3px;width:{{ [((display_completed / total_required) * 100)|round|int, 100]|min }}%;
+                        {% if display_risk == 'critical' %}background:#dc2626;
+                        {% elif display_risk in ('at-risk', 'warning') %}background:#d97706;
                         {% else %}background:#059669;{% endif %}"></div>
                 </div>
             </div>
@@ -136,8 +145,8 @@
                         {% endfor %}
                         <!-- Totals row -->
                         <tr style="background:#edf2f7;font-weight:700;border-top:2px solid #cbd5e0;">
-                            <td style="padding:8px 10px;">TOTALS</td>
-                            <td style="padding:8px 10px;text-align:center;">225</td>
+                            <td style="padding:8px 10px;">TOTALS{% if uses_state_min %} (CA Min){% endif %}</td>
+                            <td style="padding:8px 10px;text-align:center;">{{ total_required }}</td>
                             <td style="padding:8px 10px;text-align:center;">{{ latest_transcript.total_completed|int }}</td>
                             <td style="padding:8px 10px;text-align:center;color:#d69e2e;">{{ latest_transcript.total_wip|int if latest_transcript.total_wip else '-' }}</td>
                             <td style="padding:8px 10px;text-align:center;{% if not credits_all_met %}color:#dc2626;{% endif %}">
