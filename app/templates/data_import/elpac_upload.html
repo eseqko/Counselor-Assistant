@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Upload ELPAC Scores{% endblock %}
+{% block page_title %}Upload ELPAC Scores{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
+
+<div class="card">
+    <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+        <span>Upload Ellevation ELPAC Export</span>
+        <a href="{{ url_for('data_import.elpac_template') }}" class="btn btn-sm btn-outline" style="margin-left:auto;">Download Blank Template</a>
+    </div>
+    <div class="card-body">
+        <div style="padding:12px 14px;background:#eff6ff;border-left:3px solid #2563eb;border-radius:4px;margin-bottom:16px;font-size:13px;">
+            <strong>Upload Ellevation CSV exports directly &mdash; no reformatting needed.</strong><br>
+            The file may contain students from past years (graduates, withdrawals, other counselors' students).
+            Only students on <em>your</em> caseload will be added; the rest are silently skipped.
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" id="elpac-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div id="drop-zone" style="border:2px dashed var(--primary);border-radius:10px;padding:30px 20px;text-align:center;cursor:pointer;background:var(--bg);">
+                <div style="font-size:2rem;margin-bottom:6px;">&#128196;</div>
+                <div style="font-weight:600;">Drag & drop your Ellevation export here</div>
+                <div style="font-size:13px;color:var(--gray);margin-top:4px;">or click to browse &mdash; .csv or .xlsx</div>
+                <input type="file" name="file" id="elpac-file" accept=".csv,.xlsx,.xls" style="display:none;" required>
+            </div>
+
+            <div id="file-info" style="display:none;margin-top:12px;padding:10px 14px;background:#ecfdf5;border-radius:8px;font-size:14px;color:#065f46;">
+                <strong>&#9989; <span id="file-name"></span></strong>
+                <span id="file-size" style="color:var(--gray);margin-left:8px;"></span>
+                <a href="#" id="file-clear" style="float:right;color:var(--danger);font-size:13px;">Remove</a>
+            </div>
+
+            <div id="preview-area" style="display:none;margin-top:16px;"></div>
+
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+                <a href="{{ url_for('data_import.index') }}" class="btn btn-outline">Cancel</a>
+                <button type="submit" id="upload-btn" class="btn btn-primary" disabled>Upload ELPAC Scores</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if added or updated %}
+<div class="card" style="margin-top:16px;">
+    <div class="card-header">Import Complete</div>
+    <div class="card-body">
+        <p><strong>{{ added }}</strong> new records added, <strong>{{ updated }}</strong> records updated.</p>
+        {% if errors %}
+        <details>
+            <summary>{{ errors|length }} errors</summary>
+            <ul style="margin-top:8px;">
+                {% for err in errors[:20] %}<li>{{ err }}</li>{% endfor %}
+                {% if errors|length > 20 %}<li>... and {{ errors|length - 20 }} more.</li>{% endif %}
+            </ul>
+        </details>
+        {% endif %}
+        <a href="{{ url_for('data_import.index') }}" class="btn btn-primary" style="margin-top:8px;">Back to Data Import</a>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function() {
+    var drop = document.getElementById('drop-zone');
+    var input = document.getElementById('elpac-file');
+    var info = document.getElementById('file-info');
+    var nameEl = document.getElementById('file-name');
+    var sizeEl = document.getElementById('file-size');
+    var clear = document.getElementById('file-clear');
+    var btn = document.getElementById('upload-btn');
+    var preview = document.getElementById('preview-area');
+
+    drop.addEventListener('click', function() { input.click(); });
+    drop.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        drop.style.background = '#dbeafe';
+    });
+    drop.addEventListener('dragleave', function() { drop.style.background = ''; });
+    drop.addEventListener('drop', function(e) {
+        e.preventDefault();
+        drop.style.background = '';
+        if (e.dataTransfer.files.length) {
+            input.files = e.dataTransfer.files;
+            onFile();
+        }
+    });
+    input.addEventListener('change', onFile);
+
+    clear.addEventListener('click', function(e) {
+        e.preventDefault();
+        input.value = '';
+        info.style.display = 'none';
+        preview.style.display = 'none';
+        btn.disabled = true;
+    });
+
+    function fmtSize(b) {
+        if (b < 1024) return b + ' B';
+        if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+        return (b/(1024*1024)).toFixed(1) + ' MB';
+    }
+
+    function onFile() {
+        var f = input.files[0];
+        if (!f) return;
+        nameEl.textContent = f.name;
+        sizeEl.textContent = fmtSize(f.size);
+        info.style.display = 'block';
+        btn.disabled = false;
+        runPreview(f);
+    }
+
+    function runPreview(file) {
+        var fd = new FormData();
+        fd.append('file', file);
+        preview.innerHTML = '<div style="padding:8px;color:var(--gray);">Analyzing file...</div>';
+        preview.style.display = 'block';
+
+        fetch('{{ url_for("data_import.elpac_preview") }}', {method:'POST', body:fd})
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    preview.innerHTML = '<div style="padding:10px;background:#fef2f2;color:#991b1b;border-radius:6px;">' + data.error + '</div>';
+                    btn.disabled = true;
+                    return;
+                }
+                var html = '<div style="padding:12px;background:var(--bg);border-radius:6px;">';
+                html += '<h6 style="margin-top:0;">Preview</h6>';
+                html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">';
+                html += '<div><strong>' + data.total_rows + '</strong><br><span style="font-size:12px;color:var(--gray);">Total test rows</span></div>';
+                html += '<div style="color:#065f46;"><strong>' + data.on_caseload + '</strong><br><span style="font-size:12px;color:var(--gray);">On your caseload</span></div>';
+                html += '<div style="color:#92400e;"><strong>' + data.other_students + '</strong><br><span style="font-size:12px;color:var(--gray);">Other students (skip)</span></div>';
+                html += '<div style="color:#991b1b;"><strong>' + data.no_match + '</strong><br><span style="font-size:12px;color:var(--gray);">No match (skip)</span></div>';
+                html += '</div>';
+                if (data.sample && data.sample.length) {
+                    html += '<table style="font-size:13px;width:100%;"><tr><th>Student</th><th>Test Date</th><th>Purpose</th><th>Overall</th><th>On caseload</th></tr>';
+                    data.sample.forEach(function(r) {
+                        html += '<tr><td>' + r.student + '</td><td>' + r.test_date + '</td><td>' + r.test_purpose +
+                            '</td><td>' + r.overall_level + '</td><td>' + (r.matched_caseload ? '&#9989;' : '&mdash;') + '</td></tr>';
+                    });
+                    html += '</table>';
+                }
+                html += '</div>';
+                preview.innerHTML = html;
+            })
+            .catch(function() {
+                preview.innerHTML = '<div style="padding:10px;color:#991b1b;">Preview failed (will still try to upload).</div>';
+            });
+    }
+})();
+</script>
+
+{% endblock %}

@@ -33,6 +33,10 @@
         <div class="stat-value">{{ grade_count }}</div>
         <div class="stat-label">Grade Records</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ elpac_count or 0 }}</div>
+        <div class="stat-label">ELPAC Records</div>
+    </div>
 </div>
 
 <div class="grid-2">
@@ -87,6 +91,36 @@
             </form>
             {% endif %}
         </div>
+    </div>
+</div>
+
+<!-- ELPAC -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">ELPAC Scores (English Language Proficiency)</div>
+    <div class="card-body">
+        {{ import_badge(last_imports.get('elpac')) }}
+        <p style="font-size:0.9rem;margin-bottom:12px;">
+            Upload <strong>Ellevation Education</strong> CSV exports directly. The file may include
+            graduates, withdrawals, and students from other counselors &mdash; only students on
+            your caseload will be added. Year of US school entry is auto-populated.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+            <a href="{{ url_for('data_import.elpac_template') }}" class="btn btn-outline">Download Template</a>
+            <a href="{{ url_for('data_import.elpac_upload') }}" class="btn btn-primary">Upload ELPAC Scores</a>
+            <a href="{{ url_for('analytics.elpac_dashboard') }}" class="btn btn-outline">View ELPAC Analytics &rarr;</a>
+        </div>
+        <div style="font-size:0.82rem;color:var(--gray);">
+            <strong>Accepted format:</strong> Ellevation CSV/Excel (41 columns)<br>
+            <strong>Captures:</strong> 4 domains (L/S/R/W) + 3 composites (Literacy, Oral, Comprehension) + Overall + ACPL<br>
+            <strong>Matching:</strong> Student # first, then Last Name + First Name fallback
+        </div>
+        {% if elpac_count and elpac_count > 0 %}
+        <form method="POST" action="{{ url_for('data_import.clear_elpac') }}" style="margin-top:12px;"
+              data-confirm="Are you sure? This will delete all {{ elpac_count }} ELPAC records.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger">Clear All ELPAC Data</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 

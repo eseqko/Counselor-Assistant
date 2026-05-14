@@ -64,6 +64,7 @@ def _seed_all(data):
     from app.models.referral import Referral
     from app.models.calendar_event import CalendarEvent
     from app.models.activity import Activity
+    from app.models.elpac import ELPACScore
 
     demo = User(
         username='demo',
@@ -99,6 +100,10 @@ def _seed_all(data):
             section_504=s.get('section_504', False),
             el_status=s.get('el_status', 'EO'),
             el_level=s.get('el_level'),
+            us_school_entry_date=(
+                _date_from_offset(s['us_school_entry_date_offset_days'])
+                if 'us_school_entry_date_offset_days' in s else None
+            ),
         )
         db.session.add(student)
         db.session.flush()
@@ -209,6 +214,36 @@ def _seed_all(data):
             status='scheduled',
         ))
 
+    for e in data.get('elpac_scores', []):
+        test_date = _date_from_offset(e['test_date_offset_days'])
+        db.session.add(ELPACScore(
+            student_id=sid(e['student_idx']),
+            test_purpose=e.get('test_purpose', 'Summative'),
+            test_date=test_date,
+            test_grade_level=e.get('test_grade_level'),
+            test_cluster=e.get('test_cluster'),
+            school_year=e.get('school_year'),
+            listening_scale=e.get('listening_scale'),
+            listening_level=e.get('listening_level'),
+            speaking_scale=e.get('speaking_scale'),
+            speaking_level=e.get('speaking_level'),
+            reading_scale=e.get('reading_scale'),
+            reading_level=e.get('reading_level'),
+            writing_scale=e.get('writing_scale'),
+            writing_level=e.get('writing_level'),
+            literacy_scale=e.get('literacy_scale'),
+            literacy_level=e.get('literacy_level'),
+            oral_scale=e.get('oral_scale'),
+            oral_level=e.get('oral_level'),
+            comprehension_scale=e.get('comprehension_scale'),
+            comprehension_level=e.get('comprehension_level'),
+            overall_scale=e.get('overall_scale'),
+            overall_level=e.get('overall_level'),
+            acpl_scale=e.get('acpl_scale'),
+            acpl_level=e.get('acpl_level'),
+            imported_by_id=demo.id,
+        ))
+
     for act in data.get('activities', []):
         db.session.add(Activity(
             counselor_id=demo.id,
@@ -240,6 +275,7 @@ def reset_and_reseed(app):
     from app.models.referral import Referral
     from app.models.calendar_event import CalendarEvent
     from app.models.activity import Activity
+    from app.models.elpac import ELPACScore
 
     with app.app_context():
         demo = User.query.filter_by(username='demo').first()
@@ -252,6 +288,7 @@ def reset_and_reseed(app):
                 Note.query.filter(Note.student_id.in_(student_ids)).delete(synchronize_session=False)
                 GradeRecord.query.filter(GradeRecord.student_id.in_(student_ids)).delete(synchronize_session=False)
                 AttendanceRecord.query.filter(AttendanceRecord.student_id.in_(student_ids)).delete(synchronize_session=False)
+                ELPACScore.query.filter(ELPACScore.student_id.in_(student_ids)).delete(synchronize_session=False)
                 Referral.query.filter(Referral.student_id.in_(student_ids)).delete(synchronize_session=False)
                 goal_ids = [g.id for g in Goal.query.filter(Goal.student_id.in_(student_ids)).all()]
                 if goal_ids:

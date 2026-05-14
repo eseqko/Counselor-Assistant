@@ -3,6 +3,7 @@ from flask import render_template
 from flask_login import login_required, current_user
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
+from app.models.elpac import ELPACScore
 from app.models.import_log import ImportLog
 from app.utils.caseload import caseload_student_ids
 from app.routes.data_import import data_import_bp
@@ -17,10 +18,12 @@ def index():
         AttendanceRecord.student_id.in_(student_ids)).count() if student_ids else 0
     grade_count = GradeRecord.query.filter(
         GradeRecord.student_id.in_(student_ids)).count() if student_ids else 0
+    elpac_count = ELPACScore.query.filter(
+        ELPACScore.student_id.in_(student_ids)).count() if student_ids else 0
 
     # Last import per type
     last_imports = {}
-    for itype in ('attendance', 'grades', 'student_update'):
+    for itype in ('attendance', 'grades', 'student_update', 'elpac'):
         log = ImportLog.query.filter_by(
             user_id=current_user.id, import_type=itype
         ).order_by(ImportLog.imported_at.desc()).first()
@@ -30,4 +33,5 @@ def index():
     return render_template('data_import/index.html',
                            attendance_count=attendance_count,
                            grade_count=grade_count,
+                           elpac_count=elpac_count,
                            last_imports=last_imports)

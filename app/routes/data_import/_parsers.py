@@ -147,6 +147,61 @@ def parse_quarter(mark_name_str):
     return None
 
 
+# ── ELPAC import helpers (Ellevation Education CSV format) ──────────
+
+# Maps Ellevation CSV column headers (lowercase) to internal field names.
+# Raw scores intentionally omitted — counselors only use scale + level.
+ELPAC_HEADERS = {
+    # identity
+    'last name':                   'last_name',
+    'middle name':                 'middle_name',
+    'first name':                  'first_name',
+    'student #':                   'perm_id',
+    'test id #':                   'test_id',
+    # student-level (same across all rows for one student)
+    'el status':                   'el_status_in_file',
+    'enrolled in us':              'us_school_entry_date',
+    # test-level
+    'test purpose':                'test_purpose',
+    'test date':                   'test_date',
+    'test grade level':            'test_grade_level',
+    'test cluster':                'test_cluster',
+    'test administrator':          'test_administrator',
+    # domain scales + levels
+    'listening scale score':       'listening_scale',
+    'listening proficiency level': 'listening_level',
+    'speaking scale score':        'speaking_scale',
+    'speaking proficiency level':  'speaking_level',
+    'reading scale score':         'reading_scale',
+    'reading proficiency level':   'reading_level',
+    'writing scale score':         'writing_scale',
+    'writing proficiency level':   'writing_level',
+    # composites
+    'literacy scale score':        'literacy_scale',
+    'literacy proficiency level':  'literacy_level',
+    'oral scale score':            'oral_scale',
+    'oral proficiency level':      'oral_level',
+    'comprehension scale score':   'comprehension_scale',
+    'comprehension proficiency level': 'comprehension_level',
+    'composite/overall scale score':       'overall_scale',
+    'composite/overall proficiency level': 'overall_level',
+    'acpl scale score':            'acpl_scale',
+    'acpl proficiency level':      'acpl_level',
+}
+
+
+def build_elpac_col_map(header_row):
+    """Map canonical ELPAC field names to 0-based indices from header row."""
+    if not header_row:
+        return {}
+    col_map = {}
+    for i, h in enumerate(header_row):
+        key = (h or '').strip().lower()
+        if key in ELPAC_HEADERS:
+            col_map[ELPAC_HEADERS[key]] = i
+    return col_map
+
+
 def is_synergy_format(header):
     """Detect if the header row matches a Synergy attendance export."""
     if not header:
