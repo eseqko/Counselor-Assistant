@@ -8,6 +8,9 @@ from app.models.student import Student, Tag
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.routes.graduation import (
+    STATE_MIN_REQUIREMENTS, STATE_MIN_TOTAL, TOTAL_REQUIRED, _risk_level,
+)
 try:
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
@@ -134,16 +137,40 @@ def view_student(id):
     notes = student.notes.limit(10).all()
     latest_transcript = student.transcript_records.first()
 
+    uses_state_min = student.uses_state_minimum
+    total_required = STATE_MIN_TOTAL if uses_state_min else TOTAL_REQUIRED
+
     # Pre-parse JSON fields for template
     transcript_credits = None
     transcript_ag = None
     credits_total_shortfall = 0
     credits_all_met = True
+    state_min_risk = None
     if latest_transcript:
         if latest_transcript.credits_json:
             try:
                 transcript_credits = json.loads(latest_transcript.credits_json)
-                # Sum per-subject shortfalls (completed < required)
+                if uses_state_min:
+                    # AB exemption accepted: filter to CA state minimum subjects only
+                    # and override per-subject required amounts (Ed Code 51225.3).
+                    adapted = {}
+                    for subj, req in STATE_MIN_REQUIREMENTS.items():
+                        data = transcript_credits.get(subj, {}) or {}
+                        comp = data.get('completed', 0) or 0
+                        wip = data.get('wip', 0) or 0
+                        adapted[subj] = {
+                            'required': req,
+                            'completed': comp,
+                            'wip': wip,
+                            'need': max(0, req - comp),
+                        }
+                    transcript_credits = adapted
+                    # Recompute risk vs state min (a student "critical" at 225 may be
+                    # "on-track" at 130 with the same credits earned).
+                    state_min_risk = _risk_level(
+                        latest_transcript.total_completed or 0,
+                        STATE_MIN_TOTAL, student.grade_level)
+                # Sum per-subject shortfalls using whichever set is active
                 for data in transcript_credits.values():
                     req = data.get('required', 0) or 0
                     comp = data.get('completed', 0) or 0
@@ -173,6 +200,9 @@ def view_student(id):
         cte_details=cte_details,
         credits_total_shortfall=credits_total_shortfall,
         credits_all_met=credits_all_met,
+        total_required=total_required,
+        uses_state_min=uses_state_min,
+        state_min_risk=state_min_risk,
         exit_reasons=Student.EXIT_REASONS)
 
 
