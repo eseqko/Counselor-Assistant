@@ -66,9 +66,10 @@ STUDENT_UPDATE_FIELDS = {
     'homeroom':                 ('Advisory', str),
     'el_status':                ('EL Status', str),
     'el_level':                 ('EL Level', str),
+    'us_school_entry_date':     ('US School Entry Date', 'date'),
     'iep_status':               ('IEP', 'bool'),
     'section_504':              ('504', 'bool'),
 }
 
 # Import sub-modules at the bottom so they can register routes on the blueprint
-from app.routes.data_import import index, attendance, grades, students  # noqa: E402, F401
+from app.routes.data_import import index, attendance, grades, students, elpac  # noqa: E402, F401

@@ -1,5 +1,6 @@
 """Data Visualizations — analytics dashboard with Chart.js."""
 from datetime import date, timedelta, timezone
+from collections import Counter, defaultdict
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from app import db
@@ -10,6 +11,7 @@ from app.models.note import Note
 from app.models.service_record import ServiceRecord
 from app.models.activity import Activity
 from app.models.iep504 import IEP504Record
+from app.models.elpac import ELPACScore
 from sqlalchemy import func
 
 analytics_bp = Blueprint('analytics', __name__)
@@ -55,6 +57,158 @@ def api_data():
     }
 
     return jsonify(data)
+
+
+# ── ELPAC Analytics Dashboard ─────────────────────────────────────
+
+
+YEARS_BUCKETS = [
+    ('0_1', '0-1 years', 0, 1),
+    ('1_3', '1-3 years', 1, 3),
+    ('3_5', '3-5 years', 3, 5),
+    ('5_plus', '5+ years', 5, 999),
+]
+
+
+def _years_in_us_schools_bucket(student):
+    yrs = student.years_in_us_schools
+    if yrs is None:
+        return 'unknown'
+    for key, _label, lo, hi in YEARS_BUCKETS:
+        if lo <= yrs < hi:
+            return key
+    return '5_plus'
+
+
+def _filter_students(students, grade, cohort, el_status, years_bucket):
+    out = []
+    for s in students:
+        if grade != 'all' and (s.grade_level or 0) != int(grade):
+            continue
+        if cohort != 'all' and s.graduation_year != int(cohort):
+            continue
+        if el_status != 'all' and s.el_status != el_status:
+            continue
+        if years_bucket != 'all' and _years_in_us_schools_bucket(s) != years_bucket:
+            continue
+        out.append(s)
+    return out
+
+
+@analytics_bp.route('/elpac')
+@login_required
+def elpac_dashboard():
+    """Caseload-wide ELPAC analytics with Chart.js views."""
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+
+    grade = request.args.get('grade_level', 'all')
+    cohort = request.args.get('cohort', 'all')
+    el_status = request.args.get('el_status', 'all')
+    years_bucket = request.args.get('years_in_us_schools', 'all')
+
+    filtered = _filter_students(students, grade, cohort, el_status, years_bucket)
+    student_ids = [s.id for s in filtered]
+
+    # Chart 1: Overall Level Distribution (latest test per student)
+    overall_dist = Counter()
+    latest_by_student = {}
+    for s in filtered:
+        latest = s.latest_elpac
+        if latest:
+            latest_by_student[s.id] = latest
+            if latest.overall_level:
+                overall_dist[latest.overall_level] += 1
+
+    # Chart 2: Domain Weakness — count at each level per domain (1-3)
+    domain_dist = {
+        'Listening': Counter(), 'Speaking': Counter(),
+        'Reading': Counter(), 'Writing': Counter(),
+    }
+    for latest in latest_by_student.values():
+        if latest.listening_level: domain_dist['Listening'][latest.listening_level] += 1
+        if latest.speaking_level: domain_dist['Speaking'][latest.speaking_level] += 1
+        if latest.reading_level: domain_dist['Reading'][latest.reading_level] += 1
+        if latest.writing_level: domain_dist['Writing'][latest.writing_level] += 1
+
+    # Chart 3: Reclassification Pipeline (current ELs only)
+    pipeline = Counter()
+    for s in filtered:
+        if s.el_status in ('Newcomer', 'LTEL'):
+            latest = latest_by_student.get(s.id)
+            if latest and latest.overall_level:
+                pipeline[latest.overall_level] += 1
+
+    # Chart 4: EL Status Breakdown
+    el_status_dist = Counter(s.el_status or 'EO' for s in filtered)
+
+    # Chart 5: Year-over-Year Growth (% of caseload at each Overall level per school year)
+    # Use ALL ELPAC records for filtered students, not just latest
+    all_scores = []
+    if student_ids:
+        all_scores = ELPACScore.query.filter(
+            ELPACScore.student_id.in_(student_ids),
+            ELPACScore.test_purpose == 'Summative',
+            ELPACScore.overall_level.isnot(None),
+        ).all()
+    yoy = defaultdict(lambda: Counter())
+    for sc in all_scores:
+        if sc.school_year:
+            yoy[sc.school_year][sc.overall_level] += 1
+
+    # Chart 6: Years in US Schools Distribution (EL students only)
+    years_dist = Counter()
+    for s in filtered:
+        if s.el_status in ('Newcomer', 'LTEL', 'RFEP'):
+            years_dist[_years_in_us_schools_bucket(s)] += 1
+
+    # Student detail table rows
+    table_rows = []
+    for s in filtered:
+        latest = latest_by_student.get(s.id)
+        prior = None
+        if latest:
+            # Find prior Summative
+            summatives = [r for r in s.elpac_scores
+                          if r.test_purpose == 'Summative' and r.id != latest.id]
+            prior = summatives[0] if summatives else None
+        growth = None
+        if latest and latest.overall_scale and prior and prior.overall_scale:
+            growth = latest.overall_scale - prior.overall_scale
+        table_rows.append({
+            's': s,
+            'latest': latest,
+            'growth': growth,
+        })
+    table_rows.sort(key=lambda r: (
+        -(r['latest'].overall_level or 0) if r['latest'] else 0,
+        r['s'].last_name or '',
+    ))
+
+    # Build filter dropdown options
+    grade_options = sorted({s.grade_level for s in students if s.grade_level})
+    cohort_options = sorted({s.graduation_year for s in students if s.graduation_year})
+
+    return render_template(
+        'analytics/elpac.html',
+        students=students,
+        filtered_count=len(filtered),
+        total_count=len(students),
+        filters={
+            'grade_level': grade, 'cohort': cohort,
+            'el_status': el_status, 'years_in_us_schools': years_bucket,
+        },
+        grade_options=grade_options,
+        cohort_options=cohort_options,
+        overall_dist=dict(overall_dist),
+        domain_dist={d: dict(c) for d, c in domain_dist.items()},
+        pipeline=dict(pipeline),
+        el_status_dist=dict(el_status_dist),
+        yoy={yr: dict(c) for yr, c in yoy.items()},
+        years_dist=dict(years_dist),
+        years_buckets=YEARS_BUCKETS,
+        table_rows=table_rows,
+    )
 
 
 # ── Data aggregation functions ────────────────────────────────────

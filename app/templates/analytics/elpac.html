@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}ELPAC Analytics{% endblock %}
+{% block page_title %}ELPAC Analytics{% endblock %}
+{% block content %}
+
+<!-- Filter bar -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="padding:14px;">
+        <form method="GET" id="elpac-filter-form" style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Grade Level</label>
+                <select name="grade_level" onchange="this.form.submit()">
+                    <option value="all" {% if filters.grade_level == 'all' %}selected{% endif %}>All grades</option>
+                    {% for g in grade_options %}
+                    <option value="{{ g }}" {% if filters.grade_level == g|string %}selected{% endif %}>Grade {{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Graduation Cohort</label>
+                <select name="cohort" onchange="this.form.submit()">
+                    <option value="all" {% if filters.cohort == 'all' %}selected{% endif %}>All cohorts</option>
+                    {% for c in cohort_options %}
+                    <option value="{{ c }}" {% if filters.cohort == c|string %}selected{% endif %}>Class of {{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">EL Status</label>
+                <select name="el_status" onchange="this.form.submit()">
+                    <option value="all" {% if filters.el_status == 'all' %}selected{% endif %}>All</option>
+                    <option value="Newcomer" {% if filters.el_status == 'Newcomer' %}selected{% endif %}>Newcomer</option>
+                    <option value="LTEL" {% if filters.el_status == 'LTEL' %}selected{% endif %}>LTEL</option>
+                    <option value="RFEP" {% if filters.el_status == 'RFEP' %}selected{% endif %}>RFEP</option>
+                    <option value="EO" {% if filters.el_status == 'EO' %}selected{% endif %}>EO</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Years in US Schools</label>
+                <select name="years_in_us_schools" onchange="this.form.submit()">
+                    <option value="all" {% if filters.years_in_us_schools == 'all' %}selected{% endif %}>All</option>
+                    {% for key, label, lo, hi in years_buckets %}
+                    <option value="{{ key }}" {% if filters.years_in_us_schools == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                    <option value="unknown" {% if filters.years_in_us_schools == 'unknown' %}selected{% endif %}>Unknown</option>
+                </select>
+            </div>
+            <div style="margin-left:auto;font-size:14px;color:var(--gray);">
+                Showing <strong style="color:var(--dark);">{{ filtered_count }}</strong> of {{ total_count }} students
+                <a href="{{ url_for('analytics.elpac_dashboard') }}" style="margin-left:8px;font-size:12px;">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="grid-2" style="gap:16px;">
+    <div class="card">
+        <div class="card-header">Overall Level Distribution</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-overall"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Domain Weakness (count at each level)</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-domains"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Reclassification Pipeline (current ELs)</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-pipeline"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">EL Status Breakdown</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-status"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Year-over-Year Growth</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-yoy"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Years in US Schools (EL students)</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-years"></canvas></div></div>
+    </div>
+</div>
+
+<!-- Detail table -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Student Detail ({{ filtered_count }})</span>
+        <a href="{{ url_for('reports.elpac_cohorts') }}" class="btn btn-sm btn-outline">Cohort Reports &rarr;</a>
+    </div>
+    <div class="card-body" style="overflow-x:auto;">
+        <table style="width:100%;font-size:13px;">
+            <thead>
+                <tr style="background:var(--bg);">
+                    <th style="text-align:left;padding:6px 8px;">Name</th>
+                    <th style="text-align:left;padding:6px 8px;">Grade</th>
+                    <th style="text-align:left;padding:6px 8px;">Cohort</th>
+                    <th style="text-align:left;padding:6px 8px;">EL</th>
+                    <th style="text-align:left;padding:6px 8px;">Enrolled US</th>
+                    <th style="text-align:left;padding:6px 8px;">Yrs in US</th>
+                    <th style="text-align:left;padding:6px 8px;">Last Test</th>
+                    <th style="text-align:center;padding:6px 8px;">Overall</th>
+                    <th style="text-align:center;padding:6px 8px;">L</th>
+                    <th style="text-align:center;padding:6px 8px;">S</th>
+                    <th style="text-align:center;padding:6px 8px;">R</th>
+                    <th style="text-align:center;padding:6px 8px;">W</th>
+                    <th style="text-align:center;padding:6px 8px;">Growth</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in table_rows %}
+                {% set s = row.s %}
+                {% set latest = row.latest %}
+                <tr style="border-top:1px solid #e5e7eb;cursor:pointer;"
+                    onclick="window.location='{{ url_for('caseload.view_student', id=s.id) }}'">
+                    <td style="padding:6px 8px;">{{ s.display_name }}</td>
+                    <td style="padding:6px 8px;">{{ s.grade_level or '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.graduation_year or '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.el_display }}</td>
+                    <td style="padding:6px 8px;">{{ s.us_school_entry_date.strftime('%m/%Y') if s.us_school_entry_date else '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.years_in_us_schools if s.years_in_us_schools is not none else '—' }}</td>
+                    <td style="padding:6px 8px;">{{ latest.test_date.strftime('%m/%d/%Y') if latest and latest.test_date else '—' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">
+                        {% if latest and latest.overall_level %}
+                        <strong style="color:{% if latest.overall_level == 4 %}#16a34a{% elif latest.overall_level == 3 %}#2563eb{% elif latest.overall_level == 2 %}#d97706{% else %}#dc2626{% endif %};">{{ latest.overall_level }}</strong>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.listening_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.speaking_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.reading_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.writing_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">
+                        {% if row.growth is not none %}
+                            <span style="color:{% if row.growth > 0 %}#16a34a{% elif row.growth < 0 %}#dc2626{% else %}var(--gray){% endif %};">
+                                {{ '+' if row.growth > 0 else '' }}{{ row.growth }}
+                            </span>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not table_rows %}
+                <tr><td colspan="13" style="padding:20px;text-align:center;color:var(--gray);">No students match the current filters.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script>
+(function() {
+    var COLORS = {
+        L1: '#dc2626', L2: '#d97706', L3: '#2563eb', L4: '#16a34a',
+        Listening: '#16a34a', Speaking: '#d97706', Reading: '#9333ea', Writing: '#dc2626',
+        Newcomer: '#dc2626', LTEL: '#d97706', RFEP: '#16a34a', EO: '#94a3b8',
+    };
+
+    // 1. Overall Level Distribution
+    var overall = {{ overall_dist|tojson }};
+    new Chart(document.getElementById('chart-overall'), {
+        type: 'bar',
+        data: {
+            labels: ['Level 1', 'Level 2', 'Level 3', 'Level 4'],
+            datasets: [{
+                data: [overall['1']||0, overall['2']||0, overall['3']||0, overall['4']||0],
+                backgroundColor: [COLORS.L1, COLORS.L2, COLORS.L3, COLORS.L4],
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{display:false}},
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 2. Domain Weakness — grouped bar
+    var domains = {{ domain_dist|tojson }};
+    new Chart(document.getElementById('chart-domains'), {
+        type: 'bar',
+        data: {
+            labels: ['Listening', 'Speaking', 'Reading', 'Writing'],
+            datasets: [1,2,3].map(function(lvl) {
+                return {
+                    label: 'Level ' + lvl,
+                    data: ['Listening','Speaking','Reading','Writing'].map(function(d) {
+                        return (domains[d] && domains[d][lvl]) || 0;
+                    }),
+                    backgroundColor: COLORS['L'+lvl],
+                };
+            })
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 3. Reclassification Pipeline
+    var pipeline = {{ pipeline|tojson }};
+    new Chart(document.getElementById('chart-pipeline'), {
+        type: 'bar',
+        data: {
+            labels: ['Level 1', 'Level 2', 'Level 3', 'Level 4 (RFEP-eligible)'],
+            datasets: [{
+                data: [pipeline['1']||0, pipeline['2']||0, pipeline['3']||0, pipeline['4']||0],
+                backgroundColor: [COLORS.L1, COLORS.L2, COLORS.L3, COLORS.L4],
+            }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{display:false}},
+            scales:{x:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 4. EL Status Breakdown
+    var status = {{ el_status_dist|tojson }};
+    var statusLabels = Object.keys(status);
+    new Chart(document.getElementById('chart-status'), {
+        type: 'doughnut',
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                data: statusLabels.map(function(k){return status[k];}),
+                backgroundColor: statusLabels.map(function(k){return COLORS[k] || '#94a3b8';}),
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // 5. Year-over-Year Growth
+    var yoy = {{ yoy|tojson }};
+    var years = Object.keys(yoy).sort();
+    new Chart(document.getElementById('chart-yoy'), {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [1,2,3,4].map(function(lvl) {
+                return {
+                    label: 'Level ' + lvl,
+                    data: years.map(function(y){ return (yoy[y] && yoy[y][lvl]) || 0; }),
+                    borderColor: COLORS['L'+lvl],
+                    backgroundColor: COLORS['L'+lvl] + '22',
+                    tension: 0.2,
+                };
+            })
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 6. Years in US Schools
+    var ydist = {{ years_dist|tojson }};
+    var yearLabels = {{ years_buckets|map(attribute=1)|list|tojson }};
+    var yearKeys = {{ years_buckets|map(attribute=0)|list|tojson }};
+    new Chart(document.getElementById('chart-years'), {
+        type: 'bar',
+        data: {
+            labels: yearLabels.concat(['Unknown']),
+            datasets: [{
+                data: yearKeys.map(function(k){return ydist[k]||0;}).concat([ydist['unknown']||0]),
+                backgroundColor: '#2563eb',
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{display:false}},
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+})();
+</script>
+
+{% endblock %}

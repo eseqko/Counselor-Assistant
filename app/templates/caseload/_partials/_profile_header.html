@@ -17,6 +17,12 @@
             {% elif student.el_status == 'RFEP' %}
                 <span class="badge badge-info">RFEP</span>
             {% endif %}
+            {% if student.latest_elpac and student.latest_elpac.overall_level %}
+                <span class="badge {% if student.latest_elpac.overall_level == 4 %}badge-success{% elif student.latest_elpac.overall_level == 3 %}badge-info{% elif student.latest_elpac.overall_level == 2 %}badge-warning{% else %}badge-danger{% endif %}"
+                      title="Latest ELPAC Overall Proficiency Level">
+                    ELPAC {{ student.latest_elpac.overall_level }}
+                </span>
+            {% endif %}
             {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
             {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
             {% for bill in student.ab_bills %}

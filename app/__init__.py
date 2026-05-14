@@ -148,6 +148,7 @@ def create_app(config_class=Config):
     from app.routes.screenings import screenings_bp
     from app.routes.documents import documents_bp
     from app.routes.post_grad import post_grad_bp
+    from app.routes.elpac import elpac_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -192,6 +193,7 @@ def create_app(config_class=Config):
     app.register_blueprint(screenings_bp, url_prefix='/screenings')
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(post_grad_bp, url_prefix='/post-grad')
+    app.register_blueprint(elpac_bp, url_prefix='/elpac')
 
     # Demo mode: register zero-friction auto-login + reset routes
     if os.environ.get('COUNSELOR_DEMO') == '1':
@@ -285,7 +287,7 @@ def create_app(config_class=Config):
     with app.app_context():
         from app.models import user, student, note, activity, calendar_event
         from app.models import service_record, course, glossary_term, transcript
-        from app.models import attendance, grade, iep504, availability, meeting_note, import_log
+        from app.models import attendance, grade, iep504, availability, meeting_note, import_log, elpac
         from app.models import academic_plan, college_career, ai_tool_history
         from app.models import knowledge_base
         from app.models import referral, goal, communication, group, consent
