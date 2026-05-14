@@ -97,5 +97,15 @@ if __name__ == '__main__':
                 return  # localhost or Tailscale CGNAT — allowed
             abort(403)
 
+    # Demo USB bundle: open the browser straight to /demo-login so the
+    # non-technical user lands on the dashboard with zero clicks.
+    if os.environ.get('COUNSELOR_DEMO') == '1':
+        import threading, webbrowser
+        def _open_browser():
+            import time
+            time.sleep(1.5)
+            webbrowser.open('http://127.0.0.1:5000/demo-login')
+        threading.Thread(target=_open_browser, daemon=True).start()
+
     app.run(host=host, port=5000,
             debug=os.environ.get('FLASK_DEBUG', '').lower() == 'true')

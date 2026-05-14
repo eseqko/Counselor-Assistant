@@ -87,6 +87,7 @@
 </div>
 
 <!-- AI Analysis -->
+{% if app_state.has_ai %}
 <div class="card no-print">
     <div class="card-header">
         AI Trend Analysis
@@ -105,6 +106,7 @@
     </div>
 </div>
 <style>@keyframes aispin { to { transform: rotate(360deg); } }</style>
+{% endif %}
 {% endif %}
 
 <div style="margin-top:16px;font-size:0.82rem;color:var(--gray);">

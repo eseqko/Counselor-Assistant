@@ -141,9 +141,11 @@
         <!-- Toolbar -->
         <div class="ap-toolbar">
             <a href="{{ url_for('academic_plan.index') }}" class="btn btn-outline" style="font-size:0.78rem;">&larr; All Plans</a>
+            {% if app_state.has_ai %}
             <button class="btn btn-primary" id="btnAutoBuild" onclick="autoBuild()" {% if plan and plan.is_locked %}disabled{% endif %}>
                 Auto-Build (AI)
             </button>
+            {% endif %}
             <button class="btn btn-primary" id="btnSave" onclick="savePlan()" {% if plan and plan.is_locked %}disabled{% endif %}>
                 Save
             </button>

@@ -1,0 +1,12 @@
+{% if demo_mode %}
+<div class="demo-banner" role="status" aria-label="Demo mode notice">
+  <span class="demo-banner-text">
+    <strong>DEMO MODE</strong> &mdash; All data is fake. Click around freely.
+  </span>
+  <form method="POST" action="{{ url_for('demo.reset') }}" class="demo-banner-form"
+        onsubmit="return confirm('Wipe all changes and re-load the original demo data?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="demo-banner-button">Reset Demo</button>
+  </form>
+</div>
+{% endif %}

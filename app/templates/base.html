@@ -30,6 +30,7 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    {% include '_partials/_demo_banner.html' %}
     {% if current_user.is_authenticated %}
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header" id="sidebar-header">
@@ -48,6 +49,7 @@
             <a href="{{ url_for('calendar.index') }}" class="nav-item {% if request.blueprint == 'calendar' %}active{% endif %}">
                 <span class="nav-icon">&#128197;</span> Calendar
             </a>
+            {% if app_state.has_students %}
             <a href="{{ url_for('notes.index') }}" class="nav-item {% if request.blueprint == 'notes' %}active{% endif %}">
                 <span class="nav-icon">&#128221;</span> Notes
             </a>
@@ -87,6 +89,7 @@
                     </a>
                 </div>
             </div>
+            {% endif %}
 
             <div class="nav-group" data-section="academics">
                 <button type="button" class="nav-section nav-section-toggle">
@@ -94,24 +97,33 @@
                     <span class="nav-chevron">&#9662;</span>
                 </button>
                 <div class="nav-group-items">
+                    {% if app_state.has_students %}
                     <a href="{{ url_for('academic_plan.index') }}" class="nav-item {% if request.blueprint == 'academic_plan' %}active{% endif %}">
                         <span class="nav-icon">&#128221;</span> Academic Plan
                     </a>
+                    {% endif %}
+                    {% if app_state.has_transcripts %}
                     <a href="{{ url_for('graduation.index') }}" class="nav-item {% if request.blueprint == 'graduation' %}active{% endif %}">
                         <span class="nav-icon">&#127891;</span> Graduation
                     </a>
+                    {% endif %}
+                    {% if app_state.has_students %}
                     <a href="{{ url_for('college_career.index') }}" class="nav-item {% if request.blueprint == 'college_career' %}active{% endif %}">
                         <span class="nav-icon">&#127919;</span> College & Career
                     </a>
+                    {% endif %}
                     <a href="{{ url_for('course_catalog.index') }}" class="nav-item {% if request.blueprint == 'course_catalog' %}active{% endif %}">
                         <span class="nav-icon">&#128218;</span> Course Catalog
                     </a>
+                    {% if app_state.has_students %}
                     <a href="{{ url_for('post_grad.index') }}" class="nav-item {% if request.blueprint == 'post_grad' %}active{% endif %}">
                         <span class="nav-icon">&#127891;</span> Post-Grad
                     </a>
+                    {% endif %}
                 </div>
             </div>
 
+            {% if app_state.has_students %}
             <div class="nav-group" data-section="meetings">
                 <button type="button" class="nav-section nav-section-toggle">
                     <span>Meetings</span>
@@ -132,6 +144,7 @@
                     </a>
                 </div>
             </div>
+            {% endif %}
 
             <div class="nav-group" data-section="reports">
                 <button type="button" class="nav-section nav-section-toggle">
@@ -139,15 +152,19 @@
                     <span class="nav-chevron">&#9662;</span>
                 </button>
                 <div class="nav-group-items">
+                    {% if app_state.has_grades or app_state.has_attendance or app_state.has_transcripts %}
                     <a href="{{ url_for('reports.early_warning') }}" class="nav-item {% if request.endpoint == 'reports.early_warning' %}active{% endif %}">
                         <span class="nav-icon">&#9888;</span> Early Warning
                     </a>
+                    {% endif %}
+                    {% if app_state.has_students %}
                     <a href="{{ url_for('reports.index') }}" class="nav-item {% if request.blueprint == 'reports' and request.endpoint != 'reports.early_warning' %}active{% endif %}">
                         <span class="nav-icon">&#128200;</span> Reports
                     </a>
                     <a href="{{ url_for('analytics.index') }}" class="nav-item {% if request.blueprint == 'analytics' %}active{% endif %}">
                         <span class="nav-icon">&#128202;</span> Analytics
                     </a>
+                    {% endif %}
                     <a href="{{ url_for('activity_log.index') }}" class="nav-item {% if request.blueprint == 'activity_log' %}active{% endif %}">
                         <span class="nav-icon">&#9202;</span> Activity Log
                     </a>
@@ -160,15 +177,19 @@
                     <span class="nav-chevron">&#9662;</span>
                 </button>
                 <div class="nav-group-items">
+                    {% if app_state.has_ai %}
                     <a href="{{ url_for('ai_tools.index') }}" class="nav-item {% if request.blueprint == 'ai_tools' %}active{% endif %}">
                         <span class="nav-icon">&#9889;</span> AI Tools
                     </a>
+                    {% endif %}
                     <a href="{{ url_for('availability.index') }}" class="nav-item {% if request.blueprint == 'availability' %}active{% endif %}">
                         <span class="nav-icon">&#128197;</span> Scheduling
                     </a>
+                    {% if app_state.has_students %}
                     <a href="{{ url_for('mail_merge.index') }}" class="nav-item {% if request.blueprint == 'mail_merge' %}active{% endif %}">
                         <span class="nav-icon">&#128220;</span> Mail Merge
                     </a>
+                    {% endif %}
                     <a href="{{ url_for('knowledge_base.index') }}" class="nav-item {% if request.blueprint == 'knowledge_base' %}active{% endif %}">
                         <span class="nav-icon">&#128218;</span> Knowledge Base
                     </a>

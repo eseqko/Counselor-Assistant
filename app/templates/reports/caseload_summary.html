@@ -69,6 +69,7 @@
 </div>
 {% endif %}
 
+{% if app_state.has_ai %}
 <div class="card no-print">
     <div class="card-header">
         AI Insights
@@ -132,4 +133,5 @@ function getCaseloadInsights() {
     });
 }
 </script>
+{% endif %}
 {% endblock %}
