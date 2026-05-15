@@ -1330,6 +1330,9 @@ function renderStudentCard(result) {
             <div class="tab-panel" id="${cardId}-cte">
                 <div class="cte-pathway">
                     <h4>CTE Pathway Progress — ${cteAnalysis.completed} credits completed${cteAnalysis.wip ? ` (${cteAnalysis.wip} WIP)` : ''}</h4>
+                    <div style="padding:6px 10px;background:#fffbeb;border-left:3px solid #d97706;border-radius:4px;font-size:0.78rem;color:#92400e;margin-bottom:8px;">
+                        <strong>Credit-based estimate.</strong> A true Concentrator/Completer status (per Perkins V) requires 2+ courses in the same pathway with a capstone. Open the student profile to enter pathway + course details for an accurate status.
+                    </div>
                     <div class="cte-progress-steps">${cteSteps}</div>
                     <div class="cte-detail">
                         ${cteAnalysis.isCompleter
