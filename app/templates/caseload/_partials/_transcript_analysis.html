@@ -74,9 +74,17 @@
                     {{ latest_transcript.cte_completed|int }} credits
                 </div>
                 <div style="font-size:0.78rem;color:#6b7280;">
-                    {% if latest_transcript.cte_is_completer %}<span class="badge" style="background:#ede9fe;color:#5b21b6;">COMPLETER</span>
-                    {% elif latest_transcript.cte_level and latest_transcript.cte_level != 'none' %}<span class="badge badge-info">{{ latest_transcript.cte_level|upper }}</span>
-                    {% else %}<span class="badge badge-gray">NOT STARTED</span>{% endif %}
+                    {% if cte_status and cte_status.district_status != 'None' %}
+                        <span class="badge" style="background:#e0e7ff;color:#3730a3;"
+                              title="District 2-course pathway model">District: {{ cte_status.district_status }}</span>
+                        <span class="badge" style="background:#f3f4f6;color:#374151;"
+                              title="Federal Perkins V / CALPADS definition">Perkins: {{ cte_status.perkins_status }}</span>
+                        {% if cte_status.source == 'credits' %}
+                        <div style="margin-top:4px;font-size:0.7rem;color:#9ca3af;">Credit-based estimate &mdash; add pathway courses below for accurate status.</div>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge badge-gray">NOT STARTED</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -296,14 +304,20 @@
 
                 <!-- Detail text -->
                 <div style="font-size:0.84rem;color:#4a5568;line-height:1.6;">
-                    {% if latest_transcript.cte_is_completer %}
-                    <strong style="color:#38a169;">CTE Pathway Completer</strong> — Student has completed 15+ CTE credits, meeting pathway completion requirements.
-                    {% elif latest_transcript.cte_level and latest_transcript.cte_level != 'none' %}
-                    <strong>Current Level: {{ latest_transcript.cte_level|capitalize }}</strong> — {{ [0, 15 - latest_transcript.cte_completed|int]|max }} more credits needed to reach Completer status.
-                    {% elif latest_transcript.cte_completed > 0 %}
-                    Student has {{ latest_transcript.cte_completed|int }} CTE credits. {{ [0, 15 - latest_transcript.cte_completed|int]|max }} more credits needed for Completer status.
+                    {% if cte_status and cte_status.source == 'courses' and cte_status.course_count > 0 %}
+                        {{ cte_status.course_count }} course{{ '' if cte_status.course_count == 1 else 's' }}
+                        in {{ cte_status.pathway or 'pathway' }}.
+                        <strong>District:</strong> {{ cte_status.district_status }} &middot;
+                        <strong>Perkins V:</strong> {{ cte_status.perkins_status }}.
+                        {% if not cte_status.has_capstone and cte_status.course_count > 0 %}
+                            <br><span style="color:#d97706;">Add a capstone-level course to reach Completer status.</span>
+                        {% elif cte_status.has_capstone and cte_status.course_count == 1 %}
+                            <br><span style="color:#d97706;">Capstone on file but only 1 course — CALPADS will count this student as a Participant until a second course is added.</span>
+                        {% endif %}
+                    {% elif cte_status and cte_status.source == 'credits' and latest_transcript.cte_completed > 0 %}
+                        Student has {{ latest_transcript.cte_completed|int }} CTE credits (credit-based estimate). Add pathway and course details below for accurate Concentrator/Completer status.
                     {% else %}
-                    No CTE credits completed. Student needs to begin a CTE pathway (10 credits required for graduation).
+                        No CTE credits completed. Student needs to begin a CTE pathway (10 credits required for graduation).
                     {% endif %}
                 </div>
                 <div style="margin-top:12px;font-size:0.82rem;">

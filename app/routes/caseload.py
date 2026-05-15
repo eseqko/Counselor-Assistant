@@ -11,6 +11,7 @@ from app.utils.helpers import parse_date
 from app.routes.graduation import (
     STATE_MIN_REQUIREMENTS, STATE_MIN_TOTAL, TOTAL_REQUIRED, _risk_level,
 )
+from app.utils.cte_status import compute_cte_status
 try:
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
@@ -192,12 +193,18 @@ def view_student(id):
         except (json.JSONDecodeError, TypeError):
             pass
 
+    cte_status = compute_cte_status(
+        cte_details,
+        latest_transcript.cte_completed if latest_transcript else 0,
+    )
+
     return render_template('caseload/view.html',
         student=student, notes=notes,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,
         cte_details=cte_details,
+        cte_status=cte_status,
         credits_total_shortfall=credits_total_shortfall,
         credits_all_met=credits_all_met,
         total_required=total_required,
@@ -741,7 +748,8 @@ def transcript_save():
 @caseload_bp.route('/<int:id>/cte-courses', methods=['POST'])
 @login_required
 def save_cte_courses(id):
-    student = Student.query.filter_by(id=id, counselor_id=current_user.id).first_or_404()
+    student = Student.query.filter_by(
+        id=id, assigned_counselor_id=current_user.id).first_or_404()
     latest = student.transcript_records.first()
     if not latest:
         flash('No transcript record found. Import a transcript first.', 'warning')
@@ -764,7 +772,14 @@ def save_cte_courses(id):
             })
         i += 1
 
-    latest.cte_courses_json = json.dumps({'pathway': pathway, 'courses': courses})
+    parsed = {'pathway': pathway, 'courses': courses}
+    latest.cte_courses_json = json.dumps(parsed)
+    # Recompute legacy fields so caseload-wide reports stay in sync.
+    # cte_level shows the friendly district label; cte_is_completer follows
+    # the strict Perkins V definition (what CALPADS would count).
+    status = compute_cte_status(parsed, latest.cte_completed or 0)
+    latest.cte_level = status['district_status']
+    latest.cte_is_completer = (status['perkins_status'] == 'Completer')
     db.session.commit()
     flash('CTE pathway details saved.', 'success')
     return redirect(url_for('caseload.view_student', id=id))
