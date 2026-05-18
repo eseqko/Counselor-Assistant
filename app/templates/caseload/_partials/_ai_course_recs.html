@@ -1,0 +1,121 @@
+{% if app_state.has_ai %}
+<div class="card no-print">
+    <div class="card-header">
+        AI Course Recommendations (4x4 Schedule)
+        <button class="btn btn-sm btn-primary" onclick="getCourseRecs()" id="ai-recs-btn">Recommend Courses</button>
+    </div>
+    <div class="card-body" id="ai-recs-body">
+        <div id="ai-recs-placeholder" style="color:var(--gray);font-size:0.85rem;">
+            Click "Recommend Courses" to get AI-powered course suggestions for next year based on transcript gaps, grades, and graduation requirements.
+            <br><span style="font-size:0.78rem;">4x4 schedule: 4 classes per quarter, 5 credits each, 8 classes per year.</span>
+        </div>
+        <div id="ai-recs-loading" style="display:none;text-align:center;padding:20px;">
+            <div style="display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#4A90D9;border-radius:50%;animation:aispin 0.8s linear infinite;"></div>
+            <p style="margin-top:8px;font-size:0.85rem;color:var(--gray);">Analyzing transcript and building schedule recommendations...</p>
+        </div>
+        <div id="ai-recs-result" style="display:none;line-height:1.7;font-size:0.88rem;white-space:pre-wrap;"></div>
+        <div id="ai-recs-error" style="display:none;color:#dc2626;font-size:0.85rem;"></div>
+    </div>
+</div>
+<script>
+function getCourseRecs() {
+    var btn = document.getElementById('ai-recs-btn');
+    var placeholder = document.getElementById('ai-recs-placeholder');
+    var loading = document.getElementById('ai-recs-loading');
+    var result = document.getElementById('ai-recs-result');
+    var error = document.getElementById('ai-recs-error');
+
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    placeholder.style.display = 'none';
+    loading.style.display = 'block';
+    result.style.display = 'none';
+    error.style.display = 'none';
+
+    fetch('/ai/course-recommendations', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ student_id: {{ student.id }} })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Refresh Recommendations';
+        if (data.error) {
+            error.style.display = 'block';
+            error.textContent = data.error.includes('Connection') ?
+                'Could not connect to Ollama. Make sure it is running (ollama serve).' :
+                data.error;
+        } else if (data.empty_catalog) {
+            result.style.display = 'block';
+            // Check if browser has courses in localStorage that can be synced
+            var lsCourses = [];
+            try {
+                var raw = localStorage.getItem('jhs_catalog_courses');
+                if (raw) lsCourses = JSON.parse(raw);
+            } catch(e) {}
+
+            if (lsCourses.length > 0) {
+                result.innerHTML = '<strong>Your Course Catalog has ' + lsCourses.length + ' courses, but they haven\'t been synced to the database yet.</strong><br><br>' +
+                    'The AI needs courses in the database to generate recommendations.<br><br>' +
+                    '<button class="btn btn-sm" style="background:#16a34a;color:#fff;" onclick="syncAndRetry()">Sync ' + lsCourses.length + ' Courses Now</button>';
+            } else {
+                result.innerHTML = '<strong>No courses found in the Course Catalog.</strong><br><br>' +
+                    '<span>' + (data.empty_message || '') + '</span><br><br>' +
+                    '<a href="/course-catalog/" class="btn btn-sm btn-primary">Open Course Catalog</a>';
+            }
+        } else {
+            result.style.display = 'block';
+            result.textContent = data.recommendations;
+        }
+    })
+    .catch(function(err) {
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = 'Could not connect to Ollama. Make sure it is running (ollama serve).';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+    });
+}
+
+function syncAndRetry() {
+    var result = document.getElementById('ai-recs-result');
+    var courses = [];
+    var info = null;
+    try {
+        var raw = localStorage.getItem('jhs_catalog_courses');
+        if (raw) courses = JSON.parse(raw);
+        var rawInfo = localStorage.getItem('jhs_catalog_info');
+        if (rawInfo) info = JSON.parse(rawInfo);
+    } catch(e) {}
+
+    result.innerHTML = '<strong>Syncing ' + courses.length + ' courses to database...</strong>';
+
+    fetch('/course-catalog/api/sync-courses', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ courses: courses, info: info })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            result.innerHTML = '<strong style="color:#16a34a;">Synced ' + data.synced + ' courses!</strong> Now generating recommendations...';
+            // Auto-retry recommendations
+            setTimeout(getCourseRecs, 500);
+        } else {
+            result.innerHTML = '<strong style="color:#dc2626;">Sync failed:</strong> ' + (data.error || 'Unknown error');
+        }
+    })
+    .catch(function(err) {
+        result.innerHTML = '<strong style="color:#dc2626;">Sync failed:</strong> ' + err.message;
+    });
+}
+</script>
+{% endif %}

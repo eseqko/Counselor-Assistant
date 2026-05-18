@@ -2,7 +2,7 @@ import os
 import secrets
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA_DIR = os.environ.get('COUNSELOR_DATA_DIR') or os.path.join(BASE_DIR, 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # Secret key: prefer environment variable, fall back to persistent file

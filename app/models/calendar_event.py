@@ -6,7 +6,7 @@ class CalendarEvent(db.Model):
     __tablename__ = 'calendar_events'
 
     id = db.Column(db.Integer, primary_key=True)
-    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)

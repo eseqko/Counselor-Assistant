@@ -809,3 +809,188 @@ def program_evaluation():
 
     return render_template('reports/program_evaluation.html',
         counts=counts, year_start=year_start, year_end=year_end)
+
+
+# =====================================================================
+# ELPAC Cohort Comparison Report
+# =====================================================================
+
+from app.models.elpac import ELPACScore  # noqa: E402
+from app.routes.analytics import YEARS_BUCKETS, _years_in_us_schools_bucket  # noqa: E402
+from collections import Counter  # noqa: E402, F811
+
+
+_GROUP_BY_OPTIONS = [
+    ('grade_level', 'Grade Level'),
+    ('gender', 'Gender'),
+    ('ethnicity', 'Ethnicity'),
+    ('el_status', 'EL Status'),
+    ('years_in_us_schools', 'Years in US Schools'),
+    ('graduation_year', 'Graduation Cohort'),
+    ('test_grade_level', 'Test Grade Level'),
+]
+
+_METRIC_OPTIONS = [
+    ('overall_dist', 'Count at each Overall Level'),
+    ('avg_overall_scale', 'Average Overall Scale Score'),
+    ('avg_growth', 'Average Year-over-Year Growth'),
+    ('rfep_rate', 'Reclassification Rate (% at Level 4)'),
+    ('domain_profile', 'Domain Weakness Profile (avg L/S/R/W)'),
+]
+
+
+def _cohort_key(student, dim):
+    if dim == 'grade_level':
+        return str(student.grade_level) if student.grade_level else 'Unknown'
+    if dim == 'gender':
+        return student.gender or 'Unknown'
+    if dim == 'ethnicity':
+        return student.ethnicity or 'Unknown'
+    if dim == 'el_status':
+        return student.el_status or 'EO'
+    if dim == 'years_in_us_schools':
+        bucket = _years_in_us_schools_bucket(student)
+        labels = {k: lbl for k, lbl, _, _ in YEARS_BUCKETS}
+        return labels.get(bucket, 'Unknown')
+    if dim == 'graduation_year':
+        return f"Class of {student.graduation_year}" if student.graduation_year else 'Unknown'
+    if dim == 'test_grade_level':
+        latest = student.latest_elpac
+        if latest and latest.test_grade_level:
+            return f"Grade {latest.test_grade_level}"
+        return 'Unknown'
+    return 'Unknown'
+
+
+def _compute_metric(students_in_cohort, metric):
+    """Return a number (or dict for stacked metrics) for one cohort."""
+    latests = [s.latest_elpac for s in students_in_cohort if s.latest_elpac]
+    n = len(latests)
+
+    if metric == 'overall_dist':
+        # Stacked: return dict {1: count, 2: count, ...}
+        dist = Counter()
+        for lt in latests:
+            if lt.overall_level:
+                dist[lt.overall_level] += 1
+        return {str(k): dist.get(k, 0) for k in (1, 2, 3, 4)}
+
+    if metric == 'avg_overall_scale':
+        scales = [lt.overall_scale for lt in latests if lt.overall_scale]
+        return round(sum(scales) / len(scales)) if scales else 0
+
+    if metric == 'avg_growth':
+        growths = []
+        for s in students_in_cohort:
+            summatives = [r for r in s.elpac_scores if r.test_purpose == 'Summative']
+            if len(summatives) >= 2 and summatives[0].overall_scale and summatives[1].overall_scale:
+                growths.append(summatives[0].overall_scale - summatives[1].overall_scale)
+        return round(sum(growths) / len(growths), 1) if growths else 0
+
+    if metric == 'rfep_rate':
+        if not latests:
+            return 0
+        l4 = sum(1 for lt in latests if lt.overall_level == 4)
+        return round(100.0 * l4 / len(latests), 1)
+
+    if metric == 'domain_profile':
+        out = {}
+        for dom in ('listening', 'speaking', 'reading', 'writing'):
+            vals = [getattr(lt, f'{dom}_level') for lt in latests if getattr(lt, f'{dom}_level')]
+            out[dom.capitalize()] = round(sum(vals) / len(vals), 2) if vals else 0
+        return out
+
+    return 0
+
+
+@reports_bp.route('/elpac')
+@login_required
+def elpac_cohorts():
+    """Cohort comparison report: group ELPAC results by demographics."""
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+
+    group_by = request.args.get('group_by', 'grade_level')
+    metric = request.args.get('metric', 'overall_dist')
+    el_filter = request.args.get('el_status_filter', 'all')
+
+    if group_by not in {k for k, _ in _GROUP_BY_OPTIONS}:
+        group_by = 'grade_level'
+    if metric not in {k for k, _ in _METRIC_OPTIONS}:
+        metric = 'overall_dist'
+
+    if el_filter != 'all':
+        students = [s for s in students if s.el_status == el_filter]
+
+    # Group students into cohorts
+    cohorts = defaultdict(list)
+    for s in students:
+        cohorts[_cohort_key(s, group_by)].append(s)
+
+    # Compute metric per cohort
+    cohort_data = []
+    for label, members in sorted(cohorts.items()):
+        cohort_data.append({
+            'label': label,
+            'count': len(members),
+            'value': _compute_metric(members, metric),
+        })
+
+    log_action('view', 'report', details=f'ELPAC Cohorts: {group_by} / {metric}')
+
+    return render_template('reports/elpac_cohorts.html',
+        group_by_options=_GROUP_BY_OPTIONS,
+        metric_options=_METRIC_OPTIONS,
+        group_by=group_by,
+        metric=metric,
+        el_filter=el_filter,
+        cohort_data=cohort_data,
+        total_students=len(students),
+    )
+
+
+@reports_bp.route('/elpac/export.csv')
+@login_required
+def elpac_cohorts_export():
+    """CSV export of the current cohort report."""
+    import csv as _csv, io as _io
+    from flask import Response
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+
+    group_by = request.args.get('group_by', 'grade_level')
+    metric = request.args.get('metric', 'overall_dist')
+    el_filter = request.args.get('el_status_filter', 'all')
+
+    if el_filter != 'all':
+        students = [s for s in students if s.el_status == el_filter]
+
+    cohorts = defaultdict(list)
+    for s in students:
+        cohorts[_cohort_key(s, group_by)].append(s)
+
+    buf = _io.StringIO()
+    writer = _csv.writer(buf)
+
+    metric_label = dict(_METRIC_OPTIONS)[metric]
+    group_label = dict(_GROUP_BY_OPTIONS)[group_by]
+
+    if metric == 'overall_dist':
+        writer.writerow([group_label, 'Count', 'Level 1', 'Level 2', 'Level 3', 'Level 4'])
+        for label, members in sorted(cohorts.items()):
+            v = _compute_metric(members, metric)
+            writer.writerow([label, len(members), v.get('1', 0), v.get('2', 0), v.get('3', 0), v.get('4', 0)])
+    elif metric == 'domain_profile':
+        writer.writerow([group_label, 'Count', 'Listening', 'Speaking', 'Reading', 'Writing'])
+        for label, members in sorted(cohorts.items()):
+            v = _compute_metric(members, metric)
+            writer.writerow([label, len(members), v.get('Listening', 0), v.get('Speaking', 0),
+                             v.get('Reading', 0), v.get('Writing', 0)])
+    else:
+        writer.writerow([group_label, 'Count', metric_label])
+        for label, members in sorted(cohorts.items()):
+            writer.writerow([label, len(members), _compute_metric(members, metric)])
+
+    return Response(buf.getvalue(), mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=ELPAC_Cohorts.csv'})

@@ -1,0 +1,17 @@
+# Slimmed runtime for the USB demo bundle.
+# Drops faster-whisper (huge — pulls CTranslate2/PyTorch) and the Google
+# integration packages, neither of which the demo touches. All packages
+# below ship as pure-Python or prebuilt wheels for win_amd64,
+# macosx_11_0_arm64, and manylinux2014_x86_64 — no compilation needed.
+Flask==3.1.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-WTF==1.2.2
+WTForms==3.2.1
+Werkzeug==3.1.3
+cryptography==44.0.0
+python-dateutil==2.9.0
+openpyxl==3.1.5
+pytz==2024.1
+requests==2.32.3
+PyPDF2==3.0.1

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}ELPAC Cohort Comparison{% endblock %}
+{% block page_title %}ELPAC Cohort Comparison{% endblock %}
+{% block content %}
+
+<!-- Selector bar -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="padding:14px;">
+        <form method="GET" style="display:flex;flex-wrap:wrap;gap:14px;align-items:end;">
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Group by</label>
+                <select name="group_by" onchange="this.form.submit()">
+                    {% for key, label in group_by_options %}
+                    <option value="{{ key }}" {% if group_by == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Metric</label>
+                <select name="metric" onchange="this.form.submit()">
+                    {% for key, label in metric_options %}
+                    <option value="{{ key }}" {% if metric == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Filter by EL Status</label>
+                <select name="el_status_filter" onchange="this.form.submit()">
+                    <option value="all" {% if el_filter == 'all' %}selected{% endif %}>All students</option>
+                    <option value="Newcomer" {% if el_filter == 'Newcomer' %}selected{% endif %}>Newcomer only</option>
+                    <option value="LTEL" {% if el_filter == 'LTEL' %}selected{% endif %}>LTEL only</option>
+                    <option value="RFEP" {% if el_filter == 'RFEP' %}selected{% endif %}>RFEP only</option>
+                </select>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+                <span style="font-size:14px;color:var(--gray);"><strong style="color:var(--dark);">{{ total_students }}</strong> students</span>
+                <a href="{{ url_for('reports.elpac_cohorts_export', group_by=group_by, metric=metric, el_status_filter=el_filter) }}"
+                   class="btn btn-sm btn-outline">Download CSV</a>
+                <a href="{{ url_for('analytics.elpac_dashboard') }}" class="btn btn-sm btn-outline">Dashboard &rarr;</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="card">
+    <div class="card-header">
+        {% for k, label in group_by_options %}{% if k == group_by %}{{ label }}{% endif %}{% endfor %}
+        &nbsp;&times;&nbsp;
+        {% for k, label in metric_options %}{% if k == metric %}{{ label }}{% endif %}{% endfor %}
+    </div>
+    <div class="card-body">
+        <div style="position:relative;height:380px;">
+            <canvas id="cohort-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Data table -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header">Underlying Numbers</div>
+    <div class="card-body" style="overflow-x:auto;">
+        <table style="width:100%;font-size:14px;">
+            <thead>
+                <tr style="background:var(--bg);">
+                    <th style="text-align:left;padding:8px;">{% for k, label in group_by_options %}{% if k == group_by %}{{ label }}{% endif %}{% endfor %}</th>
+                    <th style="text-align:right;padding:8px;">Students</th>
+                    {% if metric == 'overall_dist' %}
+                    <th style="text-align:right;padding:8px;">L1</th>
+                    <th style="text-align:right;padding:8px;">L2</th>
+                    <th style="text-align:right;padding:8px;">L3</th>
+                    <th style="text-align:right;padding:8px;">L4</th>
+                    {% elif metric == 'domain_profile' %}
+                    <th style="text-align:right;padding:8px;">Listening</th>
+                    <th style="text-align:right;padding:8px;">Speaking</th>
+                    <th style="text-align:right;padding:8px;">Reading</th>
+                    <th style="text-align:right;padding:8px;">Writing</th>
+                    {% else %}
+                    <th style="text-align:right;padding:8px;">{% for k, label in metric_options %}{% if k == metric %}{{ label }}{% endif %}{% endfor %}</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in cohort_data %}
+                <tr style="border-top:1px solid #e5e7eb;">
+                    <td style="padding:8px;">{{ row.label }}</td>
+                    <td style="padding:8px;text-align:right;">{{ row.count }}</td>
+                    {% if metric == 'overall_dist' %}
+                    <td style="padding:8px;text-align:right;">{{ row.value['1'] }}</td>
+                    <td style="padding:8px;text-align:right;">{{ row.value['2'] }}</td>
+                    <td style="padding:8px;text-align:right;">{{ row.value['3'] }}</td>
+                    <td style="padding:8px;text-align:right;">{{ row.value['4'] }}</td>
+                    {% elif metric == 'domain_profile' %}
+                    <td style="padding:8px;text-align:right;">{{ row.value.Listening }}</td>
+                    <td style="padding:8px;text-align:right;">{{ row.value.Speaking }}</td>
+                    <td style="padding:8px;text-align:right;">{{ row.value.Reading }}</td>
+                    <td style="padding:8px;text-align:right;">{{ row.value.Writing }}</td>
+                    {% else %}
+                    <td style="padding:8px;text-align:right;">{{ row.value }}{% if metric == 'rfep_rate' %}%{% endif %}</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                {% if not cohort_data %}
+                <tr><td colspan="6" style="padding:20px;text-align:center;color:var(--gray);">No data for these filters.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script>
+(function() {
+    var ctx = document.getElementById('cohort-chart');
+    if (!ctx) return;
+
+    var COLORS = {
+        L1: '#dc2626', L2: '#d97706', L3: '#2563eb', L4: '#16a34a',
+        Listening: '#16a34a', Speaking: '#d97706', Reading: '#9333ea', Writing: '#dc2626',
+    };
+
+    var rows = {{ cohort_data|tojson }};
+    var metric = "{{ metric }}";
+    var labels = rows.map(function(r) { return r.label; });
+
+    var config;
+
+    if (metric === 'overall_dist') {
+        config = {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [1,2,3,4].map(function(lvl) {
+                    return {
+                        label: 'Level ' + lvl,
+                        data: rows.map(function(r){ return r.value[String(lvl)] || 0; }),
+                        backgroundColor: COLORS['L'+lvl],
+                    };
+                })
+            },
+            options: {
+                responsive:true, maintainAspectRatio:false,
+                scales: { x:{stacked:true}, y:{stacked:true, beginAtZero:true, ticks:{precision:0}} }
+            }
+        };
+    } else if (metric === 'domain_profile') {
+        config = {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: ['Listening','Speaking','Reading','Writing'].map(function(d) {
+                    return {
+                        label: d,
+                        data: rows.map(function(r){ return r.value[d] || 0; }),
+                        backgroundColor: COLORS[d],
+                    };
+                })
+            },
+            options: {
+                responsive:true, maintainAspectRatio:false,
+                scales: { y:{ beginAtZero:true, max:3, title:{display:true, text:'Avg Level (1-3)'}} }
+            }
+        };
+    } else {
+        // Scalar metric (avg_overall_scale, avg_growth, rfep_rate)
+        var color = metric === 'rfep_rate' ? '#16a34a' :
+                    metric === 'avg_growth' ? '#2563eb' : '#9333ea';
+        config = {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: rows.map(function(r){ return r.value; }),
+                    backgroundColor: color,
+                }]
+            },
+            options: {
+                responsive:true, maintainAspectRatio:false,
+                plugins:{legend:{display:false}},
+                scales: { y: { beginAtZero: true } }
+            }
+        };
+    }
+
+    new Chart(ctx, config);
+})();
+</script>
+
+{% endblock %}

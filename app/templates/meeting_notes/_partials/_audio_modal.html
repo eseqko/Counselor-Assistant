@@ -1,0 +1,25 @@
+<!-- Audio approval modal -->
+<div class="audio-modal-overlay" id="audioModal">
+    <div class="audio-modal">
+        <div id="audioProcessing" class="audio-processing">
+            <div class="spinner"></div>
+            <div>Transcribing and summarizing your recording...</div>
+            <div style="font-size:.75rem;color:#94a3b8;margin-top:4px;">This may take a moment depending on length</div>
+        </div>
+        <div id="audioResult" style="display:none;">
+            <h3>AI Meeting Summary</h3>
+            <p class="subtitle">Review and edit the summary before inserting into your notes.</p>
+            <details style="margin-bottom:12px;">
+                <summary style="font-size:.78rem;color:#64748b;cursor:pointer;">View raw transcript</summary>
+                <div class="transcript-box" id="rawTranscript"></div>
+            </details>
+            <label style="font-size:.78rem;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Summary (editable)</label>
+            <textarea class="summary-box" id="editableSummary"></textarea>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAudioModal()">Discard</button>
+                <button type="button" class="btn btn-outline" onclick="insertTranscript()">Insert Raw Transcript</button>
+                <button type="button" class="btn btn-primary" onclick="insertSummary()">Insert Summary</button>
+            </div>
+        </div>
+    </div>
+</div>

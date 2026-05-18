@@ -1,5 +1,6 @@
 """Data Visualizations — analytics dashboard with Chart.js."""
 from datetime import date, timedelta, timezone
+from collections import Counter, defaultdict
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from app import db
@@ -10,6 +11,10 @@ from app.models.note import Note
 from app.models.service_record import ServiceRecord
 from app.models.activity import Activity
 from app.models.iep504 import IEP504Record
+from app.models.elpac import ELPACScore
+from app.utils.elpi import (
+    compute_elpi, elpi_rank, SIMPLIFIED_CATEGORIES, FULL_CATEGORIES,
+)
 from sqlalchemy import func
 
 analytics_bp = Blueprint('analytics', __name__)
@@ -55,6 +60,237 @@ def api_data():
     }
 
     return jsonify(data)
+
+
+# ── ELPAC Analytics Dashboard ─────────────────────────────────────
+
+
+YEARS_BUCKETS = [
+    ('0_1', '0-1 years', 0, 1),
+    ('1_3', '1-3 years', 1, 3),
+    ('3_5', '3-5 years', 3, 5),
+    ('5_plus', '5+ years', 5, 999),
+]
+
+
+def _years_in_us_schools_bucket(student):
+    yrs = student.years_in_us_schools
+    if yrs is None:
+        return 'unknown'
+    for key, _label, lo, hi in YEARS_BUCKETS:
+        if lo <= yrs < hi:
+            return key
+    return '5_plus'
+
+
+def _filter_students(students, grade, cohort, el_status, years_bucket):
+    out = []
+    for s in students:
+        if grade != 'all' and (s.grade_level or 0) != int(grade):
+            continue
+        if cohort != 'all' and s.graduation_year != int(cohort):
+            continue
+        if el_status != 'all' and s.el_status != el_status:
+            continue
+        if years_bucket != 'all' and _years_in_us_schools_bucket(s) != years_bucket:
+            continue
+        out.append(s)
+    return out
+
+
+@analytics_bp.route('/elpac')
+@login_required
+def elpac_dashboard():
+    """Caseload-wide ELPAC analytics with Chart.js views."""
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+
+    grade = request.args.get('grade_level', 'all')
+    cohort = request.args.get('cohort', 'all')
+    el_status = request.args.get('el_status', 'all')
+    years_bucket = request.args.get('years_in_us_schools', 'all')
+
+    filtered = _filter_students(students, grade, cohort, el_status, years_bucket)
+    student_ids = [s.id for s in filtered]
+
+    # Chart 1: Overall Level Distribution (latest test per student)
+    overall_dist = Counter()
+    latest_by_student = {}
+    for s in filtered:
+        latest = s.latest_elpac
+        if latest:
+            latest_by_student[s.id] = latest
+            if latest.overall_level:
+                overall_dist[latest.overall_level] += 1
+
+    # Chart 2: Domain Weakness — count at each level per domain (1-3)
+    domain_dist = {
+        'Listening': Counter(), 'Speaking': Counter(),
+        'Reading': Counter(), 'Writing': Counter(),
+    }
+    for latest in latest_by_student.values():
+        if latest.listening_level: domain_dist['Listening'][latest.listening_level] += 1
+        if latest.speaking_level: domain_dist['Speaking'][latest.speaking_level] += 1
+        if latest.reading_level: domain_dist['Reading'][latest.reading_level] += 1
+        if latest.writing_level: domain_dist['Writing'][latest.writing_level] += 1
+
+    # Chart 3: Reclassification Pipeline (current ELs only)
+    pipeline = Counter()
+    for s in filtered:
+        if s.el_status in ('Newcomer', 'LTEL'):
+            latest = latest_by_student.get(s.id)
+            if latest and latest.overall_level:
+                pipeline[latest.overall_level] += 1
+
+    # Chart 4: EL Status Breakdown
+    el_status_dist = Counter(s.el_status or 'EO' for s in filtered)
+
+    # Chart 5: Year-over-Year Growth (% of caseload at each Overall level per school year)
+    # Use ALL ELPAC records for filtered students, not just latest
+    all_scores = []
+    if student_ids:
+        all_scores = ELPACScore.query.filter(
+            ELPACScore.student_id.in_(student_ids),
+            ELPACScore.test_purpose == 'Summative',
+            ELPACScore.overall_level.isnot(None),
+        ).all()
+    yoy = defaultdict(lambda: Counter())
+    for sc in all_scores:
+        if sc.school_year:
+            yoy[sc.school_year][sc.overall_level] += 1
+
+    # Chart 6: Years in US Schools Distribution (EL students only)
+    years_dist = Counter()
+    for s in filtered:
+        if s.el_status in ('Newcomer', 'LTEL', 'RFEP'):
+            years_dist[_years_in_us_schools_bucket(s)] += 1
+
+    # Student detail table rows
+    table_rows = []
+    for s in filtered:
+        latest = latest_by_student.get(s.id)
+        prior = None
+        if latest:
+            # Find prior Summative
+            summatives = [r for r in s.elpac_scores
+                          if r.test_purpose == 'Summative' and r.id != latest.id]
+            prior = summatives[0] if summatives else None
+        growth = None
+        if latest and latest.overall_scale and prior and prior.overall_scale:
+            growth = latest.overall_scale - prior.overall_scale
+        table_rows.append({
+            's': s,
+            'latest': latest,
+            'growth': growth,
+        })
+    table_rows.sort(key=lambda r: (
+        -(r['latest'].overall_level or 0) if r['latest'] else 0,
+        r['s'].last_name or '',
+    ))
+
+    # Build filter dropdown options
+    grade_options = sorted({s.grade_level for s in students if s.grade_level})
+    cohort_options = sorted({s.graduation_year for s in students if s.graduation_year})
+
+    # ── ELPI status + Reclassification Candidates ───────────────────
+    # For each filtered student with a current Summative score, compute
+    # both simplified and full ELPI status by comparing to their prior year.
+    simplified_counts = Counter()
+    full_counts = Counter()
+    reclass_candidates = []          # students at PL 4 right now (not yet RFEP)
+    elpi_per_student = {}            # student_id -> elpi dict
+    big_movers = []                  # students who jumped 2+ levels (simplified or CDE)
+
+    for s in filtered:
+        summatives = [r for r in s.elpac_scores if r.test_purpose == 'Summative']
+        # `elpac_scores` relationship is ordered by test_date DESC.
+        if not summatives:
+            continue
+        current = summatives[0]
+        prior = summatives[1] if len(summatives) > 1 else None
+
+        elpi = compute_elpi(current, prior, s.el_status)
+        elpi_per_student[s.id] = elpi
+        if elpi['simplified_status'] not in ('No current score', 'No prior score'):
+            simplified_counts[elpi['simplified_status']] += 1
+            full_counts[elpi['full_status']] += 1
+
+        # Reclassification candidate: scored 4 on the most recent test and
+        # is NOT yet RFEP. Counselor needs to push reclass paperwork.
+        if current.overall_level == 4 and s.el_status != 'RFEP':
+            reclass_candidates.append({
+                's': s,
+                'current': current,
+                'prior': prior,
+                'is_new_at_4': elpi['is_new_at_4'],
+                'elpi_now': elpi['elpi_now'],
+                'elpi_prior': elpi['elpi_prior'],
+            })
+
+        # Big movers: 2+ level change in either direction (simplified PL or CDE ELPI rank).
+        pl_jump = None
+        if elpi['pl_now'] is not None and elpi['pl_prior'] is not None:
+            pl_jump = elpi['pl_now'] - elpi['pl_prior']
+        cde_jump = None
+        rank_now = elpi_rank(elpi['elpi_now'])
+        rank_prior = elpi_rank(elpi['elpi_prior'])
+        if rank_now is not None and rank_prior is not None:
+            cde_jump = rank_now - rank_prior
+        if (pl_jump is not None and abs(pl_jump) >= 2) or (cde_jump is not None and abs(cde_jump) >= 2):
+            big_movers.append({
+                's': s,
+                'current': current,
+                'prior': prior,
+                'pl_jump': pl_jump,
+                'cde_jump': cde_jump,
+                'elpi_now': elpi['elpi_now'],
+                'elpi_prior': elpi['elpi_prior'],
+            })
+
+    # Sort candidates: newly-at-4 first, then by last name
+    reclass_candidates.sort(key=lambda r: (
+        0 if r['is_new_at_4'] else 1,
+        (r['s'].last_name or '').lower(),
+    ))
+
+    # Sort big movers: gainers first (biggest jump up), then droppers
+    # (biggest drop down). Within each group, sort by magnitude.
+    def _mover_sort(r):
+        biggest = max((r['pl_jump'] or 0), (r['cde_jump'] or 0), key=abs)
+        # Direction first (positive before negative), then magnitude descending
+        return (0 if biggest >= 0 else 1, -abs(biggest), (r['s'].last_name or '').lower())
+    big_movers.sort(key=_mover_sort)
+
+    # Attach ELPI to the existing student detail table
+    for row in table_rows:
+        row['elpi'] = elpi_per_student.get(row['s'].id)
+
+    return render_template(
+        'analytics/elpac.html',
+        students=students,
+        filtered_count=len(filtered),
+        total_count=len(students),
+        filters={
+            'grade_level': grade, 'cohort': cohort,
+            'el_status': el_status, 'years_in_us_schools': years_bucket,
+        },
+        grade_options=grade_options,
+        cohort_options=cohort_options,
+        overall_dist=dict(overall_dist),
+        domain_dist={d: dict(c) for d, c in domain_dist.items()},
+        pipeline=dict(pipeline),
+        el_status_dist=dict(el_status_dist),
+        yoy={yr: dict(c) for yr, c in yoy.items()},
+        years_dist=dict(years_dist),
+        years_buckets=YEARS_BUCKETS,
+        table_rows=table_rows,
+        reclass_candidates=reclass_candidates,
+        simplified_counts=dict(simplified_counts),
+        full_counts=dict(full_counts),
+        simplified_categories=SIMPLIFIED_CATEGORIES,
+        full_categories=FULL_CATEGORIES,
+        big_movers=big_movers,
+    )
 
 
 # ── Data aggregation functions ────────────────────────────────────

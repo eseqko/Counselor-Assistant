@@ -1,0 +1,66 @@
+{% if app_state.has_ai %}
+<div class="card no-print">
+    <div class="card-header">
+        AI Support Insights
+        <button class="btn btn-sm btn-primary" onclick="getStudentInsights()" id="ai-insights-btn">Analyze Student</button>
+    </div>
+    <div class="card-body" id="ai-insights-body">
+        <div id="ai-insights-placeholder" style="color:var(--gray);font-size:0.85rem;">
+            Click "Analyze Student" to get AI-powered insights on patterns, service gaps, risk indicators, and recommended next steps.
+            <br><span style="font-size:0.78rem;">Powered by Ollama — all data stays on this computer.</span>
+        </div>
+        <div id="ai-insights-loading" style="display:none;text-align:center;padding:20px;">
+            <div style="display:inline-block;width:24px;height:24px;border:3px solid #e5e7eb;border-top-color:#4A90D9;border-radius:50%;animation:aispin 0.8s linear infinite;"></div>
+            <p style="margin-top:8px;font-size:0.85rem;color:var(--gray);">Analyzing student history...</p>
+        </div>
+        <div id="ai-insights-result" style="display:none;line-height:1.7;font-size:0.88rem;white-space:pre-wrap;"></div>
+        <div id="ai-insights-error" style="display:none;color:#dc2626;font-size:0.85rem;"></div>
+    </div>
+</div>
+<style>@keyframes aispin { to { transform: rotate(360deg); } }</style>
+<script>
+function getStudentInsights() {
+    var btn = document.getElementById('ai-insights-btn');
+    var placeholder = document.getElementById('ai-insights-placeholder');
+    var loading = document.getElementById('ai-insights-loading');
+    var result = document.getElementById('ai-insights-result');
+    var error = document.getElementById('ai-insights-error');
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    placeholder.style.display = 'none';
+    loading.style.display = 'block';
+    result.style.display = 'none';
+    error.style.display = 'none';
+
+    var streamStarted = false;
+    streamSSE({
+        url: '/ai/student-insights-stream',
+        body: { student_id: {{ student.id }} },
+        csrf: '{{ csrf_token() }}',
+        onToken: function(token) {
+            if (!streamStarted) {
+                streamStarted = true;
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.textContent = '';
+            }
+            result.textContent += token;
+        },
+        onDone: function() {
+            btn.disabled = false;
+            btn.textContent = 'Refresh Insights';
+        },
+        onError: function(msg) {
+            loading.style.display = 'none';
+            error.style.display = 'block';
+            error.textContent = msg.indexOf('Connection') >= 0 || msg.indexOf('fetch') >= 0
+                ? 'Could not connect to Ollama. Make sure it is running (ollama serve).'
+                : msg;
+            btn.disabled = false;
+            btn.textContent = 'Retry';
+        }
+    });
+}
+</script>
+{% endif %}

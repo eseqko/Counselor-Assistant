@@ -1,0 +1,172 @@
+{% set elpac_records = student.elpac_scores.all() %}
+{% if elpac_records or student.is_el %}
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+        <span>ELPAC Scores</span>
+        {% if student.us_school_entry_date %}
+        <span style="font-size:13px;color:var(--gray);">
+            Enrolled in US schools: {{ student.us_school_entry_date.strftime('%b %d, %Y') }}
+            ({{ student.years_in_us_schools }} yr{{ '' if student.years_in_us_schools == 1 else 's' }})
+        </span>
+        {% endif %}
+        <div style="margin-left:auto;display:flex;gap:6px;">
+            <a href="{{ url_for('elpac.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Add ELPAC Score</a>
+            <a href="{{ url_for('analytics.elpac_dashboard') }}" class="btn btn-sm btn-outline">Analytics &rarr;</a>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if not elpac_records %}
+        <p style="color:var(--gray);margin:0;">No ELPAC scores on file yet. Upload an Ellevation CSV via
+            <a href="{{ url_for('data_import.elpac_upload') }}">Data Import</a> or add a score manually.
+        </p>
+        {% else %}
+
+        {% if student.is_rfep_eligible %}
+        <div style="padding:10px 14px;background:#dcfce7;border-left:3px solid #16a34a;border-radius:4px;margin-bottom:14px;font-size:14px;">
+            <strong>Eligible for RFEP review</strong> &mdash; Overall level 4. Reclassification also requires
+            grades (typically C or better in English), teacher evaluation, and parent consultation.
+        </div>
+        {% endif %}
+
+        {% set summative = elpac_records | selectattr('test_purpose', 'equalto', 'Summative') | list %}
+        {% if summative | length >= 2 %}
+        <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="font-size:14px;">Growth Over Time</strong>
+                <div style="font-size:12px;">
+                    <label style="margin-right:4px;">Y-axis:</label>
+                    <select id="elpac-y-mode" onchange="elpacUpdateYMode()" style="font-size:12px;padding:2px 6px;">
+                        <option value="scale">Scale Score</option>
+                        <option value="level">Proficiency Level (1-4)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="position:relative;height:240px;">
+                <canvas id="elpac-growth-chart"></canvas>
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="overflow-x:auto;">
+            <table style="width:100%;font-size:13px;">
+                <thead>
+                    <tr style="background:var(--bg);">
+                        <th style="text-align:left;padding:6px 8px;">Date</th>
+                        <th style="text-align:left;padding:6px 8px;">Purpose</th>
+                        <th style="text-align:left;padding:6px 8px;">Grade</th>
+                        <th style="text-align:center;padding:6px 8px;">Overall</th>
+                        <th style="text-align:center;padding:6px 8px;">L</th>
+                        <th style="text-align:center;padding:6px 8px;">S</th>
+                        <th style="text-align:center;padding:6px 8px;">R</th>
+                        <th style="text-align:center;padding:6px 8px;">W</th>
+                        <th style="text-align:center;padding:6px 8px;" class="hide-on-mobile">Lit</th>
+                        <th style="text-align:center;padding:6px 8px;" class="hide-on-mobile">Oral</th>
+                        <th style="text-align:center;padding:6px 8px;" class="hide-on-mobile">Compr</th>
+                        <th style="padding:6px 8px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in elpac_records %}
+                    <tr style="border-top:1px solid #e5e7eb;{% if loop.first %}background:#fffbeb;{% endif %}">
+                        <td style="padding:6px 8px;">{{ r.test_date.strftime('%m/%d/%Y') if r.test_date else '' }}</td>
+                        <td style="padding:6px 8px;">
+                            <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:{% if r.test_purpose == 'Initial' %}#fce7f3;color:#9d174d{% else %}#dbeafe;color:#1e40af{% endif %};">{{ r.test_purpose }}</span>
+                        </td>
+                        <td style="padding:6px 8px;">{{ r.test_grade_level or '' }}</td>
+                        <td style="padding:6px 8px;text-align:center;">
+                            {% if r.overall_level %}
+                            <strong style="color:{% if r.overall_level == 4 %}#16a34a{% elif r.overall_level == 3 %}#2563eb{% elif r.overall_level == 2 %}#d97706{% else %}#dc2626{% endif %};">{{ r.overall_level }}</strong>
+                            {% if r.overall_scale %}<br><span style="font-size:11px;color:var(--gray);">{{ r.overall_scale }}</span>{% endif %}
+                            {% endif %}
+                        </td>
+                        <td style="padding:6px 8px;text-align:center;">{{ r.listening_level or '—' }}</td>
+                        <td style="padding:6px 8px;text-align:center;">{{ r.speaking_level or '—' }}</td>
+                        <td style="padding:6px 8px;text-align:center;">{{ r.reading_level or '—' }}</td>
+                        <td style="padding:6px 8px;text-align:center;">{{ r.writing_level or '—' }}</td>
+                        <td style="padding:6px 8px;text-align:center;" class="hide-on-mobile">{{ r.literacy_level or '—' }}</td>
+                        <td style="padding:6px 8px;text-align:center;" class="hide-on-mobile">{{ r.oral_level or '—' }}</td>
+                        <td style="padding:6px 8px;text-align:center;" class="hide-on-mobile">{{ r.comprehension_level or '—' }}</td>
+                        <td style="padding:6px 8px;">
+                            <a href="{{ url_for('elpac.edit', score_id=r.id) }}" style="font-size:12px;">Edit</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if summative | length >= 2 %}
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script>
+(function() {
+    var ctx = document.getElementById('elpac-growth-chart');
+    if (!ctx) return;
+
+    var records = [
+        {% for r in summative | reverse %}
+        {
+            date: "{{ r.test_date.strftime('%b %Y') if r.test_date else '' }}",
+            overall_scale: {{ r.overall_scale or 'null' }},
+            listening_scale: {{ r.listening_scale or 'null' }},
+            speaking_scale: {{ r.speaking_scale or 'null' }},
+            reading_scale: {{ r.reading_scale or 'null' }},
+            writing_scale: {{ r.writing_scale or 'null' }},
+            overall_level: {{ r.overall_level or 'null' }},
+            listening_level: {{ r.listening_level or 'null' }},
+            speaking_level: {{ r.speaking_level or 'null' }},
+            reading_level: {{ r.reading_level or 'null' }},
+            writing_level: {{ r.writing_level or 'null' }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    var colors = {
+        Overall: '#2563eb',
+        Listening: '#16a34a',
+        Speaking: '#d97706',
+        Reading: '#9333ea',
+        Writing: '#dc2626'
+    };
+
+    var chart = null;
+    function render(mode) {
+        var suffix = mode === 'level' ? 'level' : 'scale';
+        var labels = records.map(function(r) { return r.date; });
+        var datasets = ['Overall', 'Listening', 'Speaking', 'Reading', 'Writing'].map(function(name) {
+            var key = name.toLowerCase() + '_' + suffix;
+            return {
+                label: name,
+                data: records.map(function(r) { return r[key]; }),
+                borderColor: colors[name],
+                backgroundColor: colors[name] + '33',
+                tension: 0.2,
+                spanGaps: true,
+                borderWidth: name === 'Overall' ? 3 : 2,
+                pointRadius: name === 'Overall' ? 5 : 3
+            };
+        });
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    y: mode === 'level' ? { min: 1, max: 4, ticks: { stepSize: 1 } } : { beginAtZero: false }
+                }
+            }
+        });
+    }
+    render('scale');
+    window.elpacUpdateYMode = function() {
+        render(document.getElementById('elpac-y-mode').value);
+    };
+})();
+</script>
+{% endif %}
+{% endif %}

@@ -31,21 +31,28 @@ def index():
     if referral_type:
         query = query.filter_by(referral_type=referral_type)
 
-    referrals = query.order_by(Referral.referral_date.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(Referral.referral_date.desc()).paginate(
+        page=max(1, page), per_page=50, error_out=False)
+    referrals = pagination.items
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
 
-    # Counts by status for the summary bar
+    # Counts by status for the summary bar (one grouped query instead of loading all rows)
+    from sqlalchemy import func
+    count_rows = db.session.query(
+        Referral.status, func.count(Referral.id)
+    ).filter_by(counselor_id=current_user.id).group_by(Referral.status).all()
     counts = {s: 0 for s, _ in Referral.STATUSES}
     counts['open'] = 0
-    for r in Referral.query.filter_by(counselor_id=current_user.id).all():
-        counts[r.status] = counts.get(r.status, 0) + 1
-        if r.is_open:
-            counts['open'] += 1
+    for status, n in count_rows:
+        counts[status] = counts.get(status, 0) + n
+        if status in ('pending', 'contacted', 'in_progress'):
+            counts['open'] += n
 
     return render_template('referrals/index.html',
-        referrals=referrals, students=students,
+        referrals=referrals, pagination=pagination, students=students,
         student_id=student_id, status=status, urgency=urgency, referral_type=referral_type,
         statuses=Referral.STATUSES, urgency_levels=Referral.URGENCY_LEVELS,
         referral_types=Referral.REFERRAL_TYPES, counts=counts)

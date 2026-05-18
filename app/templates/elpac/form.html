@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}{% if score.id %}Edit{% else %}Add{% endif %} ELPAC — {{ student.display_name }}{% endblock %}
+{% block page_title %}{% if score.id %}Edit{% else %}Add{% endif %} ELPAC Score{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>{{ student.display_name }} (Grade {{ student.grade_level or '—' }})</span>
+        <a href="{{ url_for('caseload.view_student', id=student.id) }}" class="btn btn-sm btn-outline">Back to profile</a>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <h6 style="margin-top:0;">Test Information</h6>
+            <div class="grid-2" style="gap:16px;">
+                <div>
+                    <label style="font-weight:600;">Test Purpose *</label>
+                    <select name="test_purpose" class="form-control" required>
+                        {% for val, label in model.TEST_PURPOSES %}
+                        <option value="{{ val }}" {% if score.test_purpose == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight:600;">Test Date *</label>
+                    <input type="date" name="test_date" class="form-control" required
+                        value="{{ score.test_date.strftime('%Y-%m-%d') if score.test_date else '' }}">
+                </div>
+                <div>
+                    <label style="font-weight:600;">Test Grade Level</label>
+                    <input type="number" name="test_grade_level" class="form-control" min="0" max="12"
+                        value="{{ score.test_grade_level or '' }}">
+                </div>
+                <div>
+                    <label style="font-weight:600;">Test Cluster</label>
+                    <select name="test_cluster" class="form-control">
+                        <option value="">—</option>
+                        {% for c in model.TEST_CLUSTERS %}
+                        <option value="{{ c }}" {% if score.test_cluster == c %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight:600;">Test Administrator</label>
+                    <input type="text" name="test_administrator" class="form-control"
+                        value="{{ score.test_administrator or '' }}">
+                </div>
+                <div>
+                    <label style="font-weight:600;">Test ID #</label>
+                    <input type="text" name="test_id" class="form-control"
+                        value="{{ score.test_id or '' }}">
+                </div>
+            </div>
+
+            <hr>
+            <h6>Overall (Composite)</h6>
+            <div class="grid-2" style="gap:16px;">
+                <div>
+                    <label style="font-weight:600;">Overall Scale Score</label>
+                    <input type="number" name="overall_scale" class="form-control"
+                        value="{{ score.overall_scale or '' }}">
+                </div>
+                <div>
+                    <label style="font-weight:600;">Overall Proficiency Level</label>
+                    <select name="overall_level" class="form-control">
+                        <option value="">—</option>
+                        {% for val, label in model.OVERALL_LEVELS %}
+                        <option value="{{ val }}" {% if score.overall_level == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <hr>
+            <h6>Domain Scores (Listening / Speaking / Reading / Writing)</h6>
+            {% for prefix, label in [
+                ('listening', 'Listening'),
+                ('speaking', 'Speaking'),
+                ('reading', 'Reading'),
+                ('writing', 'Writing')] %}
+            <div class="grid-2" style="gap:16px;margin-bottom:8px;">
+                <div>
+                    <label style="font-weight:600;">{{ label }} Scale</label>
+                    <input type="number" name="{{ prefix }}_scale" class="form-control"
+                        value="{{ score[prefix + '_scale'] or '' }}">
+                </div>
+                <div>
+                    <label style="font-weight:600;">{{ label }} Level (1-3)</label>
+                    <select name="{{ prefix }}_level" class="form-control">
+                        <option value="">—</option>
+                        {% for val, lbl in model.DOMAIN_LEVELS %}
+                        <option value="{{ val }}" {% if score[prefix + '_level'] == val %}selected{% endif %}>{{ lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            {% endfor %}
+
+            <hr>
+            <h6>Composite Scores (Literacy / Oral / Comprehension)</h6>
+            {% for prefix, label, note in [
+                ('literacy', 'Literacy', 'Reading + Writing'),
+                ('oral', 'Oral', 'Listening + Speaking'),
+                ('comprehension', 'Comprehension', 'Listening + Reading')] %}
+            <div class="grid-2" style="gap:16px;margin-bottom:8px;">
+                <div>
+                    <label style="font-weight:600;">{{ label }} Scale <span style="font-weight:400;color:#666;font-size:12px;">({{ note }})</span></label>
+                    <input type="number" name="{{ prefix }}_scale" class="form-control"
+                        value="{{ score[prefix + '_scale'] or '' }}">
+                </div>
+                <div>
+                    <label style="font-weight:600;">{{ label }} Level</label>
+                    <input type="number" name="{{ prefix }}_level" class="form-control" min="1" max="3"
+                        value="{{ score[prefix + '_level'] or '' }}">
+                </div>
+            </div>
+            {% endfor %}
+
+            <hr>
+            <details>
+                <summary style="cursor:pointer;font-weight:600;">ACPL (Alternate Composite Proficiency Level)</summary>
+                <div class="grid-2" style="gap:16px;margin-top:8px;">
+                    <div>
+                        <label style="font-weight:600;">ACPL Scale</label>
+                        <input type="number" name="acpl_scale" class="form-control"
+                            value="{{ score.acpl_scale or '' }}">
+                    </div>
+                    <div>
+                        <label style="font-weight:600;">ACPL Level</label>
+                        <input type="number" name="acpl_level" class="form-control"
+                            value="{{ score.acpl_level or '' }}">
+                    </div>
+                </div>
+            </details>
+
+            <hr>
+            <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
+                <div>
+                    {% if score.id %}
+                    <button type="button" class="btn btn-outline-danger" onclick="document.getElementById('delete-form').submit()">Delete</button>
+                    {% endif %}
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <a href="{{ url_for('caseload.view_student', id=student.id) }}" class="btn btn-outline">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save ELPAC Score</button>
+                </div>
+            </div>
+        </form>
+
+        {% if score.id %}
+        <form id="delete-form" method="POST"
+              action="{{ url_for('elpac.delete', score_id=score.id) }}"
+              style="display:none;"
+              onsubmit="return confirm('Delete this ELPAC record?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

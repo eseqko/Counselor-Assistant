@@ -133,8 +133,10 @@
                 {% endfor %}
             </select>
             <button class="btn btn-primary" onclick="mergeFields()">Merge Fields</button>
-            <button class="btn btn-outline" onclick="aiDraft()" id="btn-ai" title="Requires Ollama">AI Draft</button>
-            <button class="btn btn-outline" onclick="aiImprove()" id="btn-ai-improve" title="Requires Ollama">AI Improve</button>
+            {% if app_state.has_ai %}
+            <button class="btn btn-outline" onclick="aiDraft()" id="btn-ai" title="Local AI">AI Draft</button>
+            <button class="btn btn-outline" onclick="aiImprove()" id="btn-ai-improve" title="Local AI">AI Improve</button>
+            {% endif %}
         </div>
 
         <!-- Merge field reference -->
@@ -348,43 +350,21 @@
         btn.textContent = btnLabel === 'AI Draft' ? 'Drafting...' : 'Improving...';
         btn.disabled = true;
         var textarea = document.getElementById('inp-body');
-
-        fetch(url, {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify(payload)
-        }).then(function(response) {
-            if (!response.ok) {
-                return response.json().then(function(d) { throw new Error(d.error || 'Failed'); });
+        var streamStarted = false;
+        streamSSE({
+            url: url,
+            body: payload,
+            onToken: function(token) {
+                if (!streamStarted) { streamStarted = true; textarea.value = ''; }
+                textarea.value += token;
+                updatePreview();
+            },
+            onDone: function() { btn.textContent = btnLabel; btn.disabled = false; },
+            onError: function(msg) {
+                alert(msg || 'AI processing failed.');
+                btn.textContent = btnLabel;
+                btn.disabled = false;
             }
-            textarea.value = '';
-            var reader = response.body.getReader();
-            var decoder = new TextDecoder();
-            var buffer = '';
-            function pump() {
-                reader.read().then(function(r) {
-                    if (r.done) return;
-                    buffer += decoder.decode(r.value, {stream: true});
-                    var lines = buffer.split('\n');
-                    buffer = lines.pop();
-                    lines.forEach(function(line) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                var data = JSON.parse(line.slice(6));
-                                if (data.token) { textarea.value += data.token; updatePreview(); }
-                                if (data.done) { btn.textContent = btnLabel; btn.disabled = false; }
-                                if (data.error) { alert(data.error); btn.textContent = btnLabel; btn.disabled = false; }
-                            } catch(e) {}
-                        }
-                    });
-                    pump();
-                });
-            }
-            pump();
-        }).catch(function(err) {
-            alert(err.message || 'AI processing failed.');
-            btn.textContent = btnLabel;
-            btn.disabled = false;
         });
     }
 

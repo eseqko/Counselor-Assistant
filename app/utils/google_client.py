@@ -11,9 +11,10 @@ Gmail, Classroom, etc.). Scopes can be expanded in config.py.
 import json
 import os
 from flask import current_app
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request
+
+# google-auth packages are optional (excluded from the demo bundle). Imports
+# happen inside the functions that need them so callers without these
+# packages installed can still import this module.
 
 
 def credentials_configured():
@@ -24,6 +25,7 @@ def credentials_configured():
 
 def create_flow(redirect_uri):
     """Create an OAuth 2.0 flow for the authorization redirect."""
+    from google_auth_oauthlib.flow import Flow
     creds_file = current_app.config['GOOGLE_CREDENTIALS_FILE']
     scopes = current_app.config['GOOGLE_SCOPES']
 
@@ -47,6 +49,9 @@ def get_credentials(user):
         token_data = json.loads(user.google_token_json)
     except (json.JSONDecodeError, TypeError):
         return None
+
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
 
     creds = Credentials(
         token=token_data.get('token'),

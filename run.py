@@ -73,8 +73,8 @@ if __name__ == '__main__':
     print()
     if mode == 'tailscale':
         print(f"  Tailscale detected. Server bound to: {host}")
-        print(f"  On this PC:   http://{host}:5000")
-        print(f"  On iPhone:    http://{host}:5000 (via Tailscale)")
+        print(f"  On this PC:   http://127.0.0.1:5000")
+        print(f"  On iPhone:    http://{tailscale_ip}:5000 (via Tailscale)")
         print("  The school LAN cannot see this port.")
     elif mode == 'manual':
         print(f"  Server bound to: {host}:5000 (HOST env var)")
@@ -96,6 +96,16 @@ if __name__ == '__main__':
             if remote.startswith('127.') or remote.startswith('100.') or remote == '::1':
                 return  # localhost or Tailscale CGNAT — allowed
             abort(403)
+
+    # Demo USB bundle: open the browser straight to /demo-login so the
+    # non-technical user lands on the dashboard with zero clicks.
+    if os.environ.get('COUNSELOR_DEMO') == '1':
+        import threading, webbrowser
+        def _open_browser():
+            import time
+            time.sleep(1.5)
+            webbrowser.open('http://127.0.0.1:5000/demo-login')
+        threading.Thread(target=_open_browser, daemon=True).start()
 
     app.run(host=host, port=5000,
             debug=os.environ.get('FLASK_DEBUG', '').lower() == 'true')

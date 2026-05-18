@@ -1,0 +1,99 @@
+<div class="ferpa-notice">
+    &#128274; FERPA Protected Record - Access is logged for compliance.
+</div>
+
+<div class="profile-header">
+    <div class="profile-avatar">{{ student.first_name[0] }}{{ student.last_name[0] }}</div>
+    <div class="profile-info">
+        <h2>{{ student.display_name }}</h2>
+        <div class="meta">
+            ID: {{ student.student_id_number }} |
+            Grade {{ student.grade_level or 'N/A' }} |
+            <span class="badge badge-{{ 'success' if student.status == 'active' else 'gray' }}">{{ student.status }}</span>
+            {% if student.el_status == 'Newcomer' %}
+                <span class="badge badge-danger">{{ student.el_display }}</span>
+            {% elif student.el_status == 'LTEL' %}
+                <span class="badge badge-warning">LTEL</span>
+            {% elif student.el_status == 'RFEP' %}
+                <span class="badge badge-info">RFEP</span>
+            {% endif %}
+            {% if student.latest_elpac and student.latest_elpac.overall_level %}
+                <span class="badge {% if student.latest_elpac.overall_level == 4 %}badge-success{% elif student.latest_elpac.overall_level == 3 %}badge-info{% elif student.latest_elpac.overall_level == 2 %}badge-warning{% else %}badge-danger{% endif %}"
+                      title="Latest ELPAC Overall Proficiency Level">
+                    ELPAC {{ student.latest_elpac.overall_level }}
+                </span>
+            {% endif %}
+            {% if student.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
+            {% if student.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+            {% for bill in student.ab_bills %}
+            <span class="badge" style="background:#EDE9FE;color:#6D28D9;">{{ bill }}</span>
+            {% endfor %}
+            {% if student.ab_exemption_status == 'accepted' %}
+            <span class="badge" style="background:#DBEAFE;color:#1D4ED8;">State Min Accepted</span>
+            {% elif student.ab_exemption_status == 'eligible' %}
+            <span class="badge" style="background:#FEF3C7;color:#92400E;">Exemption Pending</span>
+            {% endif %}
+        </div>
+    </div>
+    <div style="margin-left:auto;">
+        <div class="btn-group">
+            {% if current_user.synergy_base_url %}
+            <button type="button" class="btn btn-sm btn-outline" id="open-synergy-btn"
+                    data-synergy-url="{{ current_user.synergy_base_url }}"
+                    data-student-id="{{ student.student_id_number }}"
+                    data-student-name="{{ student.display_name }}"
+                    onclick="openInSynergy(this)"
+                    title="Open Synergy in a new tab and copy this student's ID to your clipboard">
+                Open in Synergy
+            </button>
+            {% endif %}
+            <a href="{{ url_for('caseload.edit_student', id=student.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-primary">+ Note</a>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Contact Information</div>
+        <div class="card-body">
+            <table>
+                {% if student.email %}<tr><td style="font-weight:600;width:40%;">Email</td><td>{{ student.email }}</td></tr>{% endif %}
+                {% if student.phone %}<tr><td style="font-weight:600;">Phone</td><td>{{ student.phone }}</td></tr>{% endif %}
+                {% if student.homeroom %}<tr><td style="font-weight:600;">Advisory</td><td>{{ student.homeroom }}</td></tr>{% endif %}
+                {% if student.parent_guardian_name %}<tr><td style="font-weight:600;">Parent/Guardian</td><td>{{ student.parent_guardian_name }}</td></tr>{% endif %}
+                {% if student.parent_guardian_phone %}<tr><td style="font-weight:600;">Parent Phone</td><td>{{ student.parent_guardian_phone }}</td></tr>{% endif %}
+                {% if student.parent_guardian_email %}<tr><td style="font-weight:600;">Parent Email</td><td>{{ student.parent_guardian_email }}</td></tr>{% endif %}
+                {% if student.address %}<tr><td style="font-weight:600;">Address</td><td>{{ student.address }}</td></tr>{% endif %}
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Designations & Details</div>
+        <div class="card-body">
+            <table>
+                <tr><td style="font-weight:600;width:40%;">EL Status</td><td>{{ student.el_display }}</td></tr>
+                <tr><td style="font-weight:600;">IEP</td><td>{{ 'Yes' if student.iep_status else 'No' }}</td></tr>
+                <tr><td style="font-weight:600;">504 Plan</td><td>{{ 'Yes' if student.section_504 else 'No' }}</td></tr>
+                {% if student.date_of_birth %}<tr><td style="font-weight:600;">DOB</td><td>{{ student.date_of_birth.strftime('%m/%d/%Y') }}</td></tr>{% endif %}
+                {% if student.gender %}<tr><td style="font-weight:600;">Gender</td><td>{{ student.gender }}</td></tr>{% endif %}
+                {% if student.ethnicity %}<tr><td style="font-weight:600;">Ethnicity</td><td>{{ student.ethnicity }}</td></tr>{% endif %}
+                {% if student.has_ab_population %}
+                <tr><td style="font-weight:600;">AB Exemption</td><td>
+                    {{ student.ab_bills|join(', ') }}
+                    {% if student.ab_exemption_status != 'none' %}
+                    — <strong>{{ student.ab_exemption_status|capitalize }}</strong>
+                    {% endif %}
+                    {% if student.ab_transfer_date %}<br><span style="font-size:0.82rem;color:var(--gray);">Transfer: {{ student.ab_transfer_date.strftime('%m/%d/%Y') }}</span>{% endif %}
+                </td></tr>
+                {% endif %}
+            </table>
+            <div style="margin-top:12px;">
+                {% for tag in student.tags %}
+                <span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>

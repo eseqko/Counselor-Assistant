@@ -60,6 +60,10 @@ class Student(db.Model):
     ab_exemption_date = db.Column(db.Date)
     ab_transfer_date = db.Column(db.Date)
 
+    # EL — Date First Enrolled in US Schools (from Ellevation "Enrolled in US" column).
+    # Drives years_in_us_schools property and cohort filters in ELPAC analytics.
+    us_school_entry_date = db.Column(db.Date)
+
     # Special programs
     special_programs = db.Column(db.Text)  # JSON list of programs
     notes_text = db.Column(db.Text)  # Quick notes field
@@ -157,6 +161,31 @@ class Student(db.Model):
     @property
     def uses_state_minimum(self):
         return self.ab_exemption_status == 'accepted'
+
+    @property
+    def latest_elpac(self):
+        return self.elpac_scores.first()
+
+    @property
+    def is_rfep_eligible(self):
+        latest = self.latest_elpac
+        return bool(latest and latest.overall_level == 4)
+
+    @property
+    def years_in_us_schools(self):
+        if not self.us_school_entry_date:
+            return None
+        from datetime import date
+        return (date.today() - self.us_school_entry_date).days // 365
+
+    @property
+    def graduation_year(self):
+        if not self.grade_level:
+            return None
+        from app.utils.helpers import current_school_year
+        sy = current_school_year()
+        end_year = int(sy.split('-')[1])
+        return end_year + (12 - self.grade_level)
 
 
 class Tag(db.Model):

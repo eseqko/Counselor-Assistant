@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+{% block title %}ELPAC Analytics{% endblock %}
+{% block page_title %}ELPAC Analytics{% endblock %}
+{% block content %}
+
+<!-- Filter bar -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="padding:14px;">
+        <form method="GET" id="elpac-filter-form" style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Grade Level</label>
+                <select name="grade_level" onchange="this.form.submit()">
+                    <option value="all" {% if filters.grade_level == 'all' %}selected{% endif %}>All grades</option>
+                    {% for g in grade_options %}
+                    <option value="{{ g }}" {% if filters.grade_level == g|string %}selected{% endif %}>Grade {{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Graduation Cohort</label>
+                <select name="cohort" onchange="this.form.submit()">
+                    <option value="all" {% if filters.cohort == 'all' %}selected{% endif %}>All cohorts</option>
+                    {% for c in cohort_options %}
+                    <option value="{{ c }}" {% if filters.cohort == c|string %}selected{% endif %}>Class of {{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">EL Status</label>
+                <select name="el_status" onchange="this.form.submit()">
+                    <option value="all" {% if filters.el_status == 'all' %}selected{% endif %}>All</option>
+                    <option value="Newcomer" {% if filters.el_status == 'Newcomer' %}selected{% endif %}>Newcomer</option>
+                    <option value="LTEL" {% if filters.el_status == 'LTEL' %}selected{% endif %}>LTEL</option>
+                    <option value="RFEP" {% if filters.el_status == 'RFEP' %}selected{% endif %}>RFEP</option>
+                    <option value="EO" {% if filters.el_status == 'EO' %}selected{% endif %}>EO</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Years in US Schools</label>
+                <select name="years_in_us_schools" onchange="this.form.submit()">
+                    <option value="all" {% if filters.years_in_us_schools == 'all' %}selected{% endif %}>All</option>
+                    {% for key, label, lo, hi in years_buckets %}
+                    <option value="{{ key }}" {% if filters.years_in_us_schools == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                    <option value="unknown" {% if filters.years_in_us_schools == 'unknown' %}selected{% endif %}>Unknown</option>
+                </select>
+            </div>
+            <div style="margin-left:auto;font-size:14px;color:var(--gray);">
+                Showing <strong style="color:var(--dark);">{{ filtered_count }}</strong> of {{ total_count }} students
+                <a href="{{ url_for('analytics.elpac_dashboard') }}" style="margin-left:8px;font-size:12px;">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="grid-2" style="gap:16px;">
+    <div class="card">
+        <div class="card-header">Overall Level Distribution</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-overall"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Domain Weakness (count at each level)</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-domains"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Reclassification Pipeline (current ELs)</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-pipeline"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">EL Status Breakdown</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-status"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Year-over-Year Growth</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-yoy"></canvas></div></div>
+    </div>
+    <div class="card">
+        <div class="card-header">Years in US Schools (EL students)</div>
+        <div class="card-body"><div style="position:relative;height:240px;"><canvas id="chart-years"></canvas></div></div>
+    </div>
+</div>
+
+<!-- Reclassification Candidates -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Reclassification Candidates &mdash; Students at Overall Level 4 ({{ reclass_candidates|length }})</span>
+        <span style="font-size:12px;color:var(--gray);">Not yet RFEP. New-this-year highlighted.</span>
+    </div>
+    <div class="card-body" style="overflow-x:auto;">
+        {% if reclass_candidates %}
+        <table style="width:100%;font-size:13px;">
+            <thead>
+                <tr style="background:var(--bg);">
+                    <th style="text-align:left;padding:6px 8px;">Name</th>
+                    <th style="text-align:left;padding:6px 8px;">Grade</th>
+                    <th style="text-align:left;padding:6px 8px;">EL Status</th>
+                    <th style="text-align:left;padding:6px 8px;">Latest Test</th>
+                    <th style="text-align:center;padding:6px 8px;">Prior PL</th>
+                    <th style="text-align:center;padding:6px 8px;">Current PL</th>
+                    <th style="text-align:center;padding:6px 8px;">ELPI Level</th>
+                    <th style="text-align:left;padding:6px 8px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in reclass_candidates %}
+                {% set s = r.s %}
+                <tr style="border-top:1px solid #e5e7eb;cursor:pointer;{% if r.is_new_at_4 %}background:#ecfdf5;{% endif %}"
+                    onclick="window.location='{{ url_for('caseload.view_student', id=s.id) }}'">
+                    <td style="padding:6px 8px;font-weight:{% if r.is_new_at_4 %}600{% else %}400{% endif %};">{{ s.display_name }}</td>
+                    <td style="padding:6px 8px;">{{ s.grade_level or '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.el_display }}</td>
+                    <td style="padding:6px 8px;">{{ r.current.test_date.strftime('%m/%d/%Y') if r.current.test_date else '—' }}</td>
+                    <td style="padding:6px 8px;text-align:center;color:#6b7280;">{{ r.prior.overall_level if r.prior else '—' }}</td>
+                    <td style="padding:6px 8px;text-align:center;"><strong style="color:#16a34a;">4</strong></td>
+                    <td style="padding:6px 8px;text-align:center;">{{ r.elpi_now or '4' }}</td>
+                    <td style="padding:6px 8px;">
+                        {% if r.is_new_at_4 %}
+                        <span class="badge" style="background:#dcfce7;color:#166534;">NEWLY AT 4 &mdash; push reclass</span>
+                        {% else %}
+                        <span class="badge" style="background:#fef3c7;color:#92400e;">Stalled at 4 &mdash; check criteria</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="padding:12px;color:var(--gray);margin:0;">No students currently at Overall Level 4. Reclassification candidates will appear here once they hit PL 4.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ELPI Status Breakdown -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-top:16px;">
+    <div class="card">
+        <div class="card-header">
+            ELPI Status &mdash; Simplified (Overall PL 1-4)
+        </div>
+        <div class="card-body">
+            <div style="font-size:12px;color:var(--gray);margin-bottom:8px;">
+                Compares current vs prior Summative ELPAC. PL-only — no sublevels.
+            </div>
+            <div style="position:relative;height:240px;"><canvas id="chart-elpi-simple"></canvas></div>
+            <table style="width:100%;font-size:12px;margin-top:10px;">
+                {% for cat in simplified_categories %}
+                <tr style="border-top:1px solid #f3f4f6;">
+                    <td style="padding:4px 6px;">{{ cat }}</td>
+                    <td style="padding:4px 6px;text-align:right;font-weight:600;">{{ simplified_counts.get(cat, 0) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            ELPI Status &mdash; Full CDE Rubric (with sublevels)
+        </div>
+        <div class="card-body">
+            <div style="font-size:12px;color:var(--gray);margin-bottom:8px;">
+                Uses 1, 2L, 2H, 3L, 3H, 4L per CDE Dashboard methodology.
+                <span title="Scale-score cuts default to 2023-24 published ranges. Edit app/utils/elpac_cuts.py if your district uses a different year." style="cursor:help;border-bottom:1px dotted var(--gray);">Cut-source: 2023-24</span>
+            </div>
+            <div style="position:relative;height:240px;"><canvas id="chart-elpi-full"></canvas></div>
+            <table style="width:100%;font-size:12px;margin-top:10px;">
+                {% for cat in full_categories %}
+                <tr style="border-top:1px solid #f3f4f6;">
+                    <td style="padding:4px 6px;">{{ cat }}</td>
+                    <td style="padding:4px 6px;text-align:right;font-weight:600;">{{ full_counts.get(cat, 0) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            Big Movers &mdash; Changed 2+ Levels ({{ big_movers|length }})
+        </div>
+        <div class="card-body" style="padding:8px 0;">
+            <div style="font-size:12px;color:var(--gray);padding:0 14px 8px;">
+                &plusmn;2 or more in Overall PL or CDE ELPI rank, current vs prior Summative.
+                Green = gained levels, red = dropped levels.
+            </div>
+            {% if big_movers %}
+            <div style="max-height:520px;overflow-y:auto;">
+            <table style="width:100%;font-size:13px;">
+                <thead style="position:sticky;top:0;background:var(--bg);">
+                    <tr>
+                        <th style="text-align:left;padding:6px 10px;">Name</th>
+                        <th style="text-align:center;padding:6px 6px;" title="Simplified jump: Overall PL change">PL</th>
+                        <th style="text-align:center;padding:6px 6px;" title="CDE rubric jump: change across 1, 2L, 2H, 3L, 3H, 4L">CDE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in big_movers %}
+                    {% set s = r.s %}
+                    <tr style="border-top:1px solid #f3f4f6;cursor:pointer;"
+                        onclick="window.location='{{ url_for('caseload.view_student', id=s.id) }}'">
+                        <td style="padding:8px 10px;">
+                            {{ s.display_name }}
+                            <div style="font-size:11px;color:var(--gray);margin-top:2px;">
+                                {{ r.prior.overall_level if r.prior else '—' }} &rarr; {{ r.current.overall_level }}
+                                {% if r.elpi_prior and r.elpi_now %}
+                                ({{ r.elpi_prior }} &rarr; {{ r.elpi_now }})
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td style="padding:8px 6px;text-align:center;">
+                            {% if r.pl_jump is not none and r.pl_jump >= 2 %}
+                            <span class="badge" style="background:#dcfce7;color:#166534;">+{{ r.pl_jump }}</span>
+                            {% elif r.pl_jump is not none and r.pl_jump <= -2 %}
+                            <span class="badge" style="background:#fee2e2;color:#991b1b;">{{ r.pl_jump }}</span>
+                            {% else %}
+                            <span style="color:var(--gray);">—</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding:8px 6px;text-align:center;">
+                            {% if r.cde_jump is not none and r.cde_jump >= 2 %}
+                            <span class="badge" style="background:#dbeafe;color:#1e3a8a;">+{{ r.cde_jump }}</span>
+                            {% elif r.cde_jump is not none and r.cde_jump <= -2 %}
+                            <span class="badge" style="background:#fee2e2;color:#991b1b;">{{ r.cde_jump }}</span>
+                            {% else %}
+                            <span style="color:var(--gray);">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <p style="padding:14px;color:var(--gray);margin:0;">No students moved 2+ levels in either direction. One-level changes appear in the Progressed / Decreased counts at left.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Detail table -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Student Detail ({{ filtered_count }})</span>
+        <a href="{{ url_for('reports.elpac_cohorts') }}" class="btn btn-sm btn-outline">Cohort Reports &rarr;</a>
+    </div>
+    <div class="card-body" style="overflow-x:auto;">
+        <table style="width:100%;font-size:13px;">
+            <thead>
+                <tr style="background:var(--bg);">
+                    <th style="text-align:left;padding:6px 8px;">Name</th>
+                    <th style="text-align:left;padding:6px 8px;">Grade</th>
+                    <th style="text-align:left;padding:6px 8px;">Cohort</th>
+                    <th style="text-align:left;padding:6px 8px;">EL</th>
+                    <th style="text-align:left;padding:6px 8px;">Enrolled US</th>
+                    <th style="text-align:left;padding:6px 8px;">Yrs in US</th>
+                    <th style="text-align:left;padding:6px 8px;">Last Test</th>
+                    <th style="text-align:center;padding:6px 8px;">Overall</th>
+                    <th style="text-align:center;padding:6px 8px;">L</th>
+                    <th style="text-align:center;padding:6px 8px;">S</th>
+                    <th style="text-align:center;padding:6px 8px;">R</th>
+                    <th style="text-align:center;padding:6px 8px;">W</th>
+                    <th style="text-align:center;padding:6px 8px;">Growth</th>
+                    <th style="text-align:left;padding:6px 8px;">ELPI</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in table_rows %}
+                {% set s = row.s %}
+                {% set latest = row.latest %}
+                <tr style="border-top:1px solid #e5e7eb;cursor:pointer;"
+                    onclick="window.location='{{ url_for('caseload.view_student', id=s.id) }}'">
+                    <td style="padding:6px 8px;">{{ s.display_name }}</td>
+                    <td style="padding:6px 8px;">{{ s.grade_level or '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.graduation_year or '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.el_display }}</td>
+                    <td style="padding:6px 8px;">{{ s.us_school_entry_date.strftime('%m/%Y') if s.us_school_entry_date else '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.years_in_us_schools if s.years_in_us_schools is not none else '—' }}</td>
+                    <td style="padding:6px 8px;">{{ latest.test_date.strftime('%m/%d/%Y') if latest and latest.test_date else '—' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">
+                        {% if latest and latest.overall_level %}
+                        <strong style="color:{% if latest.overall_level == 4 %}#16a34a{% elif latest.overall_level == 3 %}#2563eb{% elif latest.overall_level == 2 %}#d97706{% else %}#dc2626{% endif %};">{{ latest.overall_level }}</strong>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.listening_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.speaking_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.reading_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">{{ latest.writing_level if latest else '' }}</td>
+                    <td style="padding:6px 8px;text-align:center;">
+                        {% if row.growth is not none %}
+                            <span style="color:{% if row.growth > 0 %}#16a34a{% elif row.growth < 0 %}#dc2626{% else %}var(--gray){% endif %};">
+                                {{ '+' if row.growth > 0 else '' }}{{ row.growth }}
+                            </span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="padding:6px 8px;font-size:11px;">
+                        {% if row.elpi and row.elpi.full_status not in ('No current score', 'No prior score') %}
+                            {{ row.elpi.full_status }}
+                        {% elif row.elpi %}
+                            <span style="color:var(--gray);">{{ row.elpi.full_status }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not table_rows %}
+                <tr><td colspan="14" style="padding:20px;text-align:center;color:var(--gray);">No students match the current filters.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script>
+(function() {
+    var COLORS = {
+        L1: '#dc2626', L2: '#d97706', L3: '#2563eb', L4: '#16a34a',
+        Listening: '#16a34a', Speaking: '#d97706', Reading: '#9333ea', Writing: '#dc2626',
+        Newcomer: '#dc2626', LTEL: '#d97706', RFEP: '#16a34a', EO: '#94a3b8',
+    };
+
+    // 1. Overall Level Distribution
+    var overall = {{ overall_dist|tojson }};
+    new Chart(document.getElementById('chart-overall'), {
+        type: 'bar',
+        data: {
+            labels: ['Level 1', 'Level 2', 'Level 3', 'Level 4'],
+            datasets: [{
+                data: [overall['1']||0, overall['2']||0, overall['3']||0, overall['4']||0],
+                backgroundColor: [COLORS.L1, COLORS.L2, COLORS.L3, COLORS.L4],
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{display:false}},
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 2. Domain Weakness — grouped bar
+    var domains = {{ domain_dist|tojson }};
+    new Chart(document.getElementById('chart-domains'), {
+        type: 'bar',
+        data: {
+            labels: ['Listening', 'Speaking', 'Reading', 'Writing'],
+            datasets: [1,2,3].map(function(lvl) {
+                return {
+                    label: 'Level ' + lvl,
+                    data: ['Listening','Speaking','Reading','Writing'].map(function(d) {
+                        return (domains[d] && domains[d][lvl]) || 0;
+                    }),
+                    backgroundColor: COLORS['L'+lvl],
+                };
+            })
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 3. Reclassification Pipeline
+    var pipeline = {{ pipeline|tojson }};
+    new Chart(document.getElementById('chart-pipeline'), {
+        type: 'bar',
+        data: {
+            labels: ['Level 1', 'Level 2', 'Level 3', 'Level 4 (RFEP-eligible)'],
+            datasets: [{
+                data: [pipeline['1']||0, pipeline['2']||0, pipeline['3']||0, pipeline['4']||0],
+                backgroundColor: [COLORS.L1, COLORS.L2, COLORS.L3, COLORS.L4],
+            }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{display:false}},
+            scales:{x:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 4. EL Status Breakdown
+    var status = {{ el_status_dist|tojson }};
+    var statusLabels = Object.keys(status);
+    new Chart(document.getElementById('chart-status'), {
+        type: 'doughnut',
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                data: statusLabels.map(function(k){return status[k];}),
+                backgroundColor: statusLabels.map(function(k){return COLORS[k] || '#94a3b8';}),
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // 5. Year-over-Year Growth
+    var yoy = {{ yoy|tojson }};
+    var years = Object.keys(yoy).sort();
+    new Chart(document.getElementById('chart-yoy'), {
+        type: 'line',
+        data: {
+            labels: years,
+            datasets: [1,2,3,4].map(function(lvl) {
+                return {
+                    label: 'Level ' + lvl,
+                    data: years.map(function(y){ return (yoy[y] && yoy[y][lvl]) || 0; }),
+                    borderColor: COLORS['L'+lvl],
+                    backgroundColor: COLORS['L'+lvl] + '22',
+                    tension: 0.2,
+                };
+            })
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 6. Years in US Schools
+    var ydist = {{ years_dist|tojson }};
+    var yearLabels = {{ years_buckets|map(attribute=1)|list|tojson }};
+    var yearKeys = {{ years_buckets|map(attribute=0)|list|tojson }};
+    new Chart(document.getElementById('chart-years'), {
+        type: 'bar',
+        data: {
+            labels: yearLabels.concat(['Unknown']),
+            datasets: [{
+                data: yearKeys.map(function(k){return ydist[k]||0;}).concat([ydist['unknown']||0]),
+                backgroundColor: '#2563eb',
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{display:false}},
+            scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 7. ELPI Simplified
+    var elpiSimple = {{ simplified_counts|tojson }};
+    var simpleCats = {{ simplified_categories|tojson }};
+    var simpleColors = ['#dc2626','#d97706','#eab308','#2563eb','#16a34a','#7c3aed'];
+    new Chart(document.getElementById('chart-elpi-simple'), {
+        type: 'doughnut',
+        data: {
+            labels: simpleCats,
+            datasets: [{
+                data: simpleCats.map(function(c){return elpiSimple[c]||0;}),
+                backgroundColor: simpleColors,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+    });
+
+    // 8. ELPI Full Rubric
+    var elpiFull = {{ full_counts|tojson }};
+    var fullCats = {{ full_categories|tojson }};
+    var fullColors = ['#dc2626','#d97706','#eab308','#2563eb','#16a34a','#7c3aed'];
+    new Chart(document.getElementById('chart-elpi-full'), {
+        type: 'doughnut',
+        data: {
+            labels: fullCats,
+            datasets: [{
+                data: fullCats.map(function(c){return elpiFull[c]||0;}),
+                backgroundColor: fullColors,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+    });
+
+})();
+</script>
+
+{% endblock %}

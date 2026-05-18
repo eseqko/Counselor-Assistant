@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import login_required, current_user
 from app import db
 from app.models.note import Note
@@ -66,13 +66,17 @@ def index():
     if date_to:
         query = query.filter(Note.session_date <= parse_date(date_to))
 
-    notes = query.order_by(Note.session_date.desc(), Note.created_at.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(
+        Note.session_date.desc(), Note.created_at.desc()
+    ).paginate(page=max(1, page), per_page=50, error_out=False)
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
 
     return render_template('notes/index.html',
-        notes=notes, search=search, note_type=note_type,
+        notes=pagination.items, pagination=pagination,
+        search=search, note_type=note_type,
         student_id=student_id, students=students,
         note_types=Note.NOTE_TYPES)
 
@@ -130,6 +134,8 @@ def add_note():
 @login_required
 def view_note(id):
     note = Note.query.get_or_404(id)
+    if note.author_id != current_user.id:
+        abort(403)
     log_action('view', 'note', note.id)
     return render_template('notes/view.html', note=note,
         note_types=Note.NOTE_TYPES)
@@ -139,6 +145,8 @@ def view_note(id):
 @login_required
 def edit_note(id):
     note = Note.query.get_or_404(id)
+    if note.author_id != current_user.id:
+        abort(403)
 
     if request.method == 'POST':
         note.note_type = request.form['note_type']
@@ -188,6 +196,8 @@ def edit_note(id):
 @login_required
 def delete_note(id):
     note = Note.query.get_or_404(id)
+    if note.author_id != current_user.id:
+        abort(403)
     log_action('delete', 'note', note.id)
     db.session.delete(note)
     db.session.commit()
@@ -204,13 +214,19 @@ def batch_delete():
         flash('No notes selected.', 'warning')
         return redirect(url_for('notes.index'))
 
-    count = 0
-    for nid in note_ids:
-        note = Note.query.get(int(nid))
-        if note and note.author_id == current_user.id:
-            db.session.delete(note)
-            count += 1
+    try:
+        ids = [int(nid) for nid in note_ids]
+    except (ValueError, TypeError):
+        flash('Invalid selection.', 'danger')
+        return redirect(url_for('notes.index'))
 
+    notes = Note.query.filter(
+        Note.id.in_(ids),
+        Note.author_id == current_user.id,
+    ).all()
+    count = len(notes)
+    for note in notes:
+        db.session.delete(note)
     db.session.commit()
     log_action('delete', 'note', details=f'Batch deleted {count} notes')
     flash(f'Deleted {count} notes.', 'warning')

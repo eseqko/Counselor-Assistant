@@ -8,6 +8,10 @@ from app.models.student import Student, Tag
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.routes.graduation import (
+    STATE_MIN_REQUIREMENTS, STATE_MIN_TOTAL, TOTAL_REQUIRED, _risk_level,
+)
+from app.utils.cte_status import compute_cte_status
 try:
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
@@ -52,11 +56,15 @@ def index():
     if el_filter:
         query = query.filter_by(el_status=el_filter)
 
-    students = query.order_by(Student.last_name, Student.first_name).all()
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(
+        Student.last_name, Student.first_name
+    ).paginate(page=max(1, page), per_page=50, error_out=False)
     tags = Tag.query.order_by(Tag.name).all()
 
     return render_template('caseload/index.html',
-        students=students, search=search, grade=grade,
+        students=pagination.items, pagination=pagination,
+        search=search, grade=grade,
         status=status, tag_filter=tag_filter, el_filter=el_filter, tags=tags)
 
 
@@ -98,12 +106,12 @@ def add_student():
             ab_transfer_date=parse_date(request.form.get('ab_transfer_date')),
             ab_exemption_date=parse_date(request.form.get('ab_exemption_date')),
         )
-        # Handle tags
-        tag_names = request.form.get('tags', '').split(',')
-        for name in tag_names:
-            name = name.strip()
-            if name:
-                tag = Tag.query.filter_by(name=name).first()
+        # Handle tags — bulk-load existing names in one query
+        wanted = {n.strip() for n in request.form.get('tags', '').split(',') if n.strip()}
+        if wanted:
+            existing = {t.name: t for t in Tag.query.filter(Tag.name.in_(wanted)).all()}
+            for name in wanted:
+                tag = existing.get(name)
                 if not tag:
                     tag = Tag(name=name)
                     db.session.add(tag)
@@ -130,16 +138,40 @@ def view_student(id):
     notes = student.notes.limit(10).all()
     latest_transcript = student.transcript_records.first()
 
+    uses_state_min = student.uses_state_minimum
+    total_required = STATE_MIN_TOTAL if uses_state_min else TOTAL_REQUIRED
+
     # Pre-parse JSON fields for template
     transcript_credits = None
     transcript_ag = None
     credits_total_shortfall = 0
     credits_all_met = True
+    state_min_risk = None
     if latest_transcript:
         if latest_transcript.credits_json:
             try:
                 transcript_credits = json.loads(latest_transcript.credits_json)
-                # Sum per-subject shortfalls (completed < required)
+                if uses_state_min:
+                    # AB exemption accepted: filter to CA state minimum subjects only
+                    # and override per-subject required amounts (Ed Code 51225.3).
+                    adapted = {}
+                    for subj, req in STATE_MIN_REQUIREMENTS.items():
+                        data = transcript_credits.get(subj, {}) or {}
+                        comp = data.get('completed', 0) or 0
+                        wip = data.get('wip', 0) or 0
+                        adapted[subj] = {
+                            'required': req,
+                            'completed': comp,
+                            'wip': wip,
+                            'need': max(0, req - comp),
+                        }
+                    transcript_credits = adapted
+                    # Recompute risk vs state min (a student "critical" at 225 may be
+                    # "on-track" at 130 with the same credits earned).
+                    state_min_risk = _risk_level(
+                        latest_transcript.total_completed or 0,
+                        STATE_MIN_TOTAL, student.grade_level)
+                # Sum per-subject shortfalls using whichever set is active
                 for data in transcript_credits.values():
                     req = data.get('required', 0) or 0
                     comp = data.get('completed', 0) or 0
@@ -161,14 +193,23 @@ def view_student(id):
         except (json.JSONDecodeError, TypeError):
             pass
 
+    cte_status = compute_cte_status(
+        cte_details,
+        latest_transcript.cte_completed if latest_transcript else 0,
+    )
+
     return render_template('caseload/view.html',
         student=student, notes=notes,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,
         cte_details=cte_details,
+        cte_status=cte_status,
         credits_total_shortfall=credits_total_shortfall,
         credits_all_met=credits_all_met,
+        total_required=total_required,
+        uses_state_min=uses_state_min,
+        state_min_risk=state_min_risk,
         exit_reasons=Student.EXIT_REASONS)
 
 
@@ -707,7 +748,8 @@ def transcript_save():
 @caseload_bp.route('/<int:id>/cte-courses', methods=['POST'])
 @login_required
 def save_cte_courses(id):
-    student = Student.query.filter_by(id=id, counselor_id=current_user.id).first_or_404()
+    student = Student.query.filter_by(
+        id=id, assigned_counselor_id=current_user.id).first_or_404()
     latest = student.transcript_records.first()
     if not latest:
         flash('No transcript record found. Import a transcript first.', 'warning')
@@ -730,7 +772,14 @@ def save_cte_courses(id):
             })
         i += 1
 
-    latest.cte_courses_json = json.dumps({'pathway': pathway, 'courses': courses})
+    parsed = {'pathway': pathway, 'courses': courses}
+    latest.cte_courses_json = json.dumps(parsed)
+    # Recompute legacy fields so caseload-wide reports stay in sync.
+    # cte_level shows the friendly district label; cte_is_completer follows
+    # the strict Perkins V definition (what CALPADS would count).
+    status = compute_cte_status(parsed, latest.cte_completed or 0)
+    latest.cte_level = status['district_status']
+    latest.cte_is_completer = (status['perkins_status'] == 'Completer')
     db.session.commit()
     flash('CTE pathway details saved.', 'success')
     return redirect(url_for('caseload.view_student', id=id))

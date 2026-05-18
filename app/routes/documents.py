@@ -1,6 +1,6 @@
 import os
 from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, current_app, abort
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
@@ -101,6 +101,8 @@ def add():
 @login_required
 def download(id):
     doc = StudentDocument.query.get_or_404(id)
+    if doc.counselor_id != current_user.id:
+        abort(403)
     log_action('download', 'student_document', doc.id)
     return send_file(os.path.join(_docs_dir(), doc.filename),
                      download_name=doc.original_filename or doc.filename,
@@ -111,6 +113,8 @@ def download(id):
 @login_required
 def delete(id):
     doc = StudentDocument.query.get_or_404(id)
+    if doc.counselor_id != current_user.id:
+        abort(403)
     log_action('delete', 'student_document', doc.id)
     try:
         os.remove(os.path.join(_docs_dir(), doc.filename))

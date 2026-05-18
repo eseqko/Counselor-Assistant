@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_partials/_pagination.html" import render_pagination %}
 {% block title %}Referrals{% endblock %}
 {% block page_title %}Referrals{% endblock %}
 {% block content %}
@@ -125,6 +126,7 @@
             </tbody>
         </table>
     </div>
+    {{ render_pagination(pagination, label='referrals') }}
 </div>
 
 {% endblock %}
