@@ -12,6 +12,9 @@ from app.models.service_record import ServiceRecord
 from app.models.activity import Activity
 from app.models.iep504 import IEP504Record
 from app.models.elpac import ELPACScore
+from app.utils.elpi import (
+    compute_elpi, SIMPLIFIED_CATEGORIES, FULL_CATEGORIES,
+)
 from sqlalchemy import func
 
 analytics_bp = Blueprint('analytics', __name__)
@@ -189,6 +192,73 @@ def elpac_dashboard():
     grade_options = sorted({s.grade_level for s in students if s.grade_level})
     cohort_options = sorted({s.graduation_year for s in students if s.graduation_year})
 
+    # ── ELPI status + Reclassification Candidates ───────────────────
+    # For each filtered student with a current Summative score, compute
+    # both simplified and full ELPI status by comparing to their prior year.
+    simplified_counts = Counter()
+    full_counts = Counter()
+    reclass_candidates = []          # students at PL 4 right now (not yet RFEP)
+    elpi_per_student = {}            # student_id -> elpi dict
+
+    # YoY 4-reachers: by school year, count first-time-4 vs already-at-4 vs reclassified-this-year.
+    # Keyed by school_year string -> Counter({'first_time_4', 'returned_to_4', 'reclassified'}).
+    fours_yoy = defaultdict(lambda: Counter())
+
+    for s in filtered:
+        summatives = [r for r in s.elpac_scores if r.test_purpose == 'Summative']
+        # `elpac_scores` relationship is ordered by test_date DESC.
+        if not summatives:
+            continue
+        current = summatives[0]
+        prior = summatives[1] if len(summatives) > 1 else None
+
+        elpi = compute_elpi(current, prior, s.el_status)
+        elpi_per_student[s.id] = elpi
+        if elpi['simplified_status'] not in ('No current score', 'No prior score'):
+            simplified_counts[elpi['simplified_status']] += 1
+            full_counts[elpi['full_status']] += 1
+
+        # Reclassification candidate: scored 4 on the most recent test and
+        # is NOT yet RFEP. Counselor needs to push reclass paperwork.
+        if current.overall_level == 4 and s.el_status != 'RFEP':
+            reclass_candidates.append({
+                's': s,
+                'current': current,
+                'prior': prior,
+                'is_new_at_4': elpi['is_new_at_4'],
+                'elpi_now': elpi['elpi_now'],
+                'elpi_prior': elpi['elpi_prior'],
+            })
+
+        # YoY 4-reachers: walk every Summative score chronologically and
+        # tag the year when each student first hit 4.
+        chrono = sorted(summatives, key=lambda r: r.test_date or date.min)
+        prev_at_4 = False
+        for sc in chrono:
+            if sc.overall_level == 4 and sc.school_year:
+                if not prev_at_4:
+                    fours_yoy[sc.school_year]['first_time_4'] += 1
+                else:
+                    fours_yoy[sc.school_year]['returned_to_4'] += 1
+                prev_at_4 = True
+            else:
+                prev_at_4 = False
+        # If the student's current status is RFEP and their latest test was at 4,
+        # count them as reclassified-in-that-year (best-effort — we don't store
+        # the actual reclassification date).
+        if s.el_status == 'RFEP' and current.overall_level == 4 and current.school_year:
+            fours_yoy[current.school_year]['reclassified'] += 1
+
+    # Sort candidates: newly-at-4 first, then by last name
+    reclass_candidates.sort(key=lambda r: (
+        0 if r['is_new_at_4'] else 1,
+        (r['s'].last_name or '').lower(),
+    ))
+
+    # Attach ELPI to the existing student detail table
+    for row in table_rows:
+        row['elpi'] = elpi_per_student.get(row['s'].id)
+
     return render_template(
         'analytics/elpac.html',
         students=students,
@@ -208,6 +278,12 @@ def elpac_dashboard():
         years_dist=dict(years_dist),
         years_buckets=YEARS_BUCKETS,
         table_rows=table_rows,
+        reclass_candidates=reclass_candidates,
+        simplified_counts=dict(simplified_counts),
+        full_counts=dict(full_counts),
+        simplified_categories=SIMPLIFIED_CATEGORIES,
+        full_categories=FULL_CATEGORIES,
+        fours_yoy={yr: dict(c) for yr, c in fours_yoy.items()},
     )
 
 

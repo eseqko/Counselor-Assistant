@@ -81,6 +81,110 @@
     </div>
 </div>
 
+<!-- Reclassification Candidates -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Reclassification Candidates &mdash; Students at Overall Level 4 ({{ reclass_candidates|length }})</span>
+        <span style="font-size:12px;color:var(--gray);">Not yet RFEP. New-this-year highlighted.</span>
+    </div>
+    <div class="card-body" style="overflow-x:auto;">
+        {% if reclass_candidates %}
+        <table style="width:100%;font-size:13px;">
+            <thead>
+                <tr style="background:var(--bg);">
+                    <th style="text-align:left;padding:6px 8px;">Name</th>
+                    <th style="text-align:left;padding:6px 8px;">Grade</th>
+                    <th style="text-align:left;padding:6px 8px;">EL Status</th>
+                    <th style="text-align:left;padding:6px 8px;">Latest Test</th>
+                    <th style="text-align:center;padding:6px 8px;">Prior PL</th>
+                    <th style="text-align:center;padding:6px 8px;">Current PL</th>
+                    <th style="text-align:center;padding:6px 8px;">ELPI Level</th>
+                    <th style="text-align:left;padding:6px 8px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in reclass_candidates %}
+                {% set s = r.s %}
+                <tr style="border-top:1px solid #e5e7eb;cursor:pointer;{% if r.is_new_at_4 %}background:#ecfdf5;{% endif %}"
+                    onclick="window.location='{{ url_for('caseload.view_student', id=s.id) }}'">
+                    <td style="padding:6px 8px;font-weight:{% if r.is_new_at_4 %}600{% else %}400{% endif %};">{{ s.display_name }}</td>
+                    <td style="padding:6px 8px;">{{ s.grade_level or '—' }}</td>
+                    <td style="padding:6px 8px;">{{ s.el_display }}</td>
+                    <td style="padding:6px 8px;">{{ r.current.test_date.strftime('%m/%d/%Y') if r.current.test_date else '—' }}</td>
+                    <td style="padding:6px 8px;text-align:center;color:#6b7280;">{{ r.prior.overall_level if r.prior else '—' }}</td>
+                    <td style="padding:6px 8px;text-align:center;"><strong style="color:#16a34a;">4</strong></td>
+                    <td style="padding:6px 8px;text-align:center;">{{ r.elpi_now or '4' }}</td>
+                    <td style="padding:6px 8px;">
+                        {% if r.is_new_at_4 %}
+                        <span class="badge" style="background:#dcfce7;color:#166534;">NEWLY AT 4 &mdash; push reclass</span>
+                        {% else %}
+                        <span class="badge" style="background:#fef3c7;color:#92400e;">Stalled at 4 &mdash; check criteria</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="padding:12px;color:var(--gray);margin:0;">No students currently at Overall Level 4. Reclassification candidates will appear here once they hit PL 4.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ELPI Status Breakdown -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-top:16px;">
+    <div class="card">
+        <div class="card-header">
+            ELPI Status &mdash; Simplified (Overall PL 1-4)
+        </div>
+        <div class="card-body">
+            <div style="font-size:12px;color:var(--gray);margin-bottom:8px;">
+                Compares current vs prior Summative ELPAC. PL-only — no sublevels.
+            </div>
+            <div style="position:relative;height:240px;"><canvas id="chart-elpi-simple"></canvas></div>
+            <table style="width:100%;font-size:12px;margin-top:10px;">
+                {% for cat in simplified_categories %}
+                <tr style="border-top:1px solid #f3f4f6;">
+                    <td style="padding:4px 6px;">{{ cat }}</td>
+                    <td style="padding:4px 6px;text-align:right;font-weight:600;">{{ simplified_counts.get(cat, 0) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            ELPI Status &mdash; Full CDE Rubric (with sublevels)
+        </div>
+        <div class="card-body">
+            <div style="font-size:12px;color:var(--gray);margin-bottom:8px;">
+                Uses 1, 2L, 2H, 3L, 3H, 4L per CDE Dashboard methodology.
+                <span title="Scale-score cuts default to 2023-24 published ranges. Edit app/utils/elpac_cuts.py if your district uses a different year." style="cursor:help;border-bottom:1px dotted var(--gray);">Cut-source: 2023-24</span>
+            </div>
+            <div style="position:relative;height:240px;"><canvas id="chart-elpi-full"></canvas></div>
+            <table style="width:100%;font-size:12px;margin-top:10px;">
+                {% for cat in full_categories %}
+                <tr style="border-top:1px solid #f3f4f6;">
+                    <td style="padding:4px 6px;">{{ cat }}</td>
+                    <td style="padding:4px 6px;text-align:right;font-weight:600;">{{ full_counts.get(cat, 0) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            Year-over-Year &mdash; Students Reaching Level 4
+        </div>
+        <div class="card-body">
+            <div style="font-size:12px;color:var(--gray);margin-bottom:8px;">
+                First-time-at-4 vs returned-to-4 vs reclassified this year.
+            </div>
+            <div style="position:relative;height:240px;"><canvas id="chart-fours-yoy"></canvas></div>
+        </div>
+    </div>
+</div>
+
 <!-- Detail table -->
 <div class="card" style="margin-top:16px;">
     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
@@ -104,6 +208,7 @@
                     <th style="text-align:center;padding:6px 8px;">R</th>
                     <th style="text-align:center;padding:6px 8px;">W</th>
                     <th style="text-align:center;padding:6px 8px;">Growth</th>
+                    <th style="text-align:left;padding:6px 8px;">ELPI</th>
                 </tr>
             </thead>
             <tbody>
@@ -135,10 +240,17 @@
                             </span>
                         {% else %}—{% endif %}
                     </td>
+                    <td style="padding:6px 8px;font-size:11px;">
+                        {% if row.elpi and row.elpi.full_status not in ('No current score', 'No prior score') %}
+                            {{ row.elpi.full_status }}
+                        {% elif row.elpi %}
+                            <span style="color:var(--gray);">{{ row.elpi.full_status }}</span>
+                        {% else %}—{% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
                 {% if not table_rows %}
-                <tr><td colspan="13" style="padding:20px;text-align:center;color:var(--gray);">No students match the current filters.</td></tr>
+                <tr><td colspan="14" style="padding:20px;text-align:center;color:var(--gray);">No students match the current filters.</td></tr>
                 {% endif %}
             </tbody>
         </table>
@@ -258,6 +370,62 @@
         options: { responsive: true, maintainAspectRatio: false,
             plugins:{legend:{display:false}},
             scales:{y:{beginAtZero:true,ticks:{precision:0}}}}
+    });
+
+    // 7. ELPI Simplified
+    var elpiSimple = {{ simplified_counts|tojson }};
+    var simpleCats = {{ simplified_categories|tojson }};
+    var simpleColors = ['#dc2626','#d97706','#eab308','#2563eb','#16a34a','#7c3aed'];
+    new Chart(document.getElementById('chart-elpi-simple'), {
+        type: 'doughnut',
+        data: {
+            labels: simpleCats,
+            datasets: [{
+                data: simpleCats.map(function(c){return elpiSimple[c]||0;}),
+                backgroundColor: simpleColors,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+    });
+
+    // 8. ELPI Full Rubric
+    var elpiFull = {{ full_counts|tojson }};
+    var fullCats = {{ full_categories|tojson }};
+    var fullColors = ['#dc2626','#d97706','#eab308','#2563eb','#16a34a','#7c3aed'];
+    new Chart(document.getElementById('chart-elpi-full'), {
+        type: 'doughnut',
+        data: {
+            labels: fullCats,
+            datasets: [{
+                data: fullCats.map(function(c){return elpiFull[c]||0;}),
+                backgroundColor: fullColors,
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+    });
+
+    // 9. YoY 4-Reachers (stacked bar)
+    var foursYoy = {{ fours_yoy|tojson }};
+    var foursYears = Object.keys(foursYoy).sort();
+    new Chart(document.getElementById('chart-fours-yoy'), {
+        type: 'bar',
+        data: {
+            labels: foursYears,
+            datasets: [
+                { label: 'First time at 4', backgroundColor: '#16a34a',
+                  data: foursYears.map(function(y){return (foursYoy[y]||{}).first_time_4||0;}) },
+                { label: 'Returned to 4', backgroundColor: '#2563eb',
+                  data: foursYears.map(function(y){return (foursYoy[y]||{}).returned_to_4||0;}) },
+                { label: 'Reclassified', backgroundColor: '#7c3aed',
+                  data: foursYears.map(function(y){return (foursYoy[y]||{}).reclassified||0;}) },
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+            scales: { x:{stacked:true}, y:{stacked:true,beginAtZero:true,ticks:{precision:0}} },
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+        }
     });
 })();
 </script>
