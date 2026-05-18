@@ -19,6 +19,13 @@ _ELPI_ORDER = ['1', '2L', '2H', '3L', '3H', '4L', 'R']
 _ELPI_RANK = {lvl: i for i, lvl in enumerate(_ELPI_ORDER)}
 
 
+def elpi_rank(level_str):
+    """Return the integer rank of an ELPI level string ('1', '2L', ... 'R'),
+    or None if unrecognized. Used for measuring level jumps.
+    """
+    return _ELPI_RANK.get(level_str)
+
+
 def _format_elpi_level(overall_level, sublevel):
     if overall_level is None:
         return None
