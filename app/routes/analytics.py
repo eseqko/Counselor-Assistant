@@ -13,7 +13,7 @@ from app.models.activity import Activity
 from app.models.iep504 import IEP504Record
 from app.models.elpac import ELPACScore
 from app.utils.elpi import (
-    compute_elpi, SIMPLIFIED_CATEGORIES, FULL_CATEGORIES,
+    compute_elpi, elpi_rank, SIMPLIFIED_CATEGORIES, FULL_CATEGORIES,
 )
 from sqlalchemy import func
 
@@ -199,10 +199,7 @@ def elpac_dashboard():
     full_counts = Counter()
     reclass_candidates = []          # students at PL 4 right now (not yet RFEP)
     elpi_per_student = {}            # student_id -> elpi dict
-
-    # YoY 4-reachers: by school year, count first-time-4 vs already-at-4 vs reclassified-this-year.
-    # Keyed by school_year string -> Counter({'first_time_4', 'returned_to_4', 'reclassified'}).
-    fours_yoy = defaultdict(lambda: Counter())
+    big_movers = []                  # students who jumped 2+ levels (simplified or CDE)
 
     for s in filtered:
         summatives = [r for r in s.elpac_scores if r.test_purpose == 'Summative']
@@ -230,28 +227,35 @@ def elpac_dashboard():
                 'elpi_prior': elpi['elpi_prior'],
             })
 
-        # YoY 4-reachers: walk every Summative score chronologically and
-        # tag the year when each student first hit 4.
-        chrono = sorted(summatives, key=lambda r: r.test_date or date.min)
-        prev_at_4 = False
-        for sc in chrono:
-            if sc.overall_level == 4 and sc.school_year:
-                if not prev_at_4:
-                    fours_yoy[sc.school_year]['first_time_4'] += 1
-                else:
-                    fours_yoy[sc.school_year]['returned_to_4'] += 1
-                prev_at_4 = True
-            else:
-                prev_at_4 = False
-        # If the student's current status is RFEP and their latest test was at 4,
-        # count them as reclassified-in-that-year (best-effort — we don't store
-        # the actual reclassification date).
-        if s.el_status == 'RFEP' and current.overall_level == 4 and current.school_year:
-            fours_yoy[current.school_year]['reclassified'] += 1
+        # Big movers: 2+ level jump in either simplified PL or CDE ELPI rank.
+        pl_jump = None
+        if elpi['pl_now'] is not None and elpi['pl_prior'] is not None:
+            pl_jump = elpi['pl_now'] - elpi['pl_prior']
+        cde_jump = None
+        rank_now = elpi_rank(elpi['elpi_now'])
+        rank_prior = elpi_rank(elpi['elpi_prior'])
+        if rank_now is not None and rank_prior is not None:
+            cde_jump = rank_now - rank_prior
+        if (pl_jump is not None and pl_jump >= 2) or (cde_jump is not None and cde_jump >= 2):
+            big_movers.append({
+                's': s,
+                'current': current,
+                'prior': prior,
+                'pl_jump': pl_jump,
+                'cde_jump': cde_jump,
+                'elpi_now': elpi['elpi_now'],
+                'elpi_prior': elpi['elpi_prior'],
+            })
 
     # Sort candidates: newly-at-4 first, then by last name
     reclass_candidates.sort(key=lambda r: (
         0 if r['is_new_at_4'] else 1,
+        (r['s'].last_name or '').lower(),
+    ))
+
+    # Sort big movers: largest jump first (max of pl/cde), then last name
+    big_movers.sort(key=lambda r: (
+        -max(r['pl_jump'] or 0, r['cde_jump'] or 0),
         (r['s'].last_name or '').lower(),
     ))
 
@@ -283,7 +287,7 @@ def elpac_dashboard():
         full_counts=dict(full_counts),
         simplified_categories=SIMPLIFIED_CATEGORIES,
         full_categories=FULL_CATEGORIES,
-        fours_yoy={yr: dict(c) for yr, c in fours_yoy.items()},
+        big_movers=big_movers,
     )
 
 
