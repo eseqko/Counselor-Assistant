@@ -227,7 +227,7 @@ def elpac_dashboard():
                 'elpi_prior': elpi['elpi_prior'],
             })
 
-        # Big movers: 2+ level jump in either simplified PL or CDE ELPI rank.
+        # Big movers: 2+ level change in either direction (simplified PL or CDE ELPI rank).
         pl_jump = None
         if elpi['pl_now'] is not None and elpi['pl_prior'] is not None:
             pl_jump = elpi['pl_now'] - elpi['pl_prior']
@@ -236,7 +236,7 @@ def elpac_dashboard():
         rank_prior = elpi_rank(elpi['elpi_prior'])
         if rank_now is not None and rank_prior is not None:
             cde_jump = rank_now - rank_prior
-        if (pl_jump is not None and pl_jump >= 2) or (cde_jump is not None and cde_jump >= 2):
+        if (pl_jump is not None and abs(pl_jump) >= 2) or (cde_jump is not None and abs(cde_jump) >= 2):
             big_movers.append({
                 's': s,
                 'current': current,
@@ -253,11 +253,13 @@ def elpac_dashboard():
         (r['s'].last_name or '').lower(),
     ))
 
-    # Sort big movers: largest jump first (max of pl/cde), then last name
-    big_movers.sort(key=lambda r: (
-        -max(r['pl_jump'] or 0, r['cde_jump'] or 0),
-        (r['s'].last_name or '').lower(),
-    ))
+    # Sort big movers: gainers first (biggest jump up), then droppers
+    # (biggest drop down). Within each group, sort by magnitude.
+    def _mover_sort(r):
+        biggest = max((r['pl_jump'] or 0), (r['cde_jump'] or 0), key=abs)
+        # Direction first (positive before negative), then magnitude descending
+        return (0 if biggest >= 0 else 1, -abs(biggest), (r['s'].last_name or '').lower())
+    big_movers.sort(key=_mover_sort)
 
     # Attach ELPI to the existing student detail table
     for row in table_rows:

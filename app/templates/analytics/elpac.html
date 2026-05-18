@@ -174,11 +174,12 @@
     </div>
     <div class="card">
         <div class="card-header">
-            Big Movers &mdash; Jumped 2+ Levels ({{ big_movers|length }})
+            Big Movers &mdash; Changed 2+ Levels ({{ big_movers|length }})
         </div>
         <div class="card-body" style="padding:8px 0;">
             <div style="font-size:12px;color:var(--gray);padding:0 14px 8px;">
-                Either +2 in Overall PL or +2 in CDE ELPI rank, current vs prior Summative.
+                &plusmn;2 or more in Overall PL or CDE ELPI rank, current vs prior Summative.
+                Green = gained levels, red = dropped levels.
             </div>
             {% if big_movers %}
             <div style="max-height:520px;overflow-y:auto;">
@@ -207,6 +208,8 @@
                         <td style="padding:8px 6px;text-align:center;">
                             {% if r.pl_jump is not none and r.pl_jump >= 2 %}
                             <span class="badge" style="background:#dcfce7;color:#166534;">+{{ r.pl_jump }}</span>
+                            {% elif r.pl_jump is not none and r.pl_jump <= -2 %}
+                            <span class="badge" style="background:#fee2e2;color:#991b1b;">{{ r.pl_jump }}</span>
                             {% else %}
                             <span style="color:var(--gray);">—</span>
                             {% endif %}
@@ -214,6 +217,8 @@
                         <td style="padding:8px 6px;text-align:center;">
                             {% if r.cde_jump is not none and r.cde_jump >= 2 %}
                             <span class="badge" style="background:#dbeafe;color:#1e3a8a;">+{{ r.cde_jump }}</span>
+                            {% elif r.cde_jump is not none and r.cde_jump <= -2 %}
+                            <span class="badge" style="background:#fee2e2;color:#991b1b;">{{ r.cde_jump }}</span>
                             {% else %}
                             <span style="color:var(--gray);">—</span>
                             {% endif %}
@@ -224,7 +229,7 @@
             </table>
             </div>
             {% else %}
-            <p style="padding:14px;color:var(--gray);margin:0;">No students jumped 2+ levels this cycle. Students who progress one level appear in the Progressed counts at left.</p>
+            <p style="padding:14px;color:var(--gray);margin:0;">No students moved 2+ levels in either direction. One-level changes appear in the Progressed / Decreased counts at left.</p>
             {% endif %}
         </div>
     </div>
