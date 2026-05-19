@@ -48,7 +48,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 | Module | Description |
 |--------|-------------|
 | **Academic Plan** | 4-year course planner with optional AI auto-fill |
-| **Graduation** | At-risk roster from transcript imports (credit shortfall, a-g status, CTE) |
+| **Graduation** | At-risk roster from transcript imports — credit shortfall, a-g status, CTE pathway tracking (District 2-course model + federal Perkins V status side-by-side) |
 | **College & Career** | Pathway, GPA, test scores, application tracking, FAFSA status |
 | **Course Catalog** | Department-organized courses with prerequisites, grad requirements, NCAA status |
 | **Post-Grad** | Outcome tracking (college, military, workforce, gap year) |
@@ -66,6 +66,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 | Module | Description |
 |--------|-------------|
 | **Analytics Dashboard** | Interactive charts: caseload demographics, academics, attendance, services, activities |
+| **ELPAC Analytics** | English Learner dashboard with Overall PL distribution, domain weakness, reclassification pipeline, **Reclassification Candidates** (students at PL 4 not yet RFEP, with newly-at-4 flagged), **ELPI Status** (both simplified PL-1-4 and full CDE rubric with L/H sublevels), and a **Big Movers** table of students who changed 2+ levels in either direction |
 | **Use-of-Time Report** | ASCA service-type breakdown |
 | **Student Services Report** | Per-student touch counts and topics |
 | **Activity Summary** | Time-on-task across categories |
@@ -82,7 +83,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 ### More
 | Module | Description |
 |--------|-------------|
-| **AI Tools Hub** | 17+ counselor-focused AI generators (crisis scripts, parent comms, college, documentation) — runs locally via Ollama |
+| **AI Tools Hub** | 14 counselor-focused AI generators (crisis scripts, parent comms, college, documentation) plus AI Course Recommendations on each student profile — all run locally via Ollama |
 | **Student Portal** | Public token-gated AI tools for students (no login, shareable link). Essay coaching, study planning, career exploration |
 | **Scheduling** | Public booking pages for parents/students, availability slots, conflict detection |
 | **Knowledge Base** | District documents indexed for local RAG against AI Tools |
@@ -93,6 +94,17 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 ---
 
 ## Getting Started
+
+### Try the Demo First
+
+Want to click around before committing? Run in demo mode and a fully-seeded caseload of 25 fake students (with notes, grades, ELPAC scores, transcripts, IEP/504 plans, calendar events, and goals) loads automatically — no setup wizard, no account creation. Hit "Reset Demo" any time to start over.
+
+```bash
+COUNSELOR_DEMO=1 python run.py        # Mac/Linux
+set COUNSELOR_DEMO=1 && python run.py  # Windows
+```
+
+Browser opens to a pre-authenticated counselor account. Edit, delete, break things on purpose — your real data isn't touched.
 
 ### Option 1: Standard Install (Recommended)
 
@@ -121,17 +133,30 @@ python run.py
 
 Open your browser to **http://127.0.0.1:5000** -- the setup wizard will guide you through initial configuration.
 
-> **Helper scripts:** `install.sh` (Mac/Linux) and `install.bat` (Windows) automate steps 2-3 if you'd rather not run them manually. `start.bat` and `backup.bat` / `restore.bat` are also included for day-to-day use on Windows.
+> **Helper scripts:** `install.sh` (Mac/Linux) and `install.bat` (Windows) automate steps 2-3 if you'd rather not run them manually. `start.bat`, `backup.bat`, and `restore.bat` are also included for day-to-day use on Windows.
 
-### Option 2: Portable USB Install (No Admin Rights Needed)
+### Option 2: USB-Distributable Demo Bundle (No Python Required on Target Machine)
 
-For school computers where you can't install software:
+For school computers that block Python installs, conference demos, or anyone who wants to drop the app on a flash drive and double-click. The bundle ships per-platform Python runtimes (Windows, Mac Apple Silicon, Linux x86_64) plus prebuilt wheels — no admin rights, no install, no internet on the target machine.
 
-1. **On your home computer**, install [WinPython](https://winpython.github.io/) (portable Python) to a USB drive
-2. Copy the `Counselor-Assistant` folder to the same USB drive (it must sit alongside the `python-3.x.x` folder)
-3. Double-click the bundled **`start.bat`** -- it auto-detects WinPython on the same drive, installs requirements, and launches the app
+```bash
+# On a build machine with internet access:
+python3 scripts/build_usb_bundle.py --output dist/usb-bundle --clean
+```
 
-> **Tip:** If `start.bat` doesn't find your Python folder, open it in a text editor and update the `python-3.x.x` path on the matching line.
+Copy the resulting `dist/usb-bundle/` onto an exFAT-formatted USB stick. End users see:
+
+```
+USB-stick/
+├── START_HERE_Windows.bat       ← double-click on Windows
+├── START_HERE_Mac.command       ← double-click on Mac
+├── START_HERE_Linux.sh          ← double-click on Linux
+├── README_FIRST.txt
+├── runtimes/{windows,macos,linux}/
+└── Counselor-Assistant/
+```
+
+The launcher sets `COUNSELOR_DEMO=1` and writes any test data to `~/CounselorAssistantDemo/` so the user can delete one folder to wipe everything. See `scripts/build_usb_bundle.py` for build options (`--skip-runtimes` for fast iteration on the launcher scripts and README without re-downloading Python tarballs).
 
 ### Option 3: iPhone access via Tailscale
 
@@ -179,13 +204,14 @@ Every step is skippable. You can change all settings later under **Settings**.
 | **Charts** | Chart.js 4.x (CDN) |
 | **Calendar** | FullCalendar 6.x (CDN) |
 | **Excel I/O** | openpyxl |
-| **PDF parsing** | PyPDF2 (transcript review) |
+| **PDF parsing** | PyPDF2 (transcript review, knowledge-base ingestion with encrypted-PDF tolerance) |
 | **Audio transcription** | faster-whisper (optional, runs locally) |
 | **Optional AI** | Ollama (local LLM via HTTP) |
 | **Optional Google APIs** | Calendar, Forms, Classroom (OAuth 2.0) |
 | **Optional networking** | Tailscale (auto-detected at startup) |
 | **Progressive Web App** | Manifest + service worker (installable on phones) |
 | **Themes** | Light, Dark, School (custom colors), Focus, Auto (system) + reduced-motion option |
+| **USB distribution** | python-build-standalone runtimes + prebuilt wheel cache, packaged by `scripts/build_usb_bundle.py` |
 
 ---
 
@@ -214,24 +240,31 @@ All data lives in the `data/` directory:
 
 ```
 Counselor-Assistant/
-├── run.py                  # Entry point (auto-detects Tailscale)
+├── run.py                  # Entry point (auto-detects Tailscale, COUNSELOR_DEMO mode)
 ├── config.py               # Configuration
-├── requirements.txt        # Python dependencies
+├── requirements.txt        # Full dependencies (including faster-whisper, Google APIs)
+├── requirements-demo.txt   # Slim subset for the USB bundle
 ├── install.sh / install.bat / start.bat / backup.bat / restore.bat
 ├── TAILSCALE_SETUP.md      # iPhone-via-Tailscale walkthrough
+├── scripts/
+│   ├── build_usb_bundle.py # Builds the double-clickable USB demo bundle
+│   └── seed_demo.py        # Re-runs the demo seed against a fresh database
 ├── app/
-│   ├── __init__.py         # App factory + auto-migration
+│   ├── __init__.py         # App factory + auto-migration + demo bootstrap
 │   ├── models/             # SQLAlchemy models (~30: students, notes, goals,
 │   │                       #   referrals, interventions, screeners, courses,
-│   │                       #   transcripts, documents, …)
+│   │                       #   transcripts, ELPAC scores, documents, …)
 │   ├── routes/             # Blueprint routes by domain (44 modules +
 │   │                       #   data_import sub-package)
 │   ├── templates/          # Jinja2 templates organized per blueprint
 │   ├── static/             # CSS, JS (incl. shared sse-stream.js), icons,
 │   │                       #   PWA manifest, service worker
-│   └── utils/              # Alert engine, audit, Google clients, Ollama
-│                           #   client, Excel helpers, caseload helpers
-└── data/                   # Local database + uploads (gitignored)
+│   └── utils/              # Alert engine, audit, demo seed, CTE/ELPI
+│                           #   computation, Google clients, Ollama client,
+│                           #   Excel helpers, caseload helpers
+└── data/
+    ├── demo-seed.json      # Canonical 25-student demo fixture (committed)
+    └── (counselor.db, uploads/, backups/ — gitignored runtime data)
 ```
 
 ---
