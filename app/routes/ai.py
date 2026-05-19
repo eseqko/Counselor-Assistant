@@ -443,8 +443,6 @@ Provide concise bullet points:
 #  AI COURSE RECOMMENDATIONS (4x4 Schedule)
 # =====================================================================
 
-@ai_bp.route('/course-recommendations', methods=['POST'])
-@login_required
 def build_recommended_schedule(student, target_grade_level=None,
                                exclude_course_numbers=None,
                                credit_gaps=None, ag_deficiencies=None):
@@ -581,6 +579,8 @@ def build_recommended_schedule(student, target_grade_level=None,
     return term1, term2, alternates, failed_course_names
 
 
+@ai_bp.route('/course-recommendations', methods=['POST'])
+@login_required
 def course_recommendations():
     """Generate AI-powered course recommendations for next year based on transcript and grades."""
     data = request.get_json()
