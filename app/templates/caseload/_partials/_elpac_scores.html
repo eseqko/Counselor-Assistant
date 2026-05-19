@@ -155,9 +155,14 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: function(c){ return c.dataset.label + ': ' + c.parsed.y; } } }
+                },
                 scales: {
-                    y: mode === 'level' ? { min: 1, max: 4, ticks: { stepSize: 1 } } : { beginAtZero: false }
+                    y: mode === 'level'
+                        ? { min: 1, max: 4, ticks: { stepSize: 1 } }
+                        : { beginAtZero: false, ticks: { callback: function(v){ return v; } } }
                 }
             }
         });
