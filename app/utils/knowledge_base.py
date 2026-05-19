@@ -40,10 +40,23 @@ def extract_text_from_file(filepath):
 def _extract_pdf(filepath):
     from PyPDF2 import PdfReader
     reader = PdfReader(filepath)
+    if getattr(reader, 'is_encrypted', False):
+        # Many PDFs are flagged encrypted with an empty password (Word
+        # export defaults, some Acrobat settings). Try to unlock silently.
+        try:
+            reader.decrypt('')
+        except Exception:
+            raise ValueError(
+                'This PDF is password-protected. Re-save it without a password and try again.')
+
     full_text = []
     page_texts = []
     for i, page in enumerate(reader.pages):
-        text = page.extract_text() or ''
+        try:
+            text = page.extract_text() or ''
+        except Exception:
+            # A single bad page shouldn't kill the whole document.
+            text = ''
         text = text.strip()
         if text:
             full_text.append(text)

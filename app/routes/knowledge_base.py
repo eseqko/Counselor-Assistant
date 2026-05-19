@@ -53,54 +53,75 @@ def upload():
         original_name = secure_filename(file.filename)
         ext = original_name.rsplit('.', 1)[-1].lower()
         stored_name = f'{uuid.uuid4().hex}.{ext}'
-        filepath = os.path.join(_kb_upload_path(), stored_name)
-        file.save(filepath)
-
-        file_size = os.path.getsize(filepath)
-        category = request.form.get('category', 'other')
-        description = request.form.get('description', '').strip()
-
+        filepath = None
         try:
-            full_text, page_texts = extract_text_from_file(filepath)
+            filepath = os.path.join(_kb_upload_path(), stored_name)
+            file.save(filepath)
+
+            file_size = os.path.getsize(filepath)
+            category = request.form.get('category', 'other')
+            description = request.form.get('description', '').strip()
+
+            try:
+                full_text, page_texts = extract_text_from_file(filepath)
+            except Exception as e:
+                current_app.logger.exception('Knowledge base text extraction failed')
+                os.remove(filepath)
+                flash(f'Could not read this {ext.upper()} file: {e}. '
+                      f'If it is a scanned PDF, try a text-based copy.', 'error')
+                return redirect(url_for('knowledge_base.upload'))
+
+            if not full_text.strip():
+                os.remove(filepath)
+                flash('No text could be extracted from this file. It may be image-only or scanned.', 'error')
+                return redirect(url_for('knowledge_base.upload'))
+
+            chunks = chunk_text(full_text, page_texts)
+            if not chunks:
+                os.remove(filepath)
+                flash('The file was readable but produced no searchable chunks.', 'error')
+                return redirect(url_for('knowledge_base.upload'))
+
+            doc = KnowledgeDocument(
+                user_id=current_user.id,
+                filename=stored_name,
+                original_filename=original_name,
+                file_type=ext,
+                file_size=file_size,
+                category=category,
+                description=description,
+                page_count=len(page_texts),
+                chunk_count=len(chunks),
+            )
+            db.session.add(doc)
+            db.session.flush()
+
+            for c in chunks:
+                db.session.add(KnowledgeChunk(
+                    document_id=doc.id,
+                    chunk_index=c['chunk_index'],
+                    text=c['text'],
+                    page_number=c['page_number'],
+                ))
+
+            db.session.commit()
+            try:
+                log_action('knowledge_upload', 'knowledge_document', doc.id,
+                           f'Uploaded: {original_name} ({len(chunks)} chunks)')
+            except Exception:
+                current_app.logger.exception('Audit log write failed (non-fatal)')
+            flash(f'Uploaded "{original_name}" — {len(chunks)} chunks extracted.', 'success')
+            return redirect(url_for('knowledge_base.document', doc_id=doc.id))
         except Exception as e:
-            os.remove(filepath)
-            flash(f'Failed to extract text: {e}', 'error')
+            current_app.logger.exception('Knowledge base upload failed')
+            db.session.rollback()
+            if filepath and os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
+            flash(f'Upload failed: {e}. Please try again or contact support.', 'error')
             return redirect(url_for('knowledge_base.upload'))
-
-        if not full_text.strip():
-            os.remove(filepath)
-            flash('No text could be extracted from this file. It may be image-only.', 'error')
-            return redirect(url_for('knowledge_base.upload'))
-
-        chunks = chunk_text(full_text, page_texts)
-
-        doc = KnowledgeDocument(
-            user_id=current_user.id,
-            filename=stored_name,
-            original_filename=original_name,
-            file_type=ext,
-            file_size=file_size,
-            category=category,
-            description=description,
-            page_count=len(page_texts),
-            chunk_count=len(chunks),
-        )
-        db.session.add(doc)
-        db.session.flush()
-
-        for c in chunks:
-            db.session.add(KnowledgeChunk(
-                document_id=doc.id,
-                chunk_index=c['chunk_index'],
-                text=c['text'],
-                page_number=c['page_number'],
-            ))
-
-        db.session.commit()
-        log_action('knowledge_upload', 'knowledge_document', doc.id,
-                   f'Uploaded: {original_name} ({len(chunks)} chunks)')
-        flash(f'Uploaded "{original_name}" — {len(chunks)} chunks extracted.', 'success')
-        return redirect(url_for('knowledge_base.document', doc_id=doc.id))
 
     return render_template('knowledge_base/upload.html',
                            categories=DOCUMENT_CATEGORIES)
