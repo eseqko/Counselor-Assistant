@@ -784,3 +784,98 @@ body::after {
 }
 .demo-banner-button:hover { background: #92400e; }
 @media print { .demo-banner { display: none !important; } }
+
+/* Student profile dashboard */
+.profile-shell {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr) minmax(260px, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+.profile-col-left > .card,
+.profile-col-mid > .card,
+.profile-col-right > .card { margin-bottom: 16px; }
+.profile-col-left > .card:last-child,
+.profile-col-mid > .card:last-child,
+.profile-col-right > .card:last-child { margin-bottom: 0; }
+
+.profile-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #E8ECF0;
+    margin: 12px 0 16px;
+    overflow-x: auto;
+}
+.profile-tab {
+    padding: 10px 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--gray);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.profile-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.profile-tab:hover { color: var(--primary-dark); }
+
+.profile-panel { animation: profileFadeIn 0.15s ease-out; }
+@keyframes profileFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--light-gray);
+    gap: 12px;
+}
+.metric-row:last-child { border-bottom: none; }
+.metric-row .metric-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    color: var(--gray);
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    flex-shrink: 0;
+}
+.metric-row .metric-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--dark);
+    text-align: right;
+}
+.metric-row .metric-value .metric-sub {
+    font-size: 0.72rem;
+    color: var(--gray);
+    font-weight: 500;
+    display: block;
+    margin-top: 2px;
+}
+.metric-bar {
+    height: 6px;
+    background: var(--light-gray);
+    border-radius: 3px;
+    margin-top: 6px;
+    overflow: hidden;
+    grid-column: 1 / -1;
+}
+.metric-bar > div { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.metric-row.with-bar {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 12px;
+}
+.metric-row.with-bar .metric-label { grid-column: 1; }
+.metric-row.with-bar .metric-value { grid-column: 2; }
+
+.ag-dots { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 6px; }
+.ag-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--light-gray); }
+.ag-dot.met { background: var(--success); }
+
+@media (max-width: 1024px) {
+    .profile-shell { grid-template-columns: 1fr; }
+}

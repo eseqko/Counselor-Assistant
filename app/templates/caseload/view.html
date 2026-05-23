@@ -3,22 +3,147 @@
 {% block page_title %}Student Profile{% endblock %}
 {% block content %}
 
-{% include "caseload/_partials/_profile_header.html" %}
+{% include "caseload/_partials/_profile_header_strip.html" %}
 
-{% include "caseload/_partials/_college_career_summary.html" %}
+<div class="profile-tabs" role="tablist">
+    <button class="profile-tab active" data-tab="overview" role="tab">Overview</button>
+    <button class="profile-tab" data-tab="academics" role="tab">Academics</button>
+    <button class="profile-tab" data-tab="services" role="tab">Services</button>
+    <button class="profile-tab" data-tab="notes-ai" role="tab">Notes &amp; AI</button>
+</div>
 
-{% include "caseload/_partials/_elpac_scores.html" %}
+<div id="profile-panel-overview" class="profile-panel" role="tabpanel">
+    <div class="profile-shell">
+        <aside class="profile-col-left">
+            {% include "caseload/_partials/_profile_identity_cards.html" %}
+        </aside>
 
-{% include "caseload/_partials/_transcript_analysis.html" %}
+        <section class="profile-col-mid">
+            {% include "caseload/_partials/_overview_metrics.html" %}
+        </section>
 
-{% include "caseload/_partials/_workflow_cards.html" %}
+        <aside class="profile-col-right">
+            {# Top-3 workflow summary — trimmed inline version of _workflow_cards.html #}
+            <div class="card">
+                <div class="card-header">
+                    Open Goals
+                    <a href="{{ url_for('goals.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+</a>
+                </div>
+                <div class="card-body">
+                    {% set open_goals = student.goals.all() | selectattr('is_open') | list %}
+                    {% if open_goals %}
+                    <ul style="margin:0;padding-left:18px;">
+                        {% for g in open_goals[:3] %}
+                        <li style="margin-bottom:6px;font-size:0.88rem;">
+                            <a href="{{ url_for('goals.view', id=g.id) }}">{{ g.title }}</a>
+                            {% if g.target_date %}<span style="color:var(--gray);font-size:0.78rem;"> · due {{ g.target_date.strftime('%m/%d') }}</span>{% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}<div class="empty-state" style="padding:8px 0;"><p style="font-size:0.85rem;">No open goals.</p></div>{% endif %}
+                </div>
+            </div>
 
-{% include "caseload/_partials/_recent_notes.html" %}
+            <div class="card">
+                <div class="card-header">
+                    Recent Communications
+                    <a href="{{ url_for('communications.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+</a>
+                </div>
+                <div class="card-body">
+                    {% set comms = student.communications.limit(3).all() %}
+                    {% if comms %}
+                    <ul style="margin:0;padding-left:18px;">
+                        {% for c in comms %}
+                        <li style="margin-bottom:6px;font-size:0.88rem;">
+                            <a href="{{ url_for('communications.view', id=c.id) }}">{{ c.type_label }}: {{ c.contact_person }}</a>
+                            <span style="color:var(--gray);font-size:0.78rem;"> · {{ c.contact_date.strftime('%m/%d') }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}<div class="empty-state" style="padding:8px 0;"><p style="font-size:0.85rem;">No communications.</p></div>{% endif %}
+                </div>
+            </div>
 
-{% include "caseload/_partials/_ai_insights.html" %}
+            <div class="card">
+                <div class="card-header">
+                    Active Referrals
+                    <a href="{{ url_for('referrals.add', student_id=student.id) }}" class="btn btn-sm btn-primary">+</a>
+                </div>
+                <div class="card-body">
+                    {% set refs = student.referrals.limit(3).all() %}
+                    {% if refs %}
+                    <ul style="margin:0;padding-left:18px;">
+                        {% for r in refs %}
+                        <li style="margin-bottom:6px;font-size:0.88rem;">
+                            <a href="{{ url_for('referrals.view', id=r.id) }}">{{ r.referred_to }}</a>
+                            <span class="badge badge-info" style="margin-left:4px;">{{ r.status_label }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}<div class="empty-state" style="padding:8px 0;"><p style="font-size:0.85rem;">No referrals.</p></div>{% endif %}
+                </div>
+            </div>
 
-{% include "caseload/_partials/_ai_course_recs.html" %}
+            <div class="card">
+                <div class="card-header">
+                    Latest Notes
+                    <a href="{{ url_for('notes.index', student_id=student.id) }}" class="btn btn-sm btn-outline">All</a>
+                </div>
+                <div class="card-body">
+                    {% if notes %}
+                    <ul style="margin:0;padding-left:18px;">
+                        {% for note in notes[:3] %}
+                        <li style="margin-bottom:6px;font-size:0.88rem;">
+                            <a href="{{ url_for('notes.view_note', id=note.id) }}">{{ note.title or note.note_type }}</a>
+                            <span style="color:var(--gray);font-size:0.78rem;"> · {{ note.session_date.strftime('%m/%d') }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}<div class="empty-state" style="padding:8px 0;"><p style="font-size:0.85rem;">No notes yet.</p></div>{% endif %}
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<div id="profile-panel-academics" class="profile-panel" role="tabpanel" hidden>
+    {% include "caseload/_partials/_college_career_summary.html" %}
+    {% include "caseload/_partials/_transcript_analysis.html" %}
+    {% include "caseload/_partials/_elpac_scores.html" %}
+</div>
+
+<div id="profile-panel-services" class="profile-panel" role="tabpanel" hidden>
+    {% include "caseload/_partials/_workflow_cards.html" %}
+</div>
+
+<div id="profile-panel-notes-ai" class="profile-panel" role="tabpanel" hidden>
+    {% include "caseload/_partials/_recent_notes.html" %}
+    {% include "caseload/_partials/_ai_insights.html" %}
+    {% include "caseload/_partials/_ai_course_recs.html" %}
+</div>
 
 {% include "caseload/_partials/_remove_student_modal.html" %}
+
+<script>
+(function() {
+    const tabs = document.querySelectorAll('.profile-tab');
+    const panels = document.querySelectorAll('.profile-panel');
+    function activate(name) {
+        tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+        panels.forEach(p => p.hidden = p.id !== 'profile-panel-' + name);
+    }
+    tabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const name = btn.dataset.tab;
+            activate(name);
+            history.replaceState(null, '', '#' + name);
+        });
+    });
+    const initial = (location.hash || '#overview').slice(1);
+    if (document.querySelector('.profile-tab[data-tab="' + initial + '"]')) {
+        activate(initial);
+    }
+})();
+</script>
 
 {% endblock %}

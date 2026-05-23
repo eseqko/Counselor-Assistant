@@ -198,6 +198,18 @@ def view_student(id):
         latest_transcript.cte_completed if latest_transcript else 0,
     )
 
+    attendance_rate = None
+    total_attendance = student.attendance_records.count()
+    if total_attendance:
+        present = student.attendance_records.filter_by(status='present').count()
+        attendance_rate = round(100 * present / total_attendance, 1)
+
+    goals_completion_pct = None
+    total_goals = student.goals.count()
+    if total_goals:
+        achieved = student.goals.filter_by(status='achieved').count()
+        goals_completion_pct = round(100 * achieved / total_goals, 1)
+
     return render_template('caseload/view.html',
         student=student, notes=notes,
         latest_transcript=latest_transcript,
@@ -210,6 +222,9 @@ def view_student(id):
         total_required=total_required,
         uses_state_min=uses_state_min,
         state_min_risk=state_min_risk,
+        attendance_rate=attendance_rate,
+        goals_completion_pct=goals_completion_pct,
+        now_date=date.today(),
         exit_reasons=Student.EXIT_REASONS)
 
 
