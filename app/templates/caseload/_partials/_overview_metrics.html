@@ -1,0 +1,189 @@
+{# At-a-glance metrics for the Overview tab middle column. #}
+{% set cc_plan = student.college_career_plan %}
+{% set iep = student.iep504_record %}
+{% set elpac = student.latest_elpac %}
+
+<div class="card">
+    <div class="card-header">At a Glance</div>
+    <div class="card-body">
+
+        {# Graduation credits #}
+        {% if latest_transcript %}
+            {% set display_risk = state_min_risk or latest_transcript.risk_level %}
+            {% set credit_pct = [((latest_transcript.total_completed / total_required) * 100)|round|int if total_required else 0, 100]|min %}
+            <div class="metric-row with-bar">
+                <span class="metric-label">Graduation Credits</span>
+                <span class="metric-value">
+                    {{ latest_transcript.total_completed|int }} / {{ total_required }}
+                    <span class="metric-sub">
+                        {% if latest_transcript.total_wip %}+ {{ latest_transcript.total_wip|int }} WIP &middot; {% endif %}
+                        <span class="badge badge-{{ 'danger' if display_risk == 'critical' else 'warning' if display_risk in ('at-risk', 'warning') else 'success' }}">
+                            {{ display_risk|upper|replace('-', ' ') if display_risk else 'ON TRACK' }}
+                        </span>
+                    </span>
+                </span>
+                <div class="metric-bar">
+                    <div style="width:{{ credit_pct }}%;
+                        {% if display_risk == 'critical' %}background:var(--danger);
+                        {% elif display_risk in ('at-risk', 'warning') %}background:var(--warning);
+                        {% else %}background:var(--success);{% endif %}"></div>
+                </div>
+            </div>
+        {% else %}
+            <div class="metric-row">
+                <span class="metric-label">Graduation Credits</span>
+                <span class="metric-value" style="font-weight:500;color:var(--gray);">
+                    No transcript &middot; <a href="{{ url_for('caseload.transcript_batch') }}">+ Import</a>
+                </span>
+            </div>
+        {% endif %}
+
+        {# a-g areas #}
+        {% if latest_transcript %}
+            <div class="metric-row">
+                <span class="metric-label">a-g Areas Met</span>
+                <span class="metric-value">
+                    {{ latest_transcript.ag_areas_met or 0 }} / 7
+                    <span class="ag-dots">
+                        {% for i in range(7) %}
+                        <span class="ag-dot {% if i < (latest_transcript.ag_areas_met or 0) %}met{% endif %}"></span>
+                        {% endfor %}
+                    </span>
+                    <span class="metric-sub">
+                        <span class="badge badge-{{ 'danger' if latest_transcript.ag_status == 'deficient' else 'warning' if latest_transcript.ag_status == 'verify' else 'success' }}">
+                            {% if latest_transcript.ag_status == 'deficient' %}DEFICIENT
+                            {% elif latest_transcript.ag_status == 'verify' %}VERIFY
+                            {% else %}ON TRACK{% endif %}
+                        </span>
+                    </span>
+                </span>
+            </div>
+        {% endif %}
+
+        {# CTE status #}
+        {% if cte_status and cte_status.district_status and cte_status.district_status != 'None' %}
+            <div class="metric-row">
+                <span class="metric-label">CTE Pathway</span>
+                <span class="metric-value" style="font-size:0.95rem;">
+                    <span class="badge badge-info">District: {{ cte_status.district_status }}</span>
+                    {% if cte_status.perkins_status and cte_status.perkins_status != 'None' %}
+                    <span class="badge badge-{{ 'success' if cte_status.perkins_status == 'Completer' else 'info' }}">Perkins: {{ cte_status.perkins_status }}</span>
+                    {% endif %}
+                    {% if cte_status.has_capstone %}<span class="metric-sub">Capstone complete</span>{% endif %}
+                </span>
+            </div>
+        {% endif %}
+
+        {# ELPAC #}
+        {% if elpac and elpac.overall_level %}
+            <div class="metric-row">
+                <span class="metric-label">ELPAC Overall</span>
+                <span class="metric-value">
+                    Level {{ elpac.overall_level }}{% if elpac.overall_scale %} <span style="color:var(--gray);font-weight:500;">({{ elpac.overall_scale }})</span>{% endif %}
+                    <span class="metric-sub">
+                        {% if elpac.listening_level %}L:{{ elpac.listening_level }}{% endif %}
+                        {% if elpac.speaking_level %} &middot; S:{{ elpac.speaking_level }}{% endif %}
+                        {% if elpac.reading_level %} &middot; R:{{ elpac.reading_level }}{% endif %}
+                        {% if elpac.writing_level %} &middot; W:{{ elpac.writing_level }}{% endif %}
+                    </span>
+                </span>
+            </div>
+        {% elif student.is_el %}
+            <div class="metric-row">
+                <span class="metric-label">ELPAC Overall</span>
+                <span class="metric-value" style="font-weight:500;color:var(--gray);">No scores on file</span>
+            </div>
+        {% endif %}
+
+        {# GPA #}
+        {% if cc_plan and (cc_plan.gpa_unweighted or cc_plan.gpa_weighted) %}
+            {% set gpa = cc_plan.gpa_unweighted or cc_plan.gpa_weighted %}
+            {% set gpa_pct = [((gpa / 4.0) * 100)|round|int, 100]|min %}
+            <div class="metric-row with-bar">
+                <span class="metric-label">GPA</span>
+                <span class="metric-value">
+                    {% if cc_plan.gpa_unweighted %}{{ "%.2f"|format(cc_plan.gpa_unweighted) }}{% endif %}
+                    {% if cc_plan.gpa_weighted %}<span class="metric-sub">{{ "%.2f"|format(cc_plan.gpa_weighted) }} weighted</span>{% endif %}
+                </span>
+                <div class="metric-bar">
+                    <div style="width:{{ gpa_pct }}%;
+                        {% if gpa < 2.0 %}background:var(--danger);
+                        {% elif gpa < 3.0 %}background:var(--warning);
+                        {% else %}background:var(--success);{% endif %}"></div>
+                </div>
+            </div>
+        {% else %}
+            <div class="metric-row">
+                <span class="metric-label">GPA</span>
+                <span class="metric-value" style="font-weight:500;color:var(--gray);">
+                    <form method="POST" action="{{ url_for('college_career.create_plan', student_id=student.id) }}" style="display:inline;margin:0;">
+                        No plan &middot; <button type="submit" class="btn btn-sm btn-outline" style="padding:2px 8px;">+ Start Plan</button>
+                    </form>
+                </span>
+            </div>
+        {% endif %}
+
+        {# Attendance #}
+        {% if attendance_rate is not none %}
+            <div class="metric-row with-bar">
+                <span class="metric-label">Attendance</span>
+                <span class="metric-value">
+                    {{ attendance_rate }}%
+                    <span class="metric-sub">
+                        {% if attendance_rate < 90 %}<span class="badge badge-danger">CHRONIC</span>
+                        {% elif attendance_rate < 96 %}<span class="badge badge-warning">AT RISK</span>
+                        {% else %}<span class="badge badge-success">ON TRACK</span>{% endif %}
+                    </span>
+                </span>
+                <div class="metric-bar">
+                    <div style="width:{{ attendance_rate }}%;
+                        {% if attendance_rate < 90 %}background:var(--danger);
+                        {% elif attendance_rate < 96 %}background:var(--warning);
+                        {% else %}background:var(--success);{% endif %}"></div>
+                </div>
+            </div>
+        {% endif %}
+
+        {# Grade level #}
+        <div class="metric-row">
+            <span class="metric-label">Grade Level</span>
+            <span class="metric-value">{{ student.grade_level or '—' }}</span>
+        </div>
+
+        {# Goal completion #}
+        {% if goals_completion_pct is not none %}
+            <div class="metric-row with-bar">
+                <span class="metric-label">Goals Achieved</span>
+                <span class="metric-value">
+                    {{ goals_completion_pct }}%
+                    <span class="metric-sub">of {{ student.goals.count() }} total</span>
+                </span>
+                <div class="metric-bar">
+                    <div style="width:{{ goals_completion_pct }}%;
+                        {% if goals_completion_pct < 25 %}background:var(--warning);
+                        {% else %}background:var(--success);{% endif %}"></div>
+                </div>
+            </div>
+        {% endif %}
+
+        {# IEP/504 review #}
+        {% if iep %}
+            {% set days_until = (iep.next_review_date - now_date).days if iep.next_review_date and now_date else None %}
+            <div class="metric-row">
+                <span class="metric-label">{{ iep.plan_type|upper }} Review</span>
+                <span class="metric-value">
+                    {% if iep.next_review_date %}{{ iep.next_review_date.strftime('%m/%d/%Y') }}{% else %}Not scheduled{% endif %}
+                    {% if days_until is not none %}
+                        <span class="metric-sub">
+                            {% if days_until < 0 %}<span class="badge badge-danger">OVERDUE</span>
+                            {% elif days_until < 30 %}<span class="badge badge-danger">{{ days_until }}d</span>
+                            {% elif days_until < 60 %}<span class="badge badge-warning">{{ days_until }}d</span>
+                            {% else %}<span class="badge badge-success">{{ days_until }}d</span>{% endif %}
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
