@@ -1,11 +1,13 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
 from flask_login import login_required, current_user
 from app import db, csrf
+from app.models.availability import Booking
 from app.models.calendar_event import CalendarEvent
 from app.models.student import Student
 from app.models.user import User
 from app.utils.audit import log_action
 from app.utils import google_client, google_calendar
+from app.utils.ics import build_ical_feed
 from datetime import datetime, date, timedelta, timezone
 from dateutil.rrule import rrulestr
 import pytz
@@ -172,7 +174,12 @@ def feed_url():
 
 @calendar_bp.route('/feed/<token>.ics')
 def ical_feed(token):
-    """Public iCal feed endpoint — authenticated by unique token, no login required."""
+    """Public iCal feed endpoint — authenticated by unique token, no login required.
+
+    Emits both CalendarEvents (counselor's own events) and confirmed Bookings
+    (parent/cohort-booked appointments) so subscribed Google Calendars see
+    everything the app considers scheduled.
+    """
     user = User.query.filter_by(calendar_feed_token=token).first()
     if not user:
         abort(404)
@@ -180,45 +187,11 @@ def ical_feed(token):
     events = CalendarEvent.query.filter_by(owner_id=user.id).filter(
         CalendarEvent.status != 'cancelled'
     ).all()
+    bookings = Booking.query.filter_by(counselor_id=user.id).filter(
+        Booking.status != 'cancelled'
+    ).all()
 
-    lines = [
-        'BEGIN:VCALENDAR',
-        'VERSION:2.0',
-        'PRODID:-//Counselor Assistant//Calendar Feed//EN',
-        'CALSCALE:GREGORIAN',
-        'METHOD:PUBLISH',
-        f'X-WR-CALNAME:{user.display_name} - Counselor Calendar',
-    ]
-
-    for e in events:
-        uid = f'event-{e.id}@counselor-assistant'
-        lines.append('BEGIN:VEVENT')
-        lines.append(f'UID:{uid}')
-        lines.append(f'DTSTAMP:{_ical_dt(e.created_at)}')
-        if e.all_day:
-            lines.append(f'DTSTART;VALUE=DATE:{e.start_datetime.strftime("%Y%m%d")}')
-            lines.append(f'DTEND;VALUE=DATE:{e.end_datetime.strftime("%Y%m%d")}')
-        else:
-            lines.append(f'DTSTART:{_ical_dt(e.start_datetime)}')
-            lines.append(f'DTEND:{_ical_dt(e.end_datetime)}')
-        lines.append(f'SUMMARY:{_ical_escape(e.title)}')
-        if e.description:
-            lines.append(f'DESCRIPTION:{_ical_escape(e.description)}')
-        if e.location:
-            lines.append(f'LOCATION:{_ical_escape(e.location)}')
-        if e.event_type:
-            lines.append(f'CATEGORIES:{e.event_type.replace("_", " ").title()}')
-        if e.reminder_minutes:
-            lines.append('BEGIN:VALARM')
-            lines.append('ACTION:DISPLAY')
-            lines.append(f'TRIGGER:-PT{e.reminder_minutes}M')
-            lines.append(f'DESCRIPTION:Reminder: {_ical_escape(e.title)}')
-            lines.append('END:VALARM')
-        lines.append('END:VEVENT')
-
-    lines.append('END:VCALENDAR')
-
-    ics_content = '\r\n'.join(lines) + '\r\n'
+    ics_content = build_ical_feed(user, calendar_events=events, bookings=bookings)
     return Response(ics_content, mimetype='text/calendar',
                     headers={'Content-Disposition': 'inline; filename="calendar.ics"'})
 
@@ -493,13 +466,3 @@ def _format_dt_iso(dt, raw_value, tzid, is_all_day):
 def _ical_unescape(text):
     """Unescape iCal text fields."""
     return text.replace('\\n', '\n').replace('\\,', ',').replace('\\;', ';').replace('\\\\', '\\')
-
-
-def _ical_dt(dt):
-    """Format a datetime as an iCal UTC timestamp."""
-    return dt.strftime('%Y%m%dT%H%M%SZ')
-
-
-def _ical_escape(text):
-    """Escape special characters for iCal text fields."""
-    return text.replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
