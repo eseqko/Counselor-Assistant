@@ -7,7 +7,7 @@ from app.models.student import Student, Tag
 ACTIONS = [
     ('promote', 'Promote (next grade)'),
     ('graduate', 'Graduate'),
-    ('senior_studies', 'Senior Studies (continue at grade 12)'),
+    ('senior_studies', 'Senior Studies / 5th Year (continue at grade 12)'),
     ('retain', 'Retain (no change)'),
     ('transfer', 'Transferred out'),
     ('dropout', 'Dropped out'),
@@ -19,6 +19,31 @@ ACTION_KEYS = {k for k, _ in ACTIONS}
 SENIOR_STUDIES_TAG = 'Senior Studies'
 
 
+def protected_5th_year_reasons(student):
+    """Return ED-Code-cited reasons the student may be entitled to a 5th year.
+
+    Used to (a) suppress the auto-graduate default for 12th graders with any
+    of these statuses, and (b) surface the citation in the anomaly banner so
+    the counselor sees WHY the row needs review.
+    """
+    reasons = []
+    if student.iep_status:
+        reasons.append('IEP (IDEA transition, age 22)')
+    if student.el_status == 'Newcomer':
+        reasons.append('Newcomer EL (AB 2121)')
+    if student.is_foster_youth:
+        reasons.append('Foster Youth (AB 167/216)')
+    if student.is_homeless:
+        reasons.append('Homeless (AB 1806)')
+    if student.is_migrant_newcomer:
+        reasons.append('Migrant/Newcomer (AB 2121)')
+    if student.is_formerly_incarcerated:
+        reasons.append('Formerly Incarcerated (AB 2306/1124)')
+    if student.is_military_connected:
+        reasons.append('Military Connected (AB 365)')
+    return reasons
+
+
 def default_action(student):
     """Pick the default action for a student in the review page."""
     if student.grade_level is None:
@@ -28,6 +53,10 @@ def default_action(student):
     if _has_senior_studies_tag(student):
         return 'graduate'
     if student.grade_level == 12:
+        # Legally protected 12th graders need a deliberate decision — never
+        # auto-graduate them.
+        if protected_5th_year_reasons(student):
+            return 'skip'
         return 'graduate'
     return 'promote'
 
@@ -47,6 +76,10 @@ def detect_anomalies(student):
         flags.append(f'status={student.status}')
     if _has_senior_studies_tag(student):
         flags.append('already in Senior Studies')
+    if student.grade_level == 12:
+        reasons = protected_5th_year_reasons(student)
+        if reasons:
+            flags.append('eligible for 5th year: ' + ', '.join(reasons))
     return flags
 
 
