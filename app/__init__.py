@@ -293,6 +293,7 @@ def create_app(config_class=Config):
         from app.models import referral, goal, communication, group, consent
         from app.models import intervention, screening, document, post_grad
         from app.models import asca_program
+        from app.models import rollover
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

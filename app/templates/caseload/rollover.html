@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}End of Year Rollover{% endblock %}
+{% block page_title %}End of Year Rollover{% endblock %}
+
+{% block head %}
+<style>
+.rollover-meta { background:var(--bg); border-radius:8px; padding:14px; margin-bottom:16px;
+                 display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; align-items:flex-end; }
+.rollover-meta .form-group { margin:0; }
+
+.anomalies-banner { background:#fff3cd; border-left:4px solid #f0a500; border-radius:6px;
+                    padding:12px 16px; margin-bottom:16px; font-size:0.9rem; }
+.anomalies-banner ul { margin:6px 0 0; padding-left:20px; }
+.anomalies-banner a { color:#a05a00; text-decoration:underline; }
+
+.undo-banner { background:#e8f5e9; border-left:4px solid #2E7D32; border-radius:6px;
+               padding:12px 16px; margin-bottom:16px; font-size:0.9rem;
+               display:flex; justify-content:space-between; align-items:center; gap:12px; }
+
+.flag-chip { display:inline-block; background:#FFF3CD; color:#8A6D3B; font-size:0.72rem;
+             padding:2px 8px; border-radius:10px; margin:1px 2px; }
+
+.action-cell select { font-size:0.85rem; padding:4px 6px; width:100%; max-width:240px; }
+.action-cell .promote { background-color:#E0F2FE; }
+.action-cell .graduate { background-color:#DCFCE7; }
+.action-cell .senior_studies { background-color:#EDE9FE; }
+.action-cell .retain { background-color:#FEF3C7; }
+.action-cell .transfer { background-color:#F3F4F6; }
+.action-cell .dropout { background-color:#FECACA; }
+.action-cell .skip { background-color:transparent; }
+
+.counts-row { display:flex; flex-wrap:wrap; gap:14px; margin-top:14px; font-size:0.86rem; }
+.counts-row span { background:var(--bg); padding:4px 10px; border-radius:14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if recent_snapshot %}
+<div class="undo-banner">
+    <div>
+        <strong>Recent rollover available to undo.</strong>
+        Committed {{ recent_snapshot.created_at.strftime('%b %d at %I:%M %p') }} —
+        {{ recent_snapshot.student_count }} student{{ 's' if recent_snapshot.student_count != 1 else '' }} affected.
+        Expires {{ recent_snapshot.expires_at.strftime('%b %d at %I:%M %p') }}.
+    </div>
+    <form method="POST" action="{{ url_for('caseload.rollover_undo', snapshot_id=recent_snapshot.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-danger"
+                onclick="return confirm('Undo the recent rollover? This restores grade levels, status, and exit fields.');">
+            Undo Rollover
+        </button>
+    </form>
+</div>
+{% endif %}
+
+{% if anomalies %}
+<div class="anomalies-banner">
+    <strong>{{ anomalies|length }} anomal{{ 'y' if anomalies|length == 1 else 'ies' }} detected — review before committing:</strong>
+    <ul>
+        {% for a in anomalies %}
+        <li>
+            <a href="#row-{{ a.student.id }}">{{ a.student.full_name }}</a>
+            — {{ a.flags|join(', ') }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('caseload.rollover_confirm') }}" id="rollover-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="rollover-meta">
+        <div class="form-group">
+            <label>School year end date</label>
+            <input type="date" name="end_date" class="form-control" value="{{ default_end_date.isoformat() }}" required>
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+            <button type="button" class="btn btn-sm btn-outline" onclick="bulkSet('promote')">All → Promote</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="bulkSet('graduate', 12)">12th grade → Graduate</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="bulkSet('skip')">All → Skip</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="resetDefaults()">Reset to defaults</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Caseload ({{ rows|length }} active student{{ 's' if rows|length != 1 else '' }})
+            <span style="font-size:0.82rem;color:var(--gray);font-weight:400;">
+                Defaults: grades 6-11 promote, grade 12 graduates, anomalies skip.
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Current grade</th>
+                        <th>EL</th>
+                        <th>Programs</th>
+                        <th>Action</th>
+                        <th>Flags</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    {% set s = row.student %}
+                    <tr id="row-{{ s.id }}" data-grade="{{ s.grade_level or '' }}" data-default="{{ row.default_action }}">
+                        <td>
+                            <a href="{{ url_for('caseload.view_student', id=s.id) }}" style="text-decoration:none;color:var(--primary);font-weight:600;">
+                                {{ s.full_name }}
+                            </a>
+                            <div style="font-size:0.78rem;color:var(--gray);">{{ s.student_id_number }}</div>
+                        </td>
+                        <td>{{ s.grade_level if s.grade_level is not none else '—' }}</td>
+                        <td>{{ s.el_display }}</td>
+                        <td>
+                            {% if s.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
+                            {% if s.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+                            {% if s.has_ab_population %}<span class="badge" style="background:#EDE9FE;color:#6D28D9;font-size:0.68rem;">AB</span>{% endif %}
+                        </td>
+                        <td class="action-cell">
+                            <select name="action_{{ s.id }}" class="form-control action-select {{ row.default_action }}" onchange="this.className='form-control action-select ' + this.value">
+                                {% for code, label in actions %}
+                                <option value="{{ code }}" {% if code == row.default_action %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            {% for f in row.flags %}
+                            <span class="flag-chip">{{ f }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not rows %}
+                    <tr><td colspan="6"><div class="empty-state"><p>No active students on your caseload.</p></div></td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-body">
+            <div class="counts-row" id="counts-row"></div>
+            <div style="margin-top:14px;">
+                <button type="submit" class="btn btn-primary" {% if not rows %}disabled{% endif %}
+                        onclick="return confirmCounts();">
+                    Apply Rollover
+                </button>
+                <a href="{{ url_for('caseload.index') }}" class="btn btn-outline">Cancel</a>
+                <span style="font-size:0.82rem;color:var(--gray);margin-left:10px;">
+                    A 24-hour undo will be available after committing.
+                </span>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+function selects() {
+    return document.querySelectorAll('select.action-select');
+}
+
+function recolor(sel) {
+    sel.className = 'form-control action-select ' + sel.value;
+}
+
+function updateCounts() {
+    var counts = {};
+    selects().forEach(function(sel){
+        counts[sel.value] = (counts[sel.value] || 0) + 1;
+    });
+    var row = document.getElementById('counts-row');
+    row.innerHTML = '';
+    var labels = {
+        'promote':'Promote', 'graduate':'Graduate', 'senior_studies':'Senior Studies',
+        'retain':'Retain', 'transfer':'Transfer', 'dropout':'Drop Out', 'skip':'Skip'
+    };
+    Object.keys(labels).forEach(function(k){
+        if (counts[k]) {
+            var span = document.createElement('span');
+            span.textContent = labels[k] + ': ' + counts[k];
+            row.appendChild(span);
+        }
+    });
+}
+
+function bulkSet(action, gradeOnly) {
+    document.querySelectorAll('tr[id^=row-]').forEach(function(tr){
+        if (gradeOnly !== undefined) {
+            if (parseInt(tr.dataset.grade) !== gradeOnly) return;
+        }
+        var sel = tr.querySelector('select.action-select');
+        sel.value = action;
+        recolor(sel);
+    });
+    updateCounts();
+}
+
+function resetDefaults() {
+    document.querySelectorAll('tr[id^=row-]').forEach(function(tr){
+        var sel = tr.querySelector('select.action-select');
+        sel.value = tr.dataset.default;
+        recolor(sel);
+    });
+    updateCounts();
+}
+
+function confirmCounts() {
+    var counts = {};
+    selects().forEach(function(sel){ counts[sel.value] = (counts[sel.value] || 0) + 1; });
+    var grad = counts.graduate || 0;
+    var trans = counts.transfer || 0;
+    var drop = counts.dropout || 0;
+    var exit_count = grad + trans + drop;
+    if (exit_count === 0) return true;
+    return confirm(
+        'Apply rollover?\n\n' +
+        (grad ? '• ' + grad + ' will be marked Graduated\n' : '') +
+        (trans ? '• ' + trans + ' will be marked Transferred\n' : '') +
+        (drop ? '• ' + drop + ' will be marked Dropped Out\n' : '') +
+        '\nThese set exit_date and remove the students from your active caseload. ' +
+        'A 24-hour undo will be available.'
+    );
+}
+
+// Color-code initial selects + initial count
+selects().forEach(recolor);
+updateCounts();
+selects().forEach(function(sel){ sel.addEventListener('change', updateCounts); });
+</script>
+{% endblock %}
