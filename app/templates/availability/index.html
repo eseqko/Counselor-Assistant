@@ -42,6 +42,10 @@
     <input type="text" id="booking-url" readonly
            value="{{ url_for('availability.public_booking_page', token=booking_token, _external=True) }}">
     <button class="btn btn-sm btn-primary" onclick="copyBookingUrl()">Copy</button>
+    <a href="{{ url_for('availability.auto_schedule_picker') }}" class="btn btn-sm btn-success">Auto-Schedule Cohort</a>
+    {% if session.get('last_auto_batch') %}
+    <a href="{{ url_for('availability.auto_schedule_download_ics') }}" class="btn btn-sm btn-outline">Download Last Batch (.ics)</a>
+    {% endif %}
 </div>
 
 {% if not google_connected %}

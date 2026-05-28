@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Auto-Schedule Cohort{% endblock %}
+{% block page_title %}Auto-Schedule Cohort{% endblock %}
+
+{% block head %}
+<style>
+.cohort-filters { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; align-items:flex-end; }
+.cohort-filters .form-group { margin:0; }
+.cohort-filters .filter-actions { grid-column: 1 / -1; display:flex; gap:8px; }
+
+.cohort-flags { display:flex; flex-wrap:wrap; gap:14px; }
+.cohort-flags label { font-size:0.85rem; display:flex; align-items:center; gap:6px; cursor:pointer; }
+
+.run-panel { background:var(--bg); border-radius:8px; padding:16px; margin-top:16px; }
+.run-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; align-items:flex-end; }
+
+.mode-radio { display:flex; gap:14px; }
+.mode-radio label { display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.9rem; }
+.mode-radio input[type=radio] { width:auto; }
+
+.empty-warn { background:#fff3cd; padding:12px 16px; border-radius:8px; font-size:0.9rem; margin-bottom:16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if not slots_exist %}
+<div class="empty-warn">
+    <strong>No availability set.</strong>
+    <a href="{{ url_for('availability.index') }}">Add weekly availability slots</a> before running the auto-scheduler.
+</div>
+{% endif %}
+
+<!-- Filter form (GET — reloads the picker with a filtered list) -->
+<div class="card">
+    <div class="card-header">Cohort filter</div>
+    <div class="card-body">
+        <form method="GET" class="cohort-filters">
+            <div class="form-group">
+                <label>Search</label>
+                <input type="text" name="search" class="form-control" placeholder="Name or ID..." value="{{ selected.search }}">
+            </div>
+
+            <div class="form-group">
+                <label>Grade level</label>
+                <select name="grade" class="form-control" multiple size="4">
+                    {% for g in range(6, 13) %}
+                    <option value="{{ g }}" {% if g|string in selected.grade %}selected{% endif %}>Grade {{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>EL status</label>
+                <select name="el_status" class="form-control" multiple size="4">
+                    {% for code, label in el_statuses %}
+                    <option value="{{ code }}" {% if code in selected.el_status %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>EL level</label>
+                <select name="el_level" class="form-control" multiple size="3">
+                    {% for code, label in el_levels %}
+                    <option value="{{ code }}" {% if code in selected.el_level %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label>Programs</label>
+                <div class="cohort-flags">
+                    <label><input type="checkbox" name="iep_status" value="1" {% if selected.iep_status %}checked{% endif %}> IEP</label>
+                    <label><input type="checkbox" name="section_504" value="1" {% if selected.section_504 %}checked{% endif %}> 504</label>
+                    {% for fld, label, bill in ab_population_fields %}
+                    <label><input type="checkbox" name="ab_population" value="{{ fld }}" {% if fld in selected.ab_population %}checked{% endif %}> {{ label }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-sm btn-primary">Apply filter</button>
+                <a href="{{ url_for('availability.auto_schedule_picker') }}" class="btn btn-sm btn-outline">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Run form (POST — picks students + run options) -->
+<form method="POST" action="{{ url_for('availability.auto_schedule_preview') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card" style="margin-top:16px;">
+        <div class="card-header">
+            Students (<span id="selected-count">{{ students|length }}</span> of {{ students|length }})
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline" onclick="toggleAll(true)">Select all</button>
+                <button type="button" class="btn btn-sm btn-outline" onclick="toggleAll(false)">Clear</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:36px;"></th>
+                        <th>Name</th>
+                        <th>Grade</th>
+                        <th>EL</th>
+                        <th>Programs</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    <tr>
+                        <td><input type="checkbox" name="student_ids" value="{{ s.id }}" checked onchange="updateCount()"></td>
+                        <td>{{ s.full_name }}</td>
+                        <td>{{ s.grade_level or '-' }}</td>
+                        <td>{{ s.el_display }}</td>
+                        <td>
+                            {% if s.iep_status %}<span class="badge badge-warning">IEP</span>{% endif %}
+                            {% if s.section_504 %}<span class="badge badge-info">504</span>{% endif %}
+                            {% if s.has_ab_population %}<span class="badge" style="background:#EDE9FE;color:#6D28D9;font-size:0.68rem;">AB</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not students %}
+                    <tr><td colspan="5"><div class="empty-state"><p>No students match the filter.</p></div></td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card-body">
+            <div class="run-panel">
+                <div class="mode-radio" style="margin-bottom:12px;">
+                    <label><input type="radio" name="mode" value="individual" checked onchange="updateDurationDefault()"> Individual back-to-back slots</label>
+                    <label><input type="radio" name="mode" value="group" onchange="updateDurationDefault()"> Single group meeting</label>
+                </div>
+
+                <div class="run-grid">
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" name="title" class="form-control" value="Check-in" id="run-title">
+                    </div>
+                    <div class="form-group">
+                        <label>Meeting type</label>
+                        <select name="meeting_type" class="form-control">
+                            {% for code, label in meeting_types %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Duration (min)</label>
+                        <input type="number" name="duration" id="run-duration" class="form-control" value="15" min="5" max="240">
+                    </div>
+                    <div class="form-group">
+                        <label>Days ahead</label>
+                        <input type="number" name="days_ahead" class="form-control" value="14" min="1" max="30">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label>Notes (applied to all)</label>
+                    <textarea name="notes" class="form-control" rows="2"></textarea>
+                </div>
+                <div style="margin-top:12px;">
+                    <button type="submit" class="btn btn-primary" {% if not slots_exist or not students %}disabled{% endif %}>Generate Preview</button>
+                    <a href="{{ url_for('availability.index') }}" class="btn btn-outline">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+function updateCount() {
+    var boxes = document.querySelectorAll('input[name=student_ids]');
+    var checked = 0;
+    boxes.forEach(function(b){ if (b.checked) checked++; });
+    document.getElementById('selected-count').textContent = checked;
+}
+function toggleAll(state) {
+    document.querySelectorAll('input[name=student_ids]').forEach(function(b){ b.checked = state; });
+    updateCount();
+}
+function updateDurationDefault() {
+    var mode = document.querySelector('input[name=mode]:checked').value;
+    var dur = document.getElementById('run-duration');
+    var title = document.getElementById('run-title');
+    if (mode === 'group') {
+        if (dur.value === '15') dur.value = '30';
+        if (title.value === 'Check-in') title.value = 'Cohort check-in';
+    } else {
+        if (dur.value === '30') dur.value = '15';
+        if (title.value === 'Cohort check-in') title.value = 'Check-in';
+    }
+}
+</script>
+{% endblock %}
