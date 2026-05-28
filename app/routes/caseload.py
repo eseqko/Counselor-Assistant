@@ -1,10 +1,12 @@
 import io
 import json
-from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify
+from datetime import date, datetime, timezone
+from flask import (Blueprint, render_template, request, redirect, url_for,
+                   flash, send_file, jsonify, session, abort)
 from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student, Tag
+from app.models.rollover import RolloverSnapshot
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
@@ -12,6 +14,7 @@ from app.routes.graduation import (
     STATE_MIN_REQUIREMENTS, STATE_MIN_TOTAL, TOTAL_REQUIRED, _risk_level,
 )
 from app.utils.cte_status import compute_cte_status
+from app.utils import rollover as rollover_util
 try:
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
@@ -798,3 +801,149 @@ def save_cte_courses(id):
     db.session.commit()
     flash('CTE pathway details saved.', 'success')
     return redirect(url_for('caseload.view_student', id=id))
+
+
+# ── End-of-year rollover ─────────────────────────────────────────
+
+
+@caseload_bp.route('/rollover')
+@login_required
+def rollover():
+    """Review page: propose an action per student, editable inline."""
+    students = (Student.query
+                .filter_by(assigned_counselor_id=current_user.id, status='active')
+                .order_by(Student.grade_level.desc().nulls_last(),
+                          Student.last_name, Student.first_name)
+                .all())
+
+    rows = []
+    anomalies = []
+    for s in students:
+        action = rollover_util.default_action(s)
+        flags = rollover_util.detect_anomalies(s)
+        rows.append({
+            'student': s,
+            'default_action': action,
+            'flags': flags,
+        })
+        if flags:
+            anomalies.append({'student': s, 'flags': flags})
+
+    # Default school-year-end: June 15 of the current calendar year (or next
+    # year if we're already past June).
+    today = date.today()
+    end_year = today.year if today.month < 7 else today.year + 1
+    default_end = date(end_year, 6, 15)
+
+    # Recent snapshot still within undo window?
+    recent_snapshot = (RolloverSnapshot.query
+                       .filter_by(counselor_id=current_user.id, undone=False)
+                       .order_by(RolloverSnapshot.created_at.desc())
+                       .first())
+    if recent_snapshot and recent_snapshot.is_expired():
+        recent_snapshot = None
+
+    return render_template('caseload/rollover.html',
+                           rows=rows,
+                           anomalies=anomalies,
+                           actions=rollover_util.ACTIONS,
+                           default_end_date=default_end,
+                           recent_snapshot=recent_snapshot)
+
+
+@caseload_bp.route('/rollover/confirm', methods=['POST'])
+@login_required
+def rollover_confirm():
+    """Apply the per-row actions submitted from the review form."""
+    end_date_str = request.form.get('end_date', '').strip()
+    try:
+        end_date = date.fromisoformat(end_date_str)
+    except ValueError:
+        flash('Invalid end-of-year date.', 'danger')
+        return redirect(url_for('caseload.rollover'))
+
+    # Map student_id -> chosen action. Anything missing or invalid is skipped.
+    action_map = {}
+    for key, value in request.form.items():
+        if not key.startswith('action_'):
+            continue
+        try:
+            sid = int(key[len('action_'):])
+        except ValueError:
+            continue
+        if value in rollover_util.ACTION_KEYS:
+            action_map[sid] = value
+
+    if not action_map:
+        flash('No actions submitted.', 'warning')
+        return redirect(url_for('caseload.rollover'))
+
+    students = (Student.query
+                .filter(Student.id.in_(action_map.keys()),
+                        Student.assigned_counselor_id == current_user.id)
+                .all())
+
+    counts = {}
+    snapshot_items = []
+    for s in students:
+        action = action_map.get(s.id)
+        if not action:
+            continue
+        prior = rollover_util.apply_action(s, action, end_date)
+        prior['applied_action'] = action
+        snapshot_items.append(prior)
+        counts[action] = counts.get(action, 0) + 1
+        log_action('rollover.apply', resource_type='student',
+                   resource_id=s.id, details=f'action={action}')
+
+    if not snapshot_items:
+        flash('Nothing to apply — none of the selected students are on your caseload.', 'warning')
+        return redirect(url_for('caseload.rollover'))
+
+    snapshot = RolloverSnapshot(
+        counselor_id=current_user.id,
+        student_count=len(snapshot_items),
+        school_year_end_date=end_date,
+        payload=json.dumps(snapshot_items),
+    )
+    db.session.add(snapshot)
+    db.session.commit()
+    log_action('rollover.commit', resource_type='rollover_snapshot',
+               resource_id=snapshot.id,
+               details=f'students={len(snapshot_items)} end_date={end_date.isoformat()}')
+
+    summary = ', '.join(f'{n} {a.replace("_", " ")}' for a, n in sorted(counts.items()))
+    flash(f'Rollover applied: {summary}. Undo available for 24 hours.', 'success')
+    return redirect(url_for('caseload.rollover'))
+
+
+@caseload_bp.route('/rollover/undo/<int:snapshot_id>', methods=['POST'])
+@login_required
+def rollover_undo(snapshot_id):
+    """Restore students to the state captured in the given snapshot."""
+    snapshot = RolloverSnapshot.query.get_or_404(snapshot_id)
+    if snapshot.counselor_id != current_user.id:
+        abort(403)
+    if not snapshot.can_undo():
+        flash('That rollover can no longer be undone (already undone, or 24-hour window expired).', 'warning')
+        return redirect(url_for('caseload.rollover'))
+
+    restored = 0
+    for entry in snapshot.items():
+        s = Student.query.get(entry.get('student_id'))
+        if not s or s.assigned_counselor_id != current_user.id:
+            continue
+        rollover_util.restore(s, entry)
+        log_action('rollover.undo', resource_type='student',
+                   resource_id=s.id,
+                   details=f'snapshot={snapshot.id} undone_action={entry.get("applied_action")}')
+        restored += 1
+
+    snapshot.undone = True
+    snapshot.undone_at = datetime.now(timezone.utc)
+    db.session.commit()
+    log_action('rollover.undo_commit', resource_type='rollover_snapshot',
+               resource_id=snapshot.id, details=f'restored={restored}')
+
+    flash(f'Rollover undone. {restored} students restored.', 'success')
+    return redirect(url_for('caseload.rollover'))
