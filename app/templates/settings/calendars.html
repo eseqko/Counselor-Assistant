@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}School Calendars{% endblock %}
+{% block page_title %}School Calendars{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128197; Calendars set the quarter and semester boundaries the app uses to judge whether a student is on pace for their grade <em>at this point in the year</em>. The current school year is <strong>{{ current_year }}</strong>.</div>
+
+{# ---- Upload card ---- #}
+<div class="card">
+    <div class="card-header">Upload a District Calendar (PDF)</div>
+    <div class="card-body">
+        <p style="color:var(--gray);font-size:0.86rem;margin-bottom:12px;">
+            Upload an adopted district calendar PDF and the app will try to detect the quarter and
+            semester dates. You'll review the detected dates before anything is saved.
+        </p>
+        <form method="POST" action="{{ url_for('settings.upload_calendar') }}" enctype="multipart/form-data"
+              style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="calendar_pdf" accept="application/pdf,.pdf" class="form-control" style="max-width:360px;">
+            <button type="submit" class="btn btn-primary">Detect Dates</button>
+        </form>
+    </div>
+</div>
+
+{# ---- Add / edit / review form ---- #}
+{% set p = prefill %}
+<div class="card" id="calendar-form">
+    <div class="card-header">
+        {% if p and p.school_year %}Review &amp; Save: {{ p.school_year }}{% else %}Add / Edit a School Year{% endif %}
+    </div>
+    <div class="card-body">
+        {% if p and p.warnings %}
+        <div class="alert alert-warning" style="background:#fff8e1;border:1px solid #ffe082;padding:10px 12px;border-radius:6px;margin-bottom:14px;font-size:0.86rem;">
+            <strong>Couldn't auto-detect:</strong> {{ p.warnings | join(', ') }}. Please fill these in below.
+        </div>
+        {% endif %}
+
+        {% macro datefield(name, value, label) %}
+        <div class="form-group">
+            <label>{{ label }}</label>
+            <input type="date" name="{{ name }}" class="form-control" value="{{ value.isoformat() if value else '' }}">
+        </div>
+        {% endmacro %}
+
+        <form method="POST" action="{{ url_for('settings.save_calendar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if p and p.source %}<input type="hidden" name="source" value="{{ p.source }}">{% endif %}
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>School Year <span style="color:var(--gray);font-size:0.78rem;">(e.g. 2027-2028)</span></label>
+                    <input type="text" name="school_year" class="form-control" placeholder="2027-2028"
+                           pattern="\d{4}-\d{4}" required
+                           value="{{ p.school_year if p else '' }}">
+                </div>
+            </div>
+            <div class="grid-2">
+                {{ datefield('first_day', p.first_day if p else None, 'First day of school') }}
+                {{ datefield('last_day', p.last_day if p else None, 'Last day of school') }}
+            </div>
+
+            <h3>Quarters</h3>
+            <p style="color:var(--gray);font-size:0.8rem;margin-top:-6px;">
+                <em>End</em> is the last instructional day of the quarter. <em>Progress due</em> / <em>final due</em>
+                are when grades post — used so the app doesn't flag a student for grades that aren't in yet. Both are optional.
+            </p>
+            {% for n in [1, 2, 3, 4] %}
+            {% set q = (p.quarters[n] if p and p.quarters and n in p.quarters else None) %}
+            <div style="border:1px solid var(--border, #e5e7eb);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+                <div style="font-weight:600;margin-bottom:6px;">Quarter {{ n }}</div>
+                <div class="grid-2">
+                    {{ datefield('q%d_start' % n, q.start if q else None, 'Start') }}
+                    {{ datefield('q%d_end' % n, q.end if q else None, 'End') }}
+                    {{ datefield('q%d_progress_due' % n, q.progress_due if q else None, 'Progress report grades due') }}
+                    {{ datefield('q%d_final_due' % n, q.final_due if q else None, 'Quarter grades due') }}
+                </div>
+            </div>
+            {% endfor %}
+
+            <h3>Semesters</h3>
+            <p style="color:var(--gray);font-size:0.8rem;margin-top:-6px;">
+                For schools on a semester schedule. Defaults follow the quarters (Fall = Q1–Q2, Spring = Q3–Q4).
+            </p>
+            {% for n in [1, 2] %}
+            {% set s = (p.semesters[n] if p and p.semesters and n in p.semesters else None) %}
+            <div style="border:1px solid var(--border, #e5e7eb);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+                <div style="font-weight:600;margin-bottom:6px;">{{ 'Fall' if n == 1 else 'Spring' }} semester</div>
+                <div class="grid-2">
+                    {{ datefield('s%d_start' % n, s.start if s else None, 'Start') }}
+                    {{ datefield('s%d_end' % n, s.end if s else None, 'End') }}
+                    {{ datefield('s%d_final_due' % n, s.final_due if s else None, 'Semester grades due') }}
+                </div>
+            </div>
+            {% endfor %}
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Save Calendar</button>
+                <a href="{{ url_for('settings.calendars') }}" class="btn btn-outline">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ---- Existing calendars ---- #}
+<div class="card">
+    <div class="card-header">Configured School Years</div>
+    <div class="card-body">
+        {% if calendars %}
+        <table class="table" style="width:100%;font-size:0.86rem;">
+            <thead>
+                <tr>
+                    <th>Year</th><th>First / Last day</th><th>Quarter ends</th><th>Source</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in calendars %}
+                <tr {% if c.school_year == current_year %}style="background:#eef6ff;"{% endif %}>
+                    <td>
+                        <strong>{{ c.school_year }}</strong>
+                        {% if c.school_year == current_year %}<span class="badge" style="background:#3b82f6;color:#fff;font-size:0.7rem;padding:1px 6px;border-radius:4px;">current</span>{% endif %}
+                    </td>
+                    <td>{{ c.first_day.strftime('%b %-d, %Y') if c.first_day else '—' }} → {{ c.last_day.strftime('%b %-d, %Y') if c.last_day else '—' }}</td>
+                    <td>
+                        {% for q in c.quarters() %}Q{{ q.n }} {{ q.end.strftime('%b %-d') if q.end else '?' }}{% if not loop.last %} · {% endif %}{% endfor %}
+                    </td>
+                    <td style="color:var(--gray);">{{ c.source }}</td>
+                    <td style="text-align:right;white-space:nowrap;">
+                        <a href="{{ url_for('settings.calendars', edit=c.school_year) }}#calendar-form" class="btn btn-outline btn-sm">Edit</a>
+                        <form method="POST" action="{{ url_for('settings.delete_calendar', cal_id=c.id) }}" style="display:inline;"
+                              onsubmit="return confirm('Delete the {{ c.school_year }} calendar?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-outline btn-sm" style="color:#b91c1c;">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--gray);">No school years configured yet. Upload a PDF or add one above.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

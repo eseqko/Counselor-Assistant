@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 from datetime import datetime, date, timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, Response
@@ -13,6 +14,7 @@ from app.models.service_record import ServiceRecord
 from app.models.transcript import TranscriptRecord
 from app.models.course import Department, Course, GraduationRequirement
 from app.utils.audit import log_action
+from app.utils.helpers import current_school_year
 from config import Config
 
 settings_bp = Blueprint('settings', __name__)
@@ -737,6 +739,174 @@ def alerts():
 
     return render_template('settings/alerts.html',
         thresholds=current, defaults=DEFAULT_THRESHOLDS)
+
+
+_SY_RE = re.compile(r'^\d{4}-\d{4}$')
+
+
+def _calendar_view(cal):
+    """Shape a SchoolCalendar (or a parser dict) into template-friendly form."""
+    if cal is None:
+        return None
+    if isinstance(cal, dict):
+        return {
+            'school_year': cal.get('school_year', ''),
+            'first_day': cal.get('first_day'),
+            'last_day': cal.get('last_day'),
+            'quarters': {q['n']: q for q in cal.get('quarters', [])},
+            'semesters': {s['n']: s for s in cal.get('semesters', [])},
+            'source': cal.get('source', ''),
+            'warnings': cal.get('warnings', []),
+        }
+    return {
+        'school_year': cal.school_year,
+        'first_day': cal.first_day,
+        'last_day': cal.last_day,
+        'quarters': {q['n']: q for q in cal.quarters()},
+        'semesters': {s['n']: s for s in cal.semesters()},
+        'source': cal.source,
+        'warnings': [],
+    }
+
+
+def _calendar_from_form(form):
+    """Build a structured calendar dict from posted form fields."""
+    quarters = []
+    for n in (1, 2, 3, 4):
+        quarters.append({
+            'n': n,
+            'start': _parse_date(form.get(f'q{n}_start')),
+            'end': _parse_date(form.get(f'q{n}_end')),
+            'progress_due': _parse_date(form.get(f'q{n}_progress_due')),
+            'final_due': _parse_date(form.get(f'q{n}_final_due')),
+        })
+    semesters = []
+    for n in (1, 2):
+        semesters.append({
+            'n': n,
+            'start': _parse_date(form.get(f's{n}_start')),
+            'end': _parse_date(form.get(f's{n}_end')),
+            'final_due': _parse_date(form.get(f's{n}_final_due')),
+        })
+    return {
+        'school_year': (form.get('school_year') or '').strip(),
+        'first_day': _parse_date(form.get('first_day')),
+        'last_day': _parse_date(form.get('last_day')),
+        'quarters': quarters,
+        'semesters': semesters,
+    }
+
+
+@settings_bp.route('/calendars')
+@login_required
+def calendars():
+    """List district school calendars; optionally pre-fill the form for edit."""
+    from app.models.school_calendar import SchoolCalendar
+
+    all_cals = SchoolCalendar.query.order_by(SchoolCalendar.school_year.desc()).all()
+
+    prefill = None
+    edit_year = request.args.get('edit')
+    if edit_year:
+        cal = SchoolCalendar.for_year(edit_year)
+        prefill = _calendar_view(cal)
+
+    return render_template('settings/calendars.html',
+                           calendars=all_cals,
+                           prefill=prefill,
+                           current_year=current_school_year())
+
+
+@settings_bp.route('/calendars/save', methods=['POST'])
+@login_required
+def save_calendar():
+    """Create or update a school calendar from the manual / reviewed form."""
+    from app.models.school_calendar import SchoolCalendar
+
+    data = _calendar_from_form(request.form)
+    sy = data['school_year']
+    if not _SY_RE.match(sy):
+        flash('School year must look like "2027-2028".', 'danger')
+        return redirect(url_for('settings.calendars'))
+
+    cal = SchoolCalendar.for_year(sy)
+    created = cal is None
+    if created:
+        cal = SchoolCalendar(school_year=sy)
+        db.session.add(cal)
+
+    cal.first_day = data['first_day']
+    cal.last_day = data['last_day']
+    cal.set_quarters(data['quarters'])
+    cal.set_semesters(data['semesters'])
+    if request.form.get('source'):
+        cal.source = request.form.get('source')
+    elif created:
+        cal.source = 'manual'
+
+    db.session.commit()
+    log_action('update', 'school_calendar', details=f'Saved calendar {sy}')
+    flash(f'School calendar for {sy} saved.', 'success')
+    return redirect(url_for('settings.calendars'))
+
+
+@settings_bp.route('/calendars/upload', methods=['POST'])
+@login_required
+def upload_calendar():
+    """Parse an uploaded district calendar PDF and pre-fill the form for review."""
+    from app.models.school_calendar import SchoolCalendar
+    from app.utils.calendar_parser import parse_calendar_pdf
+
+    file = request.files.get('calendar_pdf')
+    if not file or not file.filename:
+        flash('Please choose a PDF to upload.', 'warning')
+        return redirect(url_for('settings.calendars'))
+    if not file.filename.lower().endswith('.pdf'):
+        flash('Please upload a PDF file.', 'warning')
+        return redirect(url_for('settings.calendars'))
+
+    tmp_dir = os.path.join(Config.DATA_DIR if hasattr(Config, 'DATA_DIR') else 'data', 'uploads')
+    os.makedirs(tmp_dir, exist_ok=True)
+    tmp_path = os.path.join(tmp_dir, f'_calendar_upload_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
+    try:
+        file.save(tmp_path)
+        parsed = parse_calendar_pdf(tmp_path)
+    except ValueError as e:
+        flash(f'Could not parse this calendar: {e}', 'danger')
+        return redirect(url_for('settings.calendars'))
+    except Exception:
+        flash('Could not read this PDF. Try entering the dates manually.', 'danger')
+        return redirect(url_for('settings.calendars'))
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    parsed['source'] = f'pdf:{file.filename}'
+    prefill = _calendar_view(parsed)
+
+    all_cals = SchoolCalendar.query.order_by(SchoolCalendar.school_year.desc()).all()
+    if prefill['warnings']:
+        flash('Review the highlighted fields below — some dates could not be '
+              'auto-detected. Then click Save.', 'warning')
+    else:
+        flash('Calendar parsed. Review the dates below, then click Save.', 'info')
+    return render_template('settings/calendars.html',
+                           calendars=all_cals,
+                           prefill=prefill,
+                           current_year=current_school_year())
+
+
+@settings_bp.route('/calendars/<int:cal_id>/delete', methods=['POST'])
+@login_required
+def delete_calendar(cal_id):
+    from app.models.school_calendar import SchoolCalendar
+    cal = SchoolCalendar.query.get_or_404(cal_id)
+    sy = cal.school_year
+    db.session.delete(cal)
+    db.session.commit()
+    log_action('delete', 'school_calendar', details=f'Deleted calendar {sy}')
+    flash(f'Deleted calendar for {sy}.', 'success')
+    return redirect(url_for('settings.calendars'))
 
 
 @settings_bp.route('/factory-reset', methods=['POST'])

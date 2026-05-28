@@ -192,7 +192,8 @@ def _build_student_insights_prompt(student):
     """
     from app.routes.graduation import (expected_progress, projected_credits,
                                        pace_label)
-    from app.utils.helpers import current_quarter, parse_transcript_quarter
+    from app.utils.helpers import (current_quarter, parse_transcript_quarter,
+                                   semester_for_quarter, semester_name)
 
     grade_name = _grade_name(student.grade_level)
     profile = grade_name
@@ -280,8 +281,10 @@ def _build_student_insights_prompt(student):
         if pace not in ('pace unknown',) and wip > 0:
             pace_phrase = f"{pace} if current WIP courses pass"
 
+        sem_label = semester_name(semester_for_quarter(quarter))
+        sem_suffix = f" ({sem_label})" if sem_label else ""
         transcript_context = (
-            f"\nAS OF: end of Q{quarter} of grade {student.grade_level}"
+            f"\nAS OF: end of Q{quarter} of grade {student.grade_level}{sem_suffix}"
             f"\nEXPECTED BY THIS POINT: ~{exp['credits_expected']}/225 credits, "
             f"{exp['ag_expected_low']}-{exp['ag_expected_high']} of 7 a-g areas ({exp['ag_label']})"
             f"\nACTUAL: {wip_phrase} credits, {ag_met} of 7 a-g"
