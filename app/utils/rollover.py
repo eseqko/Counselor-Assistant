@@ -44,8 +44,37 @@ def protected_5th_year_reasons(student):
     return reasons
 
 
-def default_action(student):
-    """Pick the default action for a student in the review page."""
+def credit_status_summary(student):
+    """Return {risk, total_needed} for the rollover flag, or None.
+
+    Prefers the cached risk_level on the most recent TranscriptRecord; falls
+    back to live computation against grade records only when no transcript
+    exists. Returns None when risk cannot be determined.
+    """
+    latest = student.transcript_records.first()
+    if latest and latest.risk_level and latest.risk_level != 'unknown':
+        return {
+            'risk': latest.risk_level,
+            'total_needed': latest.total_needed or 0,
+        }
+    try:
+        from app.routes.graduation import _build_student_grad_data
+        data = _build_student_grad_data(student)
+    except Exception:
+        return None
+    risk = data.get('risk') if data else None
+    if not risk or risk == 'unknown':
+        return None
+    return {'risk': risk, 'total_needed': data.get('total_needed', 0)}
+
+
+def default_action(student, credit_status=None):
+    """Pick the default action for a student in the review page.
+
+    `credit_status` is an optional pre-computed summary from
+    credit_status_summary(). Routes that render many students should pass it
+    in to avoid double-computing.
+    """
     if student.grade_level is None:
         return 'skip'
     if student.grade_level > 12 or student.grade_level < 6:
@@ -53,15 +82,16 @@ def default_action(student):
     if _has_senior_studies_tag(student):
         return 'graduate'
     if student.grade_level == 12:
-        # Legally protected 12th graders need a deliberate decision — never
-        # auto-graduate them.
         if protected_5th_year_reasons(student):
+            return 'skip'
+        cs = credit_status_summary(student) if credit_status is None else credit_status
+        if cs and cs.get('risk') in ('critical', 'at-risk'):
             return 'skip'
         return 'graduate'
     return 'promote'
 
 
-def detect_anomalies(student):
+def detect_anomalies(student, credit_status=None):
     """Return a list of short anomaly labels for the student, or []."""
     flags = []
     if student.grade_level is None:
@@ -80,6 +110,14 @@ def detect_anomalies(student):
         reasons = protected_5th_year_reasons(student)
         if reasons:
             flags.append('eligible for 5th year: ' + ', '.join(reasons))
+
+    cs = credit_status_summary(student) if credit_status is None else credit_status
+    if cs and cs.get('risk') in ('critical', 'at-risk'):
+        needed = cs.get('total_needed', 0)
+        if needed > 0:
+            flags.append(f"credits {cs['risk']}: {int(needed)} short")
+        else:
+            flags.append(f"credits {cs['risk']}")
     return flags
 
 

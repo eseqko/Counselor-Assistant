@@ -819,8 +819,9 @@ def rollover():
     rows = []
     anomalies = []
     for s in students:
-        action = rollover_util.default_action(s)
-        flags = rollover_util.detect_anomalies(s)
+        cs = rollover_util.credit_status_summary(s)
+        action = rollover_util.default_action(s, credit_status=cs)
+        flags = rollover_util.detect_anomalies(s, credit_status=cs)
         rows.append({
             'student': s,
             'default_action': action,
