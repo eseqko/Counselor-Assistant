@@ -3,10 +3,8 @@ import json
 from collections import defaultdict
 from flask import Blueprint, render_template
 from flask_login import login_required, current_user
-from app import db
 from app.models.student import Student
 from app.models.grade import GradeRecord
-from app.models.transcript import TranscriptRecord
 
 graduation_bp = Blueprint('graduation', __name__)
 
@@ -150,7 +148,6 @@ def _risk_level(total_completed, total_required, grade_level):
     # Grade 9 end ≈ 25%, Grade 10 end ≈ 50%, Grade 11 end ≈ 75%, Grade 12 end = 100%
     expected_pct = {9: 0.15, 10: 0.40, 11: 0.65, 12: 0.85}
     expected = total_required * expected_pct.get(grade_level, 0.5)
-    pct = total_completed / total_required if total_required else 0
 
     if total_completed < expected * 0.6:
         return 'critical'
@@ -159,6 +156,77 @@ def _risk_level(total_completed, total_required, grade_level):
     elif total_completed < expected * 0.95:
         return 'warning'
     return 'on-track'
+
+
+# Cumulative end-of-grade credit benchmarks (same numbers _risk_level uses).
+_EOY_PCT = {9: 0.15, 10: 0.40, 11: 0.65, 12: 0.85}
+# Credits already accumulated entering each grade (end of previous grade).
+_SOG_PCT = {9: 0.00, 10: 0.15, 11: 0.40, 12: 0.65}
+
+EXPECTED_AG_BY_GRADE = {
+    9:  (0, 1, "foundation building"),
+    10: (1, 2, "typical mid-career"),
+    11: (3, 5, "approaching college-ready"),
+    12: (5, 7, "should be near complete"),
+}
+
+
+def expected_progress(grade_level, quarter=4, total_required=TOTAL_REQUIRED):
+    """Return grade- AND quarter-relative expectations.
+
+    Quarter is 1-4; defaults to 4 (year-end). Linear interpolation between
+    start-of-grade (Q0) and end-of-grade (Q4) credit benchmarks. Returns
+    None for grades outside 9-12 (middle school has no HS credit baseline).
+    """
+    if not grade_level or grade_level < 9 or grade_level > 12:
+        return None
+    quarter = max(1, min(int(quarter or 4), 4))
+    start_pct = _SOG_PCT[grade_level]
+    end_pct = _EOY_PCT[grade_level]
+    progress_pct = start_pct + (end_pct - start_pct) * (quarter / 4)
+    ag_low, ag_high, ag_label = EXPECTED_AG_BY_GRADE[grade_level]
+    return {
+        'credits_expected': round(total_required * progress_pct),
+        'credits_pct': progress_pct,
+        'quarter': quarter,
+        'ag_expected_low': ag_low,
+        'ag_expected_high': ag_high,
+        'ag_label': ag_label,
+    }
+
+
+def projected_credits(total_completed, total_wip):
+    """Optimistic projection assuming all WIP courses pass."""
+    return (total_completed or 0) + (total_wip or 0)
+
+
+def pace_label(total_completed, total_wip, grade_level, quarter=4):
+    """Translate (completed + WIP) into LLM-friendly prose.
+
+    Compares the PROJECTED total against the quarter-appropriate
+    expectation. Matches the counselor's working assumption that WIP
+    courses will pass unless proven otherwise.
+
+    Returns 'pace unknown' for the all-zero case (completed=0 AND wip=0):
+    that typically means transcript data hasn't been imported yet for the
+    current term, not that the student has actually failed everything.
+    """
+    exp = expected_progress(grade_level, quarter=quarter)
+    if not exp or not exp['credits_expected']:
+        return 'pace unknown'
+    projected = projected_credits(total_completed, total_wip)
+    if projected == 0:
+        return 'pace unknown'
+    ratio = projected / exp['credits_expected']
+    if ratio >= 1.05:
+        return 'ahead of pace'
+    if ratio >= 0.95:
+        return 'on pace'
+    if ratio >= 0.80:
+        return 'slightly behind pace'
+    if ratio >= 0.60:
+        return 'behind pace'
+    return 'critically behind pace'
 
 
 def _subject_deficiency(credits_data):

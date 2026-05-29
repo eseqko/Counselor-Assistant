@@ -1,5 +1,5 @@
 """End-of-year rollover: per-student action defaults and anomaly detection."""
-from app.models.student import Student, Tag
+from app.models.student import Tag
 
 
 # Allowed per-row actions. Keep in sync with the dropdown in rollover.html and
@@ -44,8 +44,70 @@ def protected_5th_year_reasons(student):
     return reasons
 
 
-def default_action(student):
-    """Pick the default action for a student in the review page."""
+def credit_status_summary(student):
+    """Return WIP-aware credit summary for the rollover flag, or None.
+
+    Uses the transcript's actual (completed, WIP, quarter) tuple. Two
+    different gap measures, used for different decisions:
+
+    * `behind_pace` — projected vs the quarter-appropriate expectation.
+      Used for grades 9-11 (the question is whether they're on grade-pace).
+    * `short_of_graduation` — projected vs the 225-credit graduation
+      requirement. Used for grade 12 (the question is whether they will
+      actually graduate this spring).
+
+    Returns None when no usable data exists.
+    """
+    from app.routes.graduation import (expected_progress, projected_credits,
+                                       pace_label, TOTAL_REQUIRED)
+    from app.utils.helpers import parse_transcript_quarter, current_quarter
+
+    latest = student.transcript_records.first()
+    if not latest:
+        return None
+
+    completed = int(latest.total_completed or 0)
+    wip = int(latest.total_wip or 0)
+    if completed == 0 and wip == 0:
+        return None
+
+    quarter = current_quarter()
+    if latest.quarter:
+        _, q_from_tr = parse_transcript_quarter(latest.quarter)
+        if q_from_tr:
+            quarter = q_from_tr
+
+    exp = expected_progress(student.grade_level, quarter=quarter)
+    if not exp:
+        return None
+
+    projected = projected_credits(completed, wip)
+    pace = pace_label(completed, wip, student.grade_level, quarter=quarter)
+    return {
+        'pace': pace,
+        'completed': completed,
+        'wip': wip,
+        'projected': projected,
+        'expected': exp['credits_expected'],
+        'behind_pace': max(0, exp['credits_expected'] - projected),
+        'short_of_graduation': max(0, TOTAL_REQUIRED - projected),
+    }
+
+
+_BEHIND_PACE_LABELS = ('behind pace', 'critically behind pace')
+# Senior is "skipped" from auto-graduate if projected total is more than
+# this many credits short of the 225 graduation requirement. Small slack so
+# late-posting grades don't trigger needless review.
+_SENIOR_GRADUATION_SLACK = 5
+
+
+def default_action(student, credit_status=None):
+    """Pick the default action for a student in the review page.
+
+    `credit_status` is an optional pre-computed summary from
+    credit_status_summary(). Routes that render many students should pass it
+    in to avoid double-computing.
+    """
     if student.grade_level is None:
         return 'skip'
     if student.grade_level > 12 or student.grade_level < 6:
@@ -53,15 +115,20 @@ def default_action(student):
     if _has_senior_studies_tag(student):
         return 'graduate'
     if student.grade_level == 12:
-        # Legally protected 12th graders need a deliberate decision — never
-        # auto-graduate them.
         if protected_5th_year_reasons(student):
+            return 'skip'
+        cs = credit_status_summary(student) if credit_status is None else credit_status
+        # For seniors, the decisive question is "will projected total reach
+        # the graduation requirement?" — not quarter-pace. A senior at
+        # 155 projected vs 191 expected is "slightly behind pace" but still
+        # 70 credits short of graduating. Skip unless within 5 credits of 225.
+        if cs and cs.get('short_of_graduation', 0) > _SENIOR_GRADUATION_SLACK:
             return 'skip'
         return 'graduate'
     return 'promote'
 
 
-def detect_anomalies(student):
+def detect_anomalies(student, credit_status=None):
     """Return a list of short anomaly labels for the student, or []."""
     flags = []
     if student.grade_level is None:
@@ -80,6 +147,29 @@ def detect_anomalies(student):
         reasons = protected_5th_year_reasons(student)
         if reasons:
             flags.append('eligible for 5th year: ' + ', '.join(reasons))
+
+    cs = credit_status_summary(student) if credit_status is None else credit_status
+    if cs:
+        completed = cs.get('completed', 0)
+        wip = cs.get('wip', 0)
+        projected = cs.get('projected', 0)
+
+        # Senior-specific: surface graduation shortfall when projected won't
+        # reach 225, regardless of "pace" label.
+        if (student.grade_level == 12
+                and cs.get('short_of_graduation', 0) > _SENIOR_GRADUATION_SLACK):
+            short = int(cs['short_of_graduation'])
+            wip_phrase = f"{completed}+{wip} WIP" if wip else f"{completed}"
+            flags.append(
+                f"projected short of graduation: {wip_phrase} = {projected}/225 ({short} short)"
+            )
+        # Lower-grade flag: pace-behind (so counselor can plan interventions
+        # for next year). Skip when senior-shortfall flag already covered it.
+        elif cs.get('pace') in _BEHIND_PACE_LABELS:
+            expected = cs.get('expected', 0)
+            behind = int(cs.get('behind_pace', 0))
+            wip_phrase = f"({wip} WIP, {behind} short after WIP)" if wip else f"(0 WIP, {behind} short)"
+            flags.append(f"credits {cs['pace']}: {completed}/{expected} {wip_phrase}")
     return flags
 
 

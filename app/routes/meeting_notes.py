@@ -2,13 +2,12 @@
 import re
 import os
 import uuid
-import tempfile
 from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from markupsafe import escape
 from app import db, csrf
-from app.models.meeting_note import MeetingNote, meeting_note_students
+from app.models.meeting_note import MeetingNote
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils import ollama_client

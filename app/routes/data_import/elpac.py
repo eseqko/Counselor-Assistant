@@ -7,7 +7,7 @@ graduates, withdrawals, and other counselors' students are silently skipped.
 """
 import csv
 import io
-from datetime import datetime, date
+from datetime import datetime
 from flask import render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import login_required, current_user
 from app import db, csrf
@@ -18,7 +18,7 @@ from app.utils.audit import log_action
 from app.utils.caseload import caseload_student_ids
 from app.routes.data_import import data_import_bp
 from app.routes.data_import._parsers import (
-    parse_upload_file, build_elpac_col_map, ELPAC_HEADERS,
+    parse_upload_file, build_elpac_col_map,
 )
 
 

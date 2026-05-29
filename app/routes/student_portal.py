@@ -1,7 +1,6 @@
 """Student portal — public AI tools accessible via shareable link."""
-import json
 from flask import Blueprint, render_template, request, jsonify
-from app import db, csrf
+from app import csrf
 from app.models.user import User
 from app.utils.student_tools_registry import STUDENT_TOOLS, get_student_tool
 from app.utils import ollama_client

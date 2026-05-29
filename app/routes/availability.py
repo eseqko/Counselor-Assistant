@@ -1,5 +1,5 @@
 """Availability management, public booking page, and cohort auto-scheduling."""
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timezone
 from flask import (Blueprint, render_template, request, jsonify, abort, session,
                    flash, redirect, url_for, Response)
 from flask_login import login_required, current_user
@@ -10,10 +10,9 @@ from app.models.student import Student
 from app.models.user import User
 from app.utils import google_client, google_calendar
 from app.utils.audit import log_action
-from app.utils.caseload import caseload_student_ids
 from app.utils.ics import build_ical_feed
 from app.utils.scheduling import (find_available_slots, has_upcoming_booking,
-                                  _fmt_time, _is_busy)
+                                  _fmt_time)
 
 availability_bp = Blueprint('availability', __name__)
 

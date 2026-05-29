@@ -294,12 +294,20 @@ def create_app(config_class=Config):
         from app.models import intervention, screening, document, post_grad
         from app.models import asca_program
         from app.models import rollover
+        from app.models import school_calendar
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 
         # Auto-migrate: add any missing columns/indexes to existing tables
         _add_missing_columns(app)
         _add_missing_indexes(app)
+
+        # Seed district school calendars (idempotent, non-destructive)
+        try:
+            from app.utils.calendar_seed import ensure_calendars_seeded
+            ensure_calendars_seeded()
+        except Exception:
+            db.session.rollback()
 
         # Demo mode: seed curated dataset and skip the default-counselor setup
         from app.models.user import User

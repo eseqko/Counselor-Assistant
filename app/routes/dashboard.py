@@ -1,7 +1,6 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.models.student import Student
 from app.models.calendar_event import CalendarEvent
 from app.models.note import Note
 from app.models.activity import Activity
@@ -9,7 +8,7 @@ from app.models.transcript import TranscriptRecord
 from app.utils.alert_engine import get_alerts
 from app.utils.caseload import caseload_student_ids
 from sqlalchemy import func as sa_func
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta
 import json
 import requests as http_requests
 import pytz

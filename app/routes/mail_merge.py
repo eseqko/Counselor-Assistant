@@ -4,10 +4,9 @@ import os
 from datetime import date
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
-from app import db, csrf
 from app.models.student import Student
 from app.models.grade import GradeRecord
-from app.routes.graduation import _build_student_grad_data, GRAD_REQUIREMENTS, TOTAL_REQUIRED
+from app.routes.graduation import _build_student_grad_data, TOTAL_REQUIRED
 
 mail_merge_bp = Blueprint('mail_merge', __name__)
 

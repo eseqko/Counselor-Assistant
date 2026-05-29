@@ -2,7 +2,7 @@
 from flask import Blueprint, request, jsonify, url_for
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
-from app import db, csrf
+from app import db
 from app.models.student import Student
 from app.models.note import Note
 from app.models.meeting_note import MeetingNote

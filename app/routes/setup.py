@@ -1,5 +1,5 @@
 """First-run setup wizard. Guides new users through initial configuration."""
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, current_user
 from app import db, csrf
 from app.models.user import User
@@ -7,7 +7,6 @@ from app.models.student import Student
 from app.utils.audit import log_action
 import json, csv, io, os
 from config import Config
-from werkzeug.utils import secure_filename
 
 setup_bp = Blueprint('setup', __name__, template_folder='../templates/setup')
 

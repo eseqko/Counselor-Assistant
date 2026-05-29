@@ -1,14 +1,11 @@
 """Meeting Prep Packs — one-click student packet for SST/IEP/parent meetings."""
 import json
-from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
-from app import db
 from app.models.student import Student
 from app.models.grade import GradeRecord
 from app.models.note import Note
-from app.models.service_record import ServiceRecord
 from app.models.attendance import AttendanceRecord
 from app.models.iep504 import IEP504Record
 

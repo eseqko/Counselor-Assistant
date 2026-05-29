@@ -2,7 +2,7 @@ import io
 import json
 from datetime import date, datetime, timezone
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, send_file, jsonify, session, abort)
+                   flash, send_file, jsonify, abort)
 from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student, Tag
@@ -819,8 +819,9 @@ def rollover():
     rows = []
     anomalies = []
     for s in students:
-        action = rollover_util.default_action(s)
-        flags = rollover_util.detect_anomalies(s)
+        cs = rollover_util.credit_status_summary(s)
+        action = rollover_util.default_action(s, credit_status=cs)
+        flags = rollover_util.detect_anomalies(s, credit_status=cs)
         rows.append({
             'student': s,
             'default_action': action,

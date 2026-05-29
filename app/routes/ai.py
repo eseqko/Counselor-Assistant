@@ -2,15 +2,12 @@
 import json
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from app import db
 from app.models.note import Note
 from app.models.student import Student
 from app.models.service_record import ServiceRecord
-from app.models.activity import Activity
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
-from app.models.transcript import TranscriptRecord
-from app.models.course import Course, Department, GraduationRequirement
+from app.models.course import Course
 from app.utils import ollama_client
 from app.utils.stream_helpers import stream_sse
 from app.utils.context_budget import budget_prompt
@@ -21,8 +18,20 @@ from datetime import date, timedelta
 ai_bp = Blueprint('ai', __name__)
 
 COUNSELOR_SYSTEM_PROMPT = (
-    "You are a school counselor assistant. Give professional, actionable, ASCA-aligned "
-    "feedback. Be concise. Use bullet points. Only reference provided information."
+    "You are an experienced K-12 school counselor assistant. Give professional, "
+    "actionable, ASCA-aligned feedback. Be concise. Use bullet points. Only "
+    "reference provided information.\n\n"
+    "IMPORTANT — interpret all academic data RELATIVE to the student's current "
+    "grade level AND where they are in the school year. Credits, a-g areas, "
+    "and course completion are cumulative; what's normal at the end of 10th "
+    "grade is very different from 12th, and a 0 in Q1 means something very "
+    "different from a 0 in Q4. When the prompt includes 'EXPECTED' or 'pace' "
+    "labels, treat those as your benchmark. Assume students currently enrolled "
+    "in (WIP) courses will pass them unless the data explicitly says otherwise; "
+    "react to actual failures, not to in-progress credits that haven't posted "
+    "yet. Reserve graduation-risk language for students explicitly flagged as "
+    "behind pace for their grade and quarter, or for 11th-12th graders with "
+    "credit/a-g deficits projected after WIP courses complete."
 )
 
 
@@ -160,9 +169,31 @@ Provide concise bullet points:
     return stream_sse(prompt, system=COUNSELOR_SYSTEM_PROMPT)
 
 
+_GRADE_NAMES = {
+    6: '6th grader (middle school)', 7: '7th grader (middle school)',
+    8: '8th grader (middle school)',
+    9: '9th grader', 10: '10th grader', 11: '11th grader', 12: 'senior',
+}
+
+
+def _grade_name(n):
+    return _GRADE_NAMES.get(n, f'Grade {n}' if n else 'unknown grade')
+
+
 def _build_student_insights_prompt(student):
-    """Build a compact insights prompt for a student, optimized for small LLMs."""
-    profile = f"Grade {student.grade_level or 'N/A'}"
+    """Build a compact insights prompt for a student, optimized for small LLMs.
+
+    Frames credit and a-g progress relative to the student's grade level AND
+    the quarter of the school year, so small models can't misread mid-career
+    students as graduation risks based on absolute totals alone.
+    """
+    from app.routes.graduation import (expected_progress, projected_credits,
+                                       pace_label)
+    from app.utils.helpers import (current_quarter, parse_transcript_quarter,
+                                   semester_for_quarter, semester_name)
+
+    grade_name = _grade_name(student.grade_level)
+    profile = grade_name
     designations = []
     if student.iep_status:
         designations.append("IEP")
@@ -223,12 +254,47 @@ def _build_student_insights_prompt(student):
         grade_strs = [f"{g.course_name}:{g.letter_grade or 'N/A'}" for g in recent_grades]
         grades_context = f"\nGrades: GPA {avg_gpa}, {len(failing)} failing — {', '.join(grade_strs)}"
 
+    # Quarter- and WIP-aware academic block. Prefers the transcript's own
+    # reporting point; falls back to today's date if no transcript exists.
     transcript_context = ""
     latest_tr = student.transcript_records.first()
-    if latest_tr:
-        transcript_context = f"\nTranscript: {int(latest_tr.total_completed)}/225 credits | Risk: {latest_tr.risk_level} | a-g: {latest_tr.ag_areas_met}/7 met"
+    quarter = current_quarter()
+    if latest_tr and latest_tr.quarter:
+        _, q_from_tr = parse_transcript_quarter(latest_tr.quarter)
+        if q_from_tr:
+            quarter = q_from_tr
 
-        if latest_tr.credits_json:
+    exp = expected_progress(student.grade_level, quarter=quarter)
+    pace = None
+    if exp and latest_tr:
+        completed = int(latest_tr.total_completed or 0)
+        wip = int(latest_tr.total_wip or 0)
+        projected = projected_credits(completed, wip)
+        pace = pace_label(completed, wip, student.grade_level, quarter=quarter)
+
+        ag_met = latest_tr.ag_areas_met or 0
+        wip_phrase = f"{completed} completed + {wip} WIP (projected {projected})" if wip else f"{completed} completed"
+        pace_phrase = pace
+        if pace not in ('pace unknown',) and wip > 0:
+            pace_phrase = f"{pace} if current WIP courses pass"
+
+        sem_label = semester_name(semester_for_quarter(quarter))
+        sem_suffix = f" ({sem_label})" if sem_label else ""
+        transcript_context = (
+            f"\nAS OF: end of Q{quarter} of grade {student.grade_level}{sem_suffix}"
+            f"\nEXPECTED BY THIS POINT: ~{exp['credits_expected']}/225 credits, "
+            f"{exp['ag_expected_low']}-{exp['ag_expected_high']} of 7 a-g areas ({exp['ag_label']})"
+            f"\nACTUAL: {wip_phrase} credits, {ag_met} of 7 a-g"
+            f"\nPACE: {pace_phrase}"
+        )
+
+        # Credit gaps line: only emit when actually behind, or for upperclassmen
+        # where the gap detail is always actionable. For on-pace 9-10 it's noise.
+        should_show_gaps = (
+            (student.grade_level or 0) >= 11
+            or pace in ('behind pace', 'critically behind pace')
+        )
+        if should_show_gaps and latest_tr.credits_json:
             try:
                 creds = json.loads(latest_tr.credits_json)
                 gaps = []
@@ -250,6 +316,16 @@ def _build_student_insights_prompt(student):
             except (json.JSONDecodeError, TypeError):
                 pass
 
+    # Grade-conditional bullet 3 phrasing.
+    if (student.grade_level or 0) >= 11:
+        bullet_3 = ("3. **Graduation Status** — On track for spring graduation, "
+                    "accounting for WIP courses? Specific credit gaps or a-g "
+                    "deficiencies not covered by current enrollment?")
+    else:
+        bullet_3 = (f"3. **Graduation Progress** — Are credits and a-g on pace "
+                    f"for {grade_name} at this point in the year? Any patterns "
+                    f"to address now to stay on track for 12th?")
+
     return f"""Analyze this student and provide support recommendations.
 
 STUDENT: {profile}
@@ -261,7 +337,7 @@ RECENT SERVICES:{services_summary or ' None'}
 Provide concise bullet points for:
 1. **Patterns** — Key themes in counseling history
 2. **Risk Indicators** — Attendance, grades, or behavioral concerns
-3. **Graduation Status** — On track? Credit gaps? a-g deficiencies?
+{bullet_3}
 4. **Next Steps** — 3-5 specific, actionable interventions
 {"5. **URGENT** — " + str(overdue) + " overdue follow-ups!" if overdue else ""}"""
 
@@ -443,6 +519,26 @@ Provide concise bullet points:
 #  AI COURSE RECOMMENDATIONS (4x4 Schedule)
 # =====================================================================
 
+def _transcript_credit_gaps(transcript):
+    """Return {subject: credits_needed} from a transcript's credits_json.
+
+    Subject keys keep their original case (callers that need case-insensitive
+    matching should lower() them). Returns {} when there's no transcript or
+    no shortfall.
+    """
+    gaps = {}
+    if transcript and transcript.credits_json:
+        try:
+            creds = json.loads(transcript.credits_json)
+            for subj, d in creds.items():
+                need = max(0, (d.get('required', 0) or 0) - (d.get('completed', 0) or 0))
+                if need > 0:
+                    gaps[subj.strip()] = need
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return gaps
+
+
 def build_recommended_schedule(student, target_grade_level=None,
                                exclude_course_numbers=None,
                                credit_gaps=None, ag_deficiencies=None):
@@ -462,18 +558,8 @@ def build_recommended_schedule(student, target_grade_level=None,
     if credit_gaps is None or ag_deficiencies is None:
         latest_transcript = student.transcript_records.first()
         if credit_gaps is None:
-            credit_gaps = {}
-            if latest_transcript and latest_transcript.credits_json:
-                try:
-                    creds = json.loads(latest_transcript.credits_json)
-                    for subj, d in creds.items():
-                        req = d.get('required', 0) or 0
-                        comp = d.get('completed', 0) or 0
-                        need = max(0, req - comp)
-                        if need > 0:
-                            credit_gaps[subj.lower().strip()] = need
-                except (json.JSONDecodeError, TypeError):
-                    pass
+            credit_gaps = {s.lower(): n for s, n
+                           in _transcript_credit_gaps(latest_transcript).items()}
         if ag_deficiencies is None:
             ag_deficiencies = {}
             if latest_transcript and latest_transcript.ag_json:
@@ -603,7 +689,6 @@ def course_recommendations():
             )
         })
 
-    selected = list(term1) + list(term2)
     next_grade = (student.grade_level or 9) + 1
 
     def format_course_line(rank, item):
@@ -632,6 +717,8 @@ def course_recommendations():
     schedule_text = "\n".join(lines)
 
     # --- Build context for AI to add explanations ---
+    latest_transcript = student.transcript_records.first()
+    credit_gaps = _transcript_credit_gaps(latest_transcript)
     transcript_summary = "No transcript data available."
     if latest_transcript:
         transcript_summary = (

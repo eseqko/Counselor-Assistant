@@ -1,5 +1,4 @@
-import json
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, redirect, url_for
 from flask_login import login_required, current_user
 from app import db
 from app.models.activity import Activity
@@ -209,8 +208,6 @@ def early_warning():
 
     today = date.today()
     thirty_days_ago = today - timedelta(days=30)
-    sixty_days_ago = today - timedelta(days=60)
-    ninety_days_ago = today - timedelta(days=90)
 
     student_ids = [s.id for s in students]
 
