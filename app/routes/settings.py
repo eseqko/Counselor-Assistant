@@ -7,7 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from flask import jsonify
 from app import db, csrf
-from app.models.user import User, AuditLog
+from app.models.user import AuditLog
 from app.models.student import Student, Tag
 from app.models.note import Note
 from app.models.service_record import ServiceRecord

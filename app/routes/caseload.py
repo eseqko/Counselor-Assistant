@@ -2,7 +2,7 @@ import io
 import json
 from datetime import date, datetime, timezone
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, send_file, jsonify, session, abort)
+                   flash, send_file, jsonify, abort)
 from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student, Tag

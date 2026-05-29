@@ -4,15 +4,14 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
-from app import db, csrf
+from app import db
 from app.models.student import Student
 from app.models.academic_plan import AcademicPlan
 from app.models.grade import GradeRecord
 from app.models.course import Course
 from app.routes.graduation import (
     _compute_credits_from_grades, _compute_ag_from_grades,
-    _risk_level, GRAD_REQUIREMENTS, AG_REQUIREMENTS, TOTAL_REQUIRED,
-    _SUBJECT_MAP,
+    _risk_level, GRAD_REQUIREMENTS, TOTAL_REQUIRED, _SUBJECT_MAP,
 )
 from app.routes.ai import build_recommended_schedule
 from app.utils.audit import log_action

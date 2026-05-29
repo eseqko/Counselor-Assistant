@@ -18,7 +18,6 @@ from app.utils.context_budget import budget_prompt
 from app.utils.audit import log_action
 from app.models.knowledge_base import KnowledgeDocument, KnowledgeChunk
 from app.utils.knowledge_base import build_knowledge_context
-from collections import defaultdict
 
 ai_tools_bp = Blueprint('ai_tools', __name__, template_folder='../templates/ai_tools')
 

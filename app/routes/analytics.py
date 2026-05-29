@@ -1,5 +1,5 @@
 """Data Visualizations — analytics dashboard with Chart.js."""
-from datetime import date, timedelta, timezone
+from datetime import date, timedelta
 from collections import Counter, defaultdict
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
@@ -10,12 +10,10 @@ from app.models.attendance import AttendanceRecord
 from app.models.note import Note
 from app.models.service_record import ServiceRecord
 from app.models.activity import Activity
-from app.models.iep504 import IEP504Record
 from app.models.elpac import ELPACScore
 from app.utils.elpi import (
     compute_elpi, elpi_rank, SIMPLIFIED_CATEGORIES, FULL_CATEGORIES,
 )
-from sqlalchemy import func
 
 analytics_bp = Blueprint('analytics', __name__)
 

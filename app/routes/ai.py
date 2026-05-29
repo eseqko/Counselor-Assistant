@@ -2,15 +2,12 @@
 import json
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from app import db
 from app.models.note import Note
 from app.models.student import Student
 from app.models.service_record import ServiceRecord
-from app.models.activity import Activity
 from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
-from app.models.transcript import TranscriptRecord
-from app.models.course import Course, Department, GraduationRequirement
+from app.models.course import Course
 from app.utils import ollama_client
 from app.utils.stream_helpers import stream_sse
 from app.utils.context_budget import budget_prompt
@@ -522,6 +519,26 @@ Provide concise bullet points:
 #  AI COURSE RECOMMENDATIONS (4x4 Schedule)
 # =====================================================================
 
+def _transcript_credit_gaps(transcript):
+    """Return {subject: credits_needed} from a transcript's credits_json.
+
+    Subject keys keep their original case (callers that need case-insensitive
+    matching should lower() them). Returns {} when there's no transcript or
+    no shortfall.
+    """
+    gaps = {}
+    if transcript and transcript.credits_json:
+        try:
+            creds = json.loads(transcript.credits_json)
+            for subj, d in creds.items():
+                need = max(0, (d.get('required', 0) or 0) - (d.get('completed', 0) or 0))
+                if need > 0:
+                    gaps[subj.strip()] = need
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return gaps
+
+
 def build_recommended_schedule(student, target_grade_level=None,
                                exclude_course_numbers=None,
                                credit_gaps=None, ag_deficiencies=None):
@@ -541,18 +558,8 @@ def build_recommended_schedule(student, target_grade_level=None,
     if credit_gaps is None or ag_deficiencies is None:
         latest_transcript = student.transcript_records.first()
         if credit_gaps is None:
-            credit_gaps = {}
-            if latest_transcript and latest_transcript.credits_json:
-                try:
-                    creds = json.loads(latest_transcript.credits_json)
-                    for subj, d in creds.items():
-                        req = d.get('required', 0) or 0
-                        comp = d.get('completed', 0) or 0
-                        need = max(0, req - comp)
-                        if need > 0:
-                            credit_gaps[subj.lower().strip()] = need
-                except (json.JSONDecodeError, TypeError):
-                    pass
+            credit_gaps = {s.lower(): n for s, n
+                           in _transcript_credit_gaps(latest_transcript).items()}
         if ag_deficiencies is None:
             ag_deficiencies = {}
             if latest_transcript and latest_transcript.ag_json:
@@ -682,7 +689,6 @@ def course_recommendations():
             )
         })
 
-    selected = list(term1) + list(term2)
     next_grade = (student.grade_level or 9) + 1
 
     def format_course_line(rank, item):
@@ -711,6 +717,8 @@ def course_recommendations():
     schedule_text = "\n".join(lines)
 
     # --- Build context for AI to add explanations ---
+    latest_transcript = student.transcript_records.first()
+    credit_gaps = _transcript_credit_gaps(latest_transcript)
     transcript_summary = "No transcript data available."
     if latest_transcript:
         transcript_summary = (

@@ -1,5 +1,5 @@
 """End-of-year rollover: per-student action defaults and anomaly detection."""
-from app.models.student import Student, Tag
+from app.models.student import Tag
 
 
 # Allowed per-row actions. Keep in sync with the dropdown in rollover.html and

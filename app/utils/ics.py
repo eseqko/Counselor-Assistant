@@ -7,7 +7,6 @@ rows — this module is the one place where that VEVENT formatting lives.
 from datetime import datetime, timezone
 
 from app.models.availability import Booking
-from app.models.calendar_event import CalendarEvent
 
 
 def build_ical_feed(user, calendar_events=None, bookings=None,

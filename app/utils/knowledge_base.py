@@ -1,5 +1,4 @@
 """District Knowledge Base utilities — extraction, chunking, and retrieval."""
-import os
 import re
 from collections import Counter
 

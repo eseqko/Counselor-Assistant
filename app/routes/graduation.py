@@ -3,10 +3,8 @@ import json
 from collections import defaultdict
 from flask import Blueprint, render_template
 from flask_login import login_required, current_user
-from app import db
 from app.models.student import Student
 from app.models.grade import GradeRecord
-from app.models.transcript import TranscriptRecord
 
 graduation_bp = Blueprint('graduation', __name__)
 
@@ -150,7 +148,6 @@ def _risk_level(total_completed, total_required, grade_level):
     # Grade 9 end ≈ 25%, Grade 10 end ≈ 50%, Grade 11 end ≈ 75%, Grade 12 end = 100%
     expected_pct = {9: 0.15, 10: 0.40, 11: 0.65, 12: 0.85}
     expected = total_required * expected_pct.get(grade_level, 0.5)
-    pct = total_completed / total_required if total_required else 0
 
     if total_completed < expected * 0.6:
         return 'critical'
