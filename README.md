@@ -48,7 +48,8 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 | Module | Description |
 |--------|-------------|
 | **Academic Plan** | 4-year course planner with optional AI auto-fill |
-| **Graduation** | At-risk roster from transcript imports — credit shortfall, a-g status, CTE pathway tracking (District 2-course model + federal Perkins V status side-by-side) |
+| **Graduation** | At-risk roster from transcript imports — credit shortfall, a-g status, CTE pathway tracking (District 2-course model + federal Perkins V status side-by-side). AI Support Insights frame credits/a-g against the student's grade **and** the current quarter, project WIP credits, and won't misread a freshman in Q1 (or a senior finishing on in-progress courses) as a graduation risk |
+| **End-of-Year Rollover** | Caseload-wide review page to promote / graduate / retain / withdraw students; 12th graders entitled to a 5th year (IEP, Newcomer EL, Foster, Homeless, Migrant, Formerly Incarcerated, Military) default to Skip with citations surfaced; WIP-aware so a senior projected to hit 225 credits via in-progress courses graduates correctly. 24-hour Undo for committed batches |
 | **College & Career** | Pathway, GPA, test scores, application tracking, FAFSA status |
 | **Course Catalog** | Department-organized courses with prerequisites, grad requirements, NCAA status |
 | **Post-Grad** | Outcome tracking (college, military, workforce, gap year) |
@@ -85,9 +86,10 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 |--------|-------------|
 | **AI Tools Hub** | 14 counselor-focused AI generators (crisis scripts, parent comms, college, documentation) plus AI Course Recommendations on each student profile — all run locally via Ollama |
 | **Student Portal** | Public token-gated AI tools for students (no login, shareable link). Essay coaching, study planning, career exploration |
-| **Scheduling** | Public booking pages for parents/students, availability slots, conflict detection |
+| **Scheduling** | Public booking pages for parents/students, availability slots, conflict detection. **Cohort auto-scheduler** batch-books a filtered cohort (by grade, EL status, IEP/504, AB-population flag) into back-to-back individual slots or one group meeting; subscribed Google Calendars pick up the appointments via the existing ICS feed — no OAuth required |
+| **School Calendars** | Configurable district calendar per school year — quarter and semester windows, with optional progress-due and final grades-due dates. Upload a district PDF and the parser pre-fills the form for review; manual entry also supported. The AI Insights, rollover, and credit-pace logic all read from this so quarter boundaries follow your district instead of a hardcoded month grid |
 | **Knowledge Base** | District documents indexed for local RAG against AI Tools |
-| **Data Import** | CSV/Excel/Synergy upload for attendance, grades, and bulk student-info updates |
+| **Data Import** | CSV/Excel/Synergy upload for attendance, grades, and bulk student-info updates; ELPAC scores via Ellevation export |
 | **Glossary** | ASCA-aligned counseling terms reference |
 | **Smart Alerts** | Daily action items: overdue follow-ups, IEP reviews, attendance flags, failing grades, new students |
 
@@ -201,8 +203,8 @@ Every step is skippable. You can change all settings later under **Settings**.
 | **Backend** | Python 3, Flask, SQLAlchemy |
 | **Database** | SQLite (local file, zero configuration, auto-migrating) |
 | **Frontend** | HTML5, CSS3, vanilla JavaScript, Jinja2 templates |
-| **Charts** | Chart.js 4.x (CDN) |
-| **Calendar** | FullCalendar 6.x (CDN) |
+| **Charts** | Chart.js 4.4.1 (vendored locally — works offline) |
+| **Calendar UI** | FullCalendar 6.1.9 (vendored locally — works offline) |
 | **Excel I/O** | openpyxl |
 | **PDF parsing** | PyPDF2 (transcript review, knowledge-base ingestion with encrypted-PDF tolerance) |
 | **Audio transcription** | faster-whisper (optional, runs locally) |
@@ -212,6 +214,7 @@ Every step is skippable. You can change all settings later under **Settings**.
 | **Progressive Web App** | Manifest + service worker (installable on phones) |
 | **Themes** | Light, Dark, School (custom colors), Focus, Auto (system) + reduced-motion option |
 | **USB distribution** | python-build-standalone runtimes + prebuilt wheel cache, packaged by `scripts/build_usb_bundle.py` |
+| **Testing & CI** | pytest suite (calendar logic, rollover defaults, AI prompt shape, no-500 sweep across every GET route) runs on every push and PR via GitHub Actions |
 
 ---
 
@@ -244,24 +247,32 @@ Counselor-Assistant/
 ├── config.py               # Configuration
 ├── requirements.txt        # Full dependencies (including faster-whisper, Google APIs)
 ├── requirements-demo.txt   # Slim subset for the USB bundle
+├── requirements-dev.txt    # Adds pytest for the test suite
+├── pytest.ini              # Test configuration
 ├── install.sh / install.bat / start.bat / backup.bat / restore.bat
 ├── TAILSCALE_SETUP.md      # iPhone-via-Tailscale walkthrough
+├── .github/workflows/      # GitHub Actions (runs pytest on every push/PR)
 ├── scripts/
 │   ├── build_usb_bundle.py # Builds the double-clickable USB demo bundle
 │   └── seed_demo.py        # Re-runs the demo seed against a fresh database
 ├── app/
 │   ├── __init__.py         # App factory + auto-migration + demo bootstrap
-│   ├── models/             # SQLAlchemy models (~30: students, notes, goals,
+│   ├── models/             # SQLAlchemy models (students, notes, goals,
 │   │                       #   referrals, interventions, screeners, courses,
-│   │                       #   transcripts, ELPAC scores, documents, …)
-│   ├── routes/             # Blueprint routes by domain (44 modules +
+│   │                       #   transcripts, ELPAC scores, school_calendars,
+│   │                       #   rollover snapshots, documents, …)
+│   ├── routes/             # Blueprint routes by domain (42 modules +
 │   │                       #   data_import sub-package)
 │   ├── templates/          # Jinja2 templates organized per blueprint
-│   ├── static/             # CSS, JS (incl. shared sse-stream.js), icons,
-│   │                       #   PWA manifest, service worker
+│   ├── static/
+│   │   ├── vendor/         # Chart.js + FullCalendar (vendored for offline use)
+│   │   └── …               # CSS, JS, icons, PWA manifest, service worker
 │   └── utils/              # Alert engine, audit, demo seed, CTE/ELPI
-│                           #   computation, Google clients, Ollama client,
+│                           #   computation, school-calendar seed + PDF parser,
+│                           #   rollover logic, Google clients, Ollama client,
 │                           #   Excel helpers, caseload helpers
+├── tests/                  # pytest suite (calendar, rollover, AI prompt,
+│                           #   no-500 route sweep, regression tests)
 └── data/
     ├── demo-seed.json      # Canonical 25-student demo fixture (committed)
     └── (counselor.db, uploads/, backups/ — gitignored runtime data)
@@ -307,6 +318,15 @@ A: Settings → Danger Zone → Reset App. Type `RESET` to confirm. All data is 
 ## Contributing
 
 This project is in active development. If you're a school counselor with feature ideas, or a developer who wants to contribute, open an issue or pull request.
+
+**Running the tests locally:**
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The same suite runs in CI on every push and PR.
 
 ---
 
