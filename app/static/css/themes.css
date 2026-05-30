@@ -151,6 +151,348 @@
 
 
 /* ══════════════════════════════════════════════
+   FIESTA THEME — Diseño Mexicano Moderno
+   Editorial-brutalist. Barragán color planes,
+   Wyman geometric system, talud-tablero massing,
+   xicalcoliuhqui (greca stepped-fret).
+   ══════════════════════════════════════════════ */
+[data-theme="fiesta"] {
+    /* Paleta Fiesta */
+    --rosa:        #E4007C;
+    --cempasuchil: #FF6A00;
+    --talavera:    #0F4C9A;
+    --agave:       #2E7D5B;
+    --obsidiana:   #1A1410;
+    --bone:        #F4EDE1;
+    --sand:        #E8DBC5;
+    --terracotta:  #C44536;
+    --ochre:       #D4A93A;
+
+    /* Map paleta → semantic tokens (components adapt automatically) */
+    --primary:       var(--rosa);
+    --primary-light: #F23A99;
+    --primary-dark:  #B30062;
+    --secondary:     var(--agave);
+    --accent:        var(--cempasuchil);
+    --danger:        var(--terracotta);
+    --warning:       var(--ochre);
+    --success:       var(--agave);
+    --info:          var(--talavera);
+    --dark:          var(--obsidiana);
+    --gray:          #6B5D4F;
+    --light-gray:    var(--sand);
+    --white:         var(--bone);
+    --bg:            var(--bone);
+    --surface:       var(--bone);
+    --border:        var(--obsidiana);
+    --text:          var(--obsidiana);
+    --text-muted:    #6B5D4F;
+    --input-bg:      var(--bone);
+    --input-border:  var(--obsidiana);
+    --topbar-bg:     var(--bone);
+    --hover-bg:      var(--sand);
+
+    /* Fiesta structural tokens */
+    --border-weight:        2px;
+    --border-weight-strong: 3px;
+    --border-weight-data:   1.5px;
+    --shadow-brutalist:     5px 5px 0 var(--obsidiana);
+    --shadow-brutalist-sm:  3px 3px 0 var(--obsidiana);
+
+    /* Typography */
+    --font-body:    'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-mono:    'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+[data-theme="fiesta"] body {
+    font-family: var(--font-body);
+    background: var(--bone);
+    color: var(--obsidiana);
+}
+
+[data-theme="fiesta"] h1,
+[data-theme="fiesta"] h2,
+[data-theme="fiesta"] h3,
+[data-theme="fiesta"] .stat-value,
+[data-theme="fiesta"] .sidebar-header h2 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "wght" 600;
+    letter-spacing: -0.01em;
+}
+
+[data-theme="fiesta"] code,
+[data-theme="fiesta"] .badge,
+[data-theme="fiesta"] .nav-section,
+[data-theme="fiesta"] .student-id {
+    font-family: var(--font-mono);
+    font-weight: 500;
+}
+
+/* ── Sidebar: solid rosa with obsidian frame ── */
+[data-theme="fiesta"] .sidebar {
+    background: var(--rosa) !important;
+    border-right: var(--border-weight-strong) solid var(--obsidiana);
+    color: var(--bone);
+}
+[data-theme="fiesta"] .sidebar-header {
+    border-bottom: var(--border-weight-strong) solid var(--obsidiana);
+}
+[data-theme="fiesta"] .sidebar-header h2 {
+    color: var(--bone);
+}
+[data-theme="fiesta"] .sidebar-header .subtitle {
+    color: var(--cempasuchil);
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+[data-theme="fiesta"] .nav-section {
+    color: rgba(244, 237, 225, 0.6);
+    letter-spacing: 2px;
+    position: relative;
+}
+/* xicalcoliuhqui stepped-fret strip above each nav section (skip first) */
+[data-theme="fiesta"] .nav-section + .nav-section,
+[data-theme="fiesta"] .nav-item + .nav-section {
+    margin-top: 18px;
+}
+[data-theme="fiesta"] .nav-section::before {
+    content: "";
+    display: block;
+    height: 8px;
+    margin: 0 16px 6px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 8' preserveAspectRatio='none'><path d='M0 4 L8 4 L8 0 L16 0 L16 8 L24 8 L24 4 L32 4' fill='none' stroke='%23F4EDE1' stroke-width='1.5' opacity='0.7'/></svg>");
+    background-repeat: repeat-x;
+    background-size: 24px 8px;
+}
+[data-theme="fiesta"] .nav-section:first-of-type::before {
+    display: none;
+}
+[data-theme="fiesta"] .nav-item {
+    color: var(--bone);
+    border-left: 4px solid transparent;
+}
+[data-theme="fiesta"] .nav-item:hover {
+    background: rgba(26, 20, 16, 0.25);
+    color: var(--bone);
+}
+[data-theme="fiesta"] .nav-item.active {
+    background: var(--obsidiana);
+    color: var(--cempasuchil);
+    border-left-color: var(--cempasuchil);
+}
+
+/* ── Top bar ── */
+[data-theme="fiesta"] .top-bar {
+    background: var(--bone);
+    border-bottom: var(--border-weight-strong) solid var(--obsidiana);
+    box-shadow: none;
+}
+
+/* ── Cards: bone surface, obsidian border, hard offset shadow ── */
+[data-theme="fiesta"] .card,
+[data-theme="fiesta"] .stat-card {
+    background: var(--bone);
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+    box-shadow: var(--shadow-brutalist);
+}
+[data-theme="fiesta"] .card-header {
+    border-bottom: var(--border-weight) solid var(--obsidiana);
+    background: var(--sand);
+    padding-left: 24px;
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "wght" 600;
+}
+
+/* Talud-tablero: stepped accent on stat cards (4 colors cycle) */
+[data-theme="fiesta"] .stat-card {
+    border-top: 6px solid var(--cempasuchil);
+}
+[data-theme="fiesta"] .stat-card:nth-of-type(4n+2) { border-top-color: var(--talavera); }
+[data-theme="fiesta"] .stat-card:nth-of-type(4n+3) { border-top-color: var(--agave); }
+[data-theme="fiesta"] .stat-card:nth-of-type(4n)   { border-top-color: var(--rosa); }
+
+/* ── Buttons: hard shadow + click translate ── */
+[data-theme="fiesta"] .btn {
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+    box-shadow: var(--shadow-brutalist-sm);
+    font-family: var(--font-body);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: transform 0.08s, box-shadow 0.08s;
+}
+[data-theme="fiesta"] .btn-primary  { background: var(--cempasuchil); color: var(--obsidiana); }
+[data-theme="fiesta"] .btn-success  { background: var(--agave);       color: var(--bone); }
+[data-theme="fiesta"] .btn-danger   { background: var(--terracotta);  color: var(--bone); }
+[data-theme="fiesta"] .btn-secondary{ background: var(--talavera);    color: var(--bone); }
+[data-theme="fiesta"] .btn-outline  { background: var(--bone); color: var(--obsidiana); }
+[data-theme="fiesta"] .btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--obsidiana);
+}
+[data-theme="fiesta"] .btn:active {
+    transform: translate(3px, 3px);
+    box-shadow: 0 0 0 var(--obsidiana);
+}
+
+/* ── Badges: square with obsidian border ── */
+[data-theme="fiesta"] .badge {
+    border: 1.5px solid var(--obsidiana);
+    border-radius: 0;
+    padding: 3px 8px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+[data-theme="fiesta"] .badge-primary { background: var(--rosa);        color: var(--bone); }
+[data-theme="fiesta"] .badge-success { background: var(--agave);       color: var(--bone); }
+[data-theme="fiesta"] .badge-warning { background: var(--ochre);       color: var(--obsidiana); }
+[data-theme="fiesta"] .badge-danger  { background: var(--terracotta);  color: var(--bone); }
+[data-theme="fiesta"] .badge-info    { background: var(--talavera);    color: var(--bone); }
+[data-theme="fiesta"] .badge-gray    { background: var(--sand);        color: var(--obsidiana); }
+
+/* ── Tables: density preserved (1.5px borders, not 3px) ── */
+[data-theme="fiesta"] table {
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+}
+[data-theme="fiesta"] table th {
+    background: var(--rosa);
+    color: var(--bone);
+    border-bottom: var(--border-weight) solid var(--obsidiana);
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+}
+[data-theme="fiesta"] table td {
+    border-bottom: var(--border-weight-data) solid var(--obsidiana);
+    background: var(--bone);
+}
+[data-theme="fiesta"] table tr:nth-child(even) td { background: var(--sand); }
+[data-theme="fiesta"] table tbody tr:hover td {
+    background: var(--cempasuchil);
+    color: var(--obsidiana);
+}
+
+/* ── Inputs ── */
+[data-theme="fiesta"] .form-control,
+[data-theme="fiesta"] select,
+[data-theme="fiesta"] textarea,
+[data-theme="fiesta"] input[type="text"],
+[data-theme="fiesta"] input[type="email"],
+[data-theme="fiesta"] input[type="password"],
+[data-theme="fiesta"] input[type="number"],
+[data-theme="fiesta"] input[type="date"],
+[data-theme="fiesta"] input[type="search"] {
+    background: var(--bone);
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+    font-family: var(--font-body);
+    color: var(--obsidiana);
+}
+[data-theme="fiesta"] .form-control:focus {
+    outline: none;
+    box-shadow: var(--shadow-brutalist-sm);
+    transform: translate(-2px, -2px);
+    border-color: var(--rosa);
+}
+
+/* ── Alerts ── */
+[data-theme="fiesta"] .alert {
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+    box-shadow: var(--shadow-brutalist-sm);
+}
+[data-theme="fiesta"] .alert-success { background: #D6E8DB; color: var(--obsidiana); }
+[data-theme="fiesta"] .alert-danger  { background: #F0CFC9; color: var(--obsidiana); }
+[data-theme="fiesta"] .alert-warning { background: #F0E0B0; color: var(--obsidiana); }
+[data-theme="fiesta"] .alert-info    { background: #C9D6E8; color: var(--obsidiana); }
+
+/* ── Filter bar & pagination ── */
+[data-theme="fiesta"] .filter-bar {
+    background: var(--sand);
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+}
+[data-theme="fiesta"] .pagination a,
+[data-theme="fiesta"] .pagination .current {
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+}
+[data-theme="fiesta"] .pagination .current {
+    background: var(--obsidiana);
+    color: var(--cempasuchil);
+}
+
+/* ── Modal ── */
+[data-theme="fiesta"] .modal-content {
+    border: var(--border-weight-strong) solid var(--obsidiana);
+    border-radius: 0;
+    box-shadow: var(--shadow-brutalist);
+    background: var(--bone);
+}
+
+/* ── Login screen ── */
+[data-theme="fiesta"] .login-page {
+    background: var(--bone);
+    /* Wyman-style concentric radiating-lines, ochre at low opacity */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'><g fill='none' stroke='%23D4A93A' stroke-width='1.5' opacity='0.22'><circle cx='400' cy='400' r='80'/><circle cx='400' cy='400' r='160'/><circle cx='400' cy='400' r='240'/><circle cx='400' cy='400' r='320'/><circle cx='400' cy='400' r='400'/><circle cx='400' cy='400' r='480'/></g></svg>");
+    background-size: 900px 900px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+[data-theme="fiesta"] .login-card {
+    background: var(--bone);
+    border: var(--border-weight-strong) solid var(--obsidiana);
+    border-radius: 0;
+    box-shadow: var(--shadow-brutalist);
+}
+[data-theme="fiesta"] .login-card h1 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "wght" 700;
+    color: var(--obsidiana);
+    letter-spacing: -0.02em;
+}
+[data-theme="fiesta"] .login-card .subtitle {
+    color: var(--rosa);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.72rem;
+}
+
+/* ── User menu + theme switcher dropdown ── */
+[data-theme="fiesta"] .user-menu-dropdown {
+    border: var(--border-weight) solid var(--obsidiana);
+    border-radius: 0;
+    box-shadow: var(--shadow-brutalist);
+}
+[data-theme="fiesta"] .theme-btn {
+    border: 1.5px solid var(--obsidiana);
+    border-radius: 0;
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+[data-theme="fiesta"] .theme-btn.is-active {
+    background: var(--cempasuchil);
+    color: var(--obsidiana);
+}
+
+/* ── FERPA notice + print letterhead respect the palette ── */
+[data-theme="fiesta"] .ferpa-notice {
+    background: var(--sand);
+    border: 1.5px solid var(--obsidiana);
+    color: var(--obsidiana);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+}
+
+/* ══════════════════════════════════════════════
    REDUCED MOTION (independent of theme)
    ══════════════════════════════════════════════ */
 [data-reduced-motion="true"] *,
