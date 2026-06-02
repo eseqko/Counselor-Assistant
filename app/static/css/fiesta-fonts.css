@@ -1,0 +1,32 @@
+/* Fiesta theme — variable-font @font-face declarations.
+   Loaded only when user_theme == 'fiesta' (see base.html conditional <link>).
+   Licenses: all three fonts are SIL Open Font License; see
+   app/static/vendor/fonts/<family>/OFL.txt for full text. */
+
+@font-face {
+    font-family: 'Fraunces';
+    src: url('../vendor/fonts/fraunces/Fraunces-Variable.woff2') format('woff2-variations'),
+         url('../vendor/fonts/fraunces/Fraunces-Variable.woff2') format('woff2');
+    font-weight: 100 900;
+    font-stretch: 75% 125%;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Hanken Grotesk';
+    src: url('../vendor/fonts/hanken-grotesk/HankenGrotesk-Variable.woff2') format('woff2-variations'),
+         url('../vendor/fonts/hanken-grotesk/HankenGrotesk-Variable.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('../vendor/fonts/jetbrains-mono/JetBrainsMono-Variable.woff2') format('woff2-variations'),
+         url('../vendor/fonts/jetbrains-mono/JetBrainsMono-Variable.woff2') format('woff2');
+    font-weight: 100 800;
+    font-style: normal;
+    font-display: swap;
+}

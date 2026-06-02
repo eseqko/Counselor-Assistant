@@ -14,6 +14,13 @@
     <title>{% block title %}Counselor Assistant{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v('css/style.css')) }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css', v=static_v('css/themes.css')) }}">
+    {% if user_theme == 'fiesta' %}
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="{{ url_for('static', filename='vendor/fonts/hanken-grotesk/HankenGrotesk-Variable.woff2') }}">
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="{{ url_for('static', filename='vendor/fonts/fraunces/Fraunces-Variable.woff2') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fiesta-fonts.css', v=static_v('css/fiesta-fonts.css')) }}">
+    {% endif %}
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -335,6 +342,8 @@
                                         onclick="pickTheme('school')">School</button>
                                 <button type="button" data-theme="focus" class="theme-btn"
                                         onclick="pickTheme('focus')">Focus</button>
+                                <button type="button" data-theme="fiesta" class="theme-btn"
+                                        onclick="pickTheme('fiesta')">Fiesta</button>
                             </div>
                         </div>
                         <div style="padding:4px 0;border-top:1px solid var(--border);">

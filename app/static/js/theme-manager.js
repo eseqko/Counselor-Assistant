@@ -5,7 +5,7 @@
 var ThemeManager = (function() {
     'use strict';
 
-    var VALID = ['light', 'dark', 'school', 'focus', 'auto'];
+    var VALID = ['light', 'dark', 'school', 'focus', 'auto', 'fiesta'];
     var root = document.documentElement;
 
     // ── Color math helpers (self-contained, no dependencies) ──
