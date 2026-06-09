@@ -11,6 +11,7 @@ from flask_login import login_required, current_user
 from app import db, csrf
 from app.models.course import Course, Department, GraduationRequirement
 from app.utils.audit import log_action
+from app.utils.security import safe_logo_response
 
 course_catalog_bp = Blueprint('course_catalog', __name__)
 
@@ -381,7 +382,7 @@ def serve_logo():
     path = _find_logo(current_user.id)
     if not path:
         return '', 404
-    return send_file(path)
+    return safe_logo_response(path)
 
 
 @course_catalog_bp.route('/api/school-logo', methods=['DELETE'])
@@ -401,7 +402,7 @@ def public_logo():
     if user:
         path = _find_logo(user.id)
         if path:
-            return send_file(path)
+            return safe_logo_response(path)
     return '', 404
 
 

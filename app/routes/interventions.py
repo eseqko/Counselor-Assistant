@@ -6,6 +6,7 @@ from app.models.intervention import InterventionPlan, InterventionProgress
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import owned_or_404
 
 interventions_bp = Blueprint('interventions', __name__)
 
@@ -88,7 +89,7 @@ def add():
 @interventions_bp.route('/<int:id>')
 @login_required
 def view(id):
-    plan = InterventionPlan.query.get_or_404(id)
+    plan = owned_or_404(InterventionPlan, id)
     log_action('view', 'intervention', plan.id)
     return render_template('interventions/view.html', plan=plan,
         data_sources=InterventionPlan.DATA_SOURCES)
@@ -97,7 +98,7 @@ def view(id):
 @interventions_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(id):
-    plan = InterventionPlan.query.get_or_404(id)
+    plan = owned_or_404(InterventionPlan, id)
     if request.method == 'POST':
         plan.tier = int(request.form.get('tier', plan.tier))
         plan.concern_area = request.form['concern_area']
@@ -129,7 +130,7 @@ def edit(id):
 @interventions_bp.route('/<int:id>/progress', methods=['POST'])
 @login_required
 def add_progress(id):
-    plan = InterventionPlan.query.get_or_404(id)
+    plan = owned_or_404(InterventionPlan, id)
     entry = InterventionProgress(
         plan_id=plan.id,
         entry_date=parse_date(request.form.get('entry_date')) or date.today(),
@@ -147,7 +148,7 @@ def add_progress(id):
 @interventions_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    plan = InterventionPlan.query.get_or_404(id)
+    plan = owned_or_404(InterventionPlan, id)
     log_action('delete', 'intervention', plan.id)
     db.session.delete(plan)
     db.session.commit()

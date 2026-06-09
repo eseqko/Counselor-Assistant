@@ -421,9 +421,9 @@
 <script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var noteTrend = {{ note_trend_json|safe }};
-    var svcBreakdown = {{ svc_breakdown_json|safe }};
-    var gradRisk = {{ grad_risk_json|safe }};
+    var noteTrend = JSON.parse({{ note_trend_json | tojson }});
+    var svcBreakdown = JSON.parse({{ svc_breakdown_json | tojson }});
+    var gradRisk = JSON.parse({{ grad_risk_json | tojson }});
 
     // Restore insights open state from localStorage
     var insights = document.getElementById('dash-insights');

@@ -10,6 +10,7 @@ from app.models.rollover import RolloverSnapshot
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import owned_or_404
 from app.routes.graduation import (
     STATE_MIN_REQUIREMENTS, STATE_MIN_TOTAL, TOTAL_REQUIRED, _risk_level,
 )
@@ -136,7 +137,7 @@ def add_student():
 @caseload_bp.route('/<int:id>')
 @login_required
 def view_student(id):
-    student = Student.query.get_or_404(id)
+    student = owned_or_404(Student, id, 'assigned_counselor_id')
     log_action('view', 'student', student.id)
     notes = student.notes.limit(10).all()
     latest_transcript = student.transcript_records.first()
@@ -234,7 +235,7 @@ def view_student(id):
 @caseload_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_student(id):
-    student = Student.query.get_or_404(id)
+    student = owned_or_404(Student, id, 'assigned_counselor_id')
 
     if request.method == 'POST':
         student.student_id_number = request.form['student_id_number']
@@ -283,7 +284,7 @@ def edit_student(id):
 @caseload_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_student(id):
-    student = Student.query.get_or_404(id)
+    student = owned_or_404(Student, id, 'assigned_counselor_id')
     exit_reason = request.form.get('exit_reason', 'other')
     exit_notes = request.form.get('exit_notes', '').strip()
 
@@ -573,9 +574,13 @@ def upload_caseload():
                 errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
-            # Upsert: update if student ID already exists
+            # Upsert: update only a student already on THIS counselor's caseload.
+            # Scoping by assigned_counselor_id stops an import from silently
+            # overwriting / reassigning another counselor's student record.
             student_id_str = str(student_id).strip()
-            existing = Student.query.filter_by(student_id_number=student_id_str).first()
+            existing = Student.query.filter_by(
+                student_id_number=student_id_str,
+                assigned_counselor_id=current_user.id).first()
 
             if existing:
                 existing.first_name = str(first_name).strip()

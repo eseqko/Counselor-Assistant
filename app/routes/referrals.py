@@ -6,6 +6,7 @@ from app.models.referral import Referral
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import owned_or_404
 
 referrals_bp = Blueprint('referrals', __name__)
 
@@ -101,7 +102,7 @@ def add():
 @referrals_bp.route('/<int:id>')
 @login_required
 def view(id):
-    ref = Referral.query.get_or_404(id)
+    ref = owned_or_404(Referral, id)
     log_action('view', 'referral', ref.id)
     return render_template('referrals/view.html', referral=ref,
         statuses=Referral.STATUSES)
@@ -110,7 +111,7 @@ def view(id):
 @referrals_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(id):
-    ref = Referral.query.get_or_404(id)
+    ref = owned_or_404(Referral, id)
     if request.method == 'POST':
         ref.referral_date = parse_date(request.form.get('referral_date')) or ref.referral_date
         ref.referral_type = request.form['referral_type']
@@ -144,7 +145,7 @@ def edit(id):
 @login_required
 def update_status(id):
     """AJAX-friendly status update."""
-    ref = Referral.query.get_or_404(id)
+    ref = owned_or_404(Referral, id)
     new_status = request.form.get('status') or (request.get_json() or {}).get('status')
     if not new_status or new_status not in dict(Referral.STATUSES):
         return jsonify({'ok': False, 'error': 'Invalid status'}), 400
@@ -170,7 +171,7 @@ def update_status(id):
 @referrals_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    ref = Referral.query.get_or_404(id)
+    ref = owned_or_404(Referral, id)
     log_action('delete', 'referral', ref.id)
     db.session.delete(ref)
     db.session.commit()

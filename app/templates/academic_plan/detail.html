@@ -302,7 +302,7 @@ var catalog = {{ catalog|tojson }};
 // In-memory plan state (future years only)
 var planState = {};
 {% if plan and plan.plan_json %}
-try { planState = JSON.parse('{{ plan.plan_json|safe }}'); } catch(e) { planState = {}; }
+try { planState = JSON.parse({{ plan.plan_json | tojson }}); } catch(e) { planState = {}; }
 {% endif %}
 
 // ── Picker ──

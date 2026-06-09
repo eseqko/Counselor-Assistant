@@ -57,7 +57,11 @@ def settings():
         base_url = data.get('base_url', '').strip().rstrip('/')
         model = data.get('model', '').strip()
         if base_url:
-            ollama_client.save_settings(base_url, model or ollama_client.OLLAMA_MODEL)
+            from app.utils.security import validate_local_url
+            ok, result = validate_local_url(base_url)
+            if not ok:
+                return jsonify({'saved': False, 'error': result}), 400
+            ollama_client.save_settings(result, model or ollama_client.OLLAMA_MODEL)
         return jsonify({'saved': True})
 
     return jsonify({

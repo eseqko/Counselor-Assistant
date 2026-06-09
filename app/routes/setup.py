@@ -1,5 +1,5 @@
 """First-run setup wizard. Guides new users through initial configuration."""
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import login_user, current_user
 from app import db, csrf
 from app.models.user import User
@@ -97,13 +97,19 @@ def _handle_complete(form):
     if school_name:
         school_config['schoolName'] = school_name
 
-    # Ollama settings
+    # Ollama settings — validate the URL points at a local/private host (SSRF guard).
     ollama_url = form.get('ollama_url', '').strip()
     ollama_model = form.get('ollama_model', '').strip()
     if ollama_url or ollama_model:
+        from app.utils.security import validate_local_url
+        safe_url = 'http://localhost:11434'
+        if ollama_url:
+            ok, result = validate_local_url(ollama_url)
+            if ok:
+                safe_url = result
         try:
             from app.utils.ollama_client import save_settings
-            save_settings(ollama_url or 'http://localhost:11434', ollama_model or 'gemma3:4b')
+            save_settings(safe_url, ollama_model or 'gemma3:4b')
         except Exception:
             pass
 
@@ -116,6 +122,13 @@ def _handle_complete(form):
     theme = form.get('theme', '').strip()
     if theme and theme in ('light', 'dark', 'school', 'focus', 'auto'):
         user.theme_preference = theme
+
+    # Never finish setup while the well-known default password is still active.
+    # Combined with the global setup redirect, the app is unreachable on
+    # 'changeme' — closing the default-credential hole.
+    if user.check_password('changeme'):
+        flash('Please choose a password of at least 8 characters to finish setup.', 'danger')
+        return render_template('setup/wizard.html')
 
     user.school_config_json = json.dumps(school_config)
     user.setup_completed = True
@@ -132,6 +145,8 @@ def _handle_complete(form):
 @csrf.exempt
 def import_preview():
     """Preview CSV/Excel headers and sample data. Returns JSON."""
+    if not needs_setup():
+        abort(403)
     file = request.files.get('file')
     if not file or not file.filename:
         return jsonify({'ok': False, 'error': 'No file selected'}), 400
@@ -175,6 +190,8 @@ def import_preview():
 @csrf.exempt
 def import_students():
     """Import students from CSV/Excel during setup. Returns JSON."""
+    if not needs_setup():
+        abort(403)
     file = request.files.get('file')
     if not file or not file.filename:
         return jsonify({'ok': False, 'error': 'No file selected'}), 400
@@ -288,6 +305,8 @@ def import_students():
 @csrf.exempt
 def upload_logo():
     """Upload school logo during setup. Returns JSON."""
+    if not needs_setup():
+        abort(403)
     file = request.files.get('logo')
     if not file or not file.filename:
         return jsonify({'ok': False, 'error': 'No file selected'}), 400

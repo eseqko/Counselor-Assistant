@@ -104,7 +104,11 @@ def profile():
 @login_required
 def audit_log():
     page = request.args.get('page', 1, type=int)
-    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).paginate(
+    query = AuditLog.query
+    # Counselors see only their own trail; admins see the whole school's.
+    if current_user.role != 'admin':
+        query = query.filter_by(user_id=current_user.id)
+    logs = query.order_by(AuditLog.timestamp.desc()).paginate(
         page=page, per_page=50, error_out=False)
     return render_template('settings/audit_log.html', logs=logs)
 
