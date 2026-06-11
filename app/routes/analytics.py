@@ -420,7 +420,9 @@ def _attendance_data(student_ids, start, end):
         AttendanceRecord.student_id.in_(student_ids),
         AttendanceRecord.date >= start,
         AttendanceRecord.date <= end,
-        AttendanceRecord.period == 0,
+        # Daily attendance is imported with period NULL (not 0); == 0 matched
+        # nothing, leaving the analytics charts silently empty. Accept both.
+        db.or_(AttendanceRecord.period == 0, AttendanceRecord.period.is_(None)),
     ).all()
 
     # Monthly trend

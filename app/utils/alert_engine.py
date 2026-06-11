@@ -380,7 +380,9 @@ def _check_attendance_alerts(user, student_ids, student_map, today, thresholds=N
             AttendanceRecord.student_id.in_(student_ids),
             AttendanceRecord.date >= cutoff,
             AttendanceRecord.status == 'absent',
-            AttendanceRecord.period == 0,
+            # Daily attendance is imported with period NULL (not 0), so == 0
+            # matched nothing and these alerts never fired. Accept both.
+            db.or_(AttendanceRecord.period == 0, AttendanceRecord.period.is_(None)),
         ).group_by(AttendanceRecord.student_id).all()
     )
 

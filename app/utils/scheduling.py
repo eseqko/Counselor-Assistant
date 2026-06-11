@@ -120,12 +120,18 @@ def has_upcoming_booking(student, user):
 
 def _is_busy(check_date, start_str, end_str, busy_ranges):
     """Check if a time slot overlaps with any busy ranges from Google Calendar."""
-    slot_start = datetime.combine(check_date,
-                                  datetime.strptime(start_str, '%H:%M').time(),
-                                  tzinfo=timezone.utc)
-    slot_end = datetime.combine(check_date,
-                                datetime.strptime(end_str, '%H:%M').time(),
-                                tzinfo=timezone.utc)
+    # Availability times are LOCAL wall-clock (e.g. 09:00 Pacific). Google
+    # free/busy ranges come back as true UTC. Tagging the wall-clock as UTC
+    # (the old behavior) skewed every slot by 7-8h, so a 9am Pacific meeting
+    # didn't overlap the 9am slot and busy times were missed -> double-booking.
+    # Localize to the same tz get_freebusy() uses (America/Los_Angeles), with
+    # DST handled by pytz.localize().
+    import pytz
+    local_tz = pytz.timezone('America/Los_Angeles')
+    slot_start = local_tz.localize(
+        datetime.combine(check_date, datetime.strptime(start_str, '%H:%M').time()))
+    slot_end = local_tz.localize(
+        datetime.combine(check_date, datetime.strptime(end_str, '%H:%M').time()))
     for busy in busy_ranges:
         try:
             b_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00'))

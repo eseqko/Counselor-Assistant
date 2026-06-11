@@ -1,6 +1,7 @@
 """First-run setup wizard. Guides new users through initial configuration."""
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import login_user, current_user
+from sqlalchemy.exc import IntegrityError
 from app import db, csrf
 from app.models.user import User
 from app.models.student import Student
@@ -297,7 +298,12 @@ def import_students():
         db.session.add(student)
         imported += 1
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'ok': False,
+                        'error': 'Some student IDs already exist. Import aborted; no changes saved.'}), 400
     return jsonify({'ok': True, 'imported': imported, 'skipped': skipped})
 
 

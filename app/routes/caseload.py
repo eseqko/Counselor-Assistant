@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, send_file, jsonify, abort)
 from flask_login import login_required, current_user
+from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models.student import Student, Tag
 from app.models.rollover import RolloverSnapshot
@@ -11,6 +12,19 @@ from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from app.utils.roles import owned_or_404
+
+
+def _safe_float(value, default=0.0):
+    """Coerce a possibly-stringy/None value to float; fall back on garbage.
+
+    Transcript-batch data comes from a client-side PDF parser, so numeric fields
+    can arrive as strings or junk tokens. SQLite would store them verbatim in a
+    Float column and crash later during credit math — coerce at the boundary.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 from app.routes.graduation import (
     STATE_MIN_REQUIREMENTS, STATE_MIN_TOTAL, TOTAL_REQUIRED, _risk_level,
 )
@@ -122,7 +136,17 @@ def add_student():
                 student.tags.append(tag)
 
         db.session.add(student)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash(f"A student with ID '{student.student_id_number}' already exists. "
+                  "Please use a unique student ID.", 'danger')
+            tags = Tag.query.order_by(Tag.name).all()
+            return render_template('caseload/add.html', tags=tags,
+                el_statuses=Student.EL_STATUSES, el_levels=Student.EL_LEVELS,
+                ab_populations=Student.AB_POPULATION_FIELDS,
+                ab_statuses=Student.AB_EXEMPTION_STATUSES)
         log_action('create', 'student', student.id, f'Added student {student.full_name}')
         flash(f'Student {student.full_name} added successfully.', 'success')
         return redirect(url_for('caseload.view_student', id=student.id))
@@ -269,7 +293,17 @@ def edit_student(id):
         student.ab_transfer_date = parse_date(request.form.get('ab_transfer_date'))
         student.ab_exemption_date = parse_date(request.form.get('ab_exemption_date'))
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash(f"A student with ID '{student.student_id_number}' already exists. "
+                  "Please use a unique student ID.", 'danger')
+            tags = Tag.query.order_by(Tag.name).all()
+            return render_template('caseload/edit.html', student=student, tags=tags,
+                el_statuses=Student.EL_STATUSES, el_levels=Student.EL_LEVELS,
+                ab_populations=Student.AB_POPULATION_FIELDS,
+                ab_statuses=Student.AB_EXEMPTION_STATUSES)
         log_action('update', 'student', student.id, f'Updated student {student.full_name}')
         flash(f'Student {student.full_name} updated.', 'success')
         return redirect(url_for('caseload.view_student', id=student.id))
@@ -574,13 +608,21 @@ def upload_caseload():
                 errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
-            # Upsert: update only a student already on THIS counselor's caseload.
-            # Scoping by assigned_counselor_id stops an import from silently
-            # overwriting / reassigning another counselor's student record.
+            # student_id_number is globally unique (one row per student). Look it
+            # up GLOBALLY: scoping the lookup to the current counselor would let a
+            # colliding ID (owned by another counselor) fall through to an INSERT
+            # that violates the unique constraint and aborts the entire batch.
             student_id_str = str(student_id).strip()
-            existing = Student.query.filter_by(
-                student_id_number=student_id_str,
-                assigned_counselor_id=current_user.id).first()
+            existing = Student.query.filter_by(student_id_number=student_id_str).first()
+
+            if existing and current_user.role != 'admin' \
+                    and existing.assigned_counselor_id not in (None, 0, current_user.id):
+                # On another counselor's caseload: don't reassign via import (FERPA)
+                # and don't crash the batch. Skip with a clear, per-row message.
+                errors.append(
+                    f'Row {row_idx}: student ID {student_id_str} is on another '
+                    "counselor's caseload — skipped (use Reassign to move).")
+                continue
 
             if existing:
                 existing.first_name = str(first_name).strip()
@@ -612,7 +654,15 @@ def upload_caseload():
                 db.session.add(student)
                 added += 1
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash('Import aborted: a duplicate student ID conflict was detected. '
+                  'No changes were saved.', 'danger')
+            return render_template('caseload/upload.html',
+                errors=['Duplicate student ID conflict — import aborted. No changes saved.'],
+                added=0, updated=0)
         log_action('import', 'caseload', details=f'Imported caseload: {added} added, {updated} updated')
 
         if errors:
@@ -736,16 +786,16 @@ def transcript_save():
         record = TranscriptRecord(
             student_id=student.id,
             quarter=entry.get('quarter', ''),
-            total_completed=entry.get('totalCompleted', 0),
-            total_wip=entry.get('totalWIP', 0),
-            total_needed=entry.get('totalNeeded', 0),
+            total_completed=_safe_float(entry.get('totalCompleted', 0)),
+            total_wip=_safe_float(entry.get('totalWIP', 0)),
+            total_needed=_safe_float(entry.get('totalNeeded', 0)),
             risk_level=entry.get('riskLevel', ''),
             ag_status=entry.get('agStatus', ''),
-            ag_areas_met=entry.get('agAreasMet', 0),
-            ag_areas_deficient=entry.get('agAreasDeficient', 0),
-            cte_completed=entry.get('cteCompleted', 0),
+            ag_areas_met=int(_safe_float(entry.get('agAreasMet', 0))),
+            ag_areas_deficient=int(_safe_float(entry.get('agAreasDeficient', 0))),
+            cte_completed=_safe_float(entry.get('cteCompleted', 0)),
             cte_level=entry.get('cteLevel', 'none'),
-            cte_is_completer=entry.get('cteIsCompleter', False),
+            cte_is_completer=bool(entry.get('cteIsCompleter', False)),
             credits_json=json.dumps(entry.get('credits', {})),
             ag_json=json.dumps(entry.get('agAreas', {})),
             created_by_id=current_user.id,
@@ -753,7 +803,11 @@ def transcript_save():
         db.session.add(record)
         saved += 1
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': 'Failed to save transcripts. No changes were made.'}), 500
 
     if saved > 0:
         log_action('import', 'transcript',
