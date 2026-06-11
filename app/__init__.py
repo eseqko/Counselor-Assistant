@@ -272,13 +272,12 @@ def create_app(config_class=Config):
     # cdnjs is the single external dependency (pdf.js on the transcript-import page).
     CSP = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
         "font-src 'self'; "
-        # cdnjs in connect-src + blob worker: the transcript-import page fetches
-        # pdf.js from cdnjs and runs it as a blob: worker.
-        "connect-src 'self' https://cdnjs.cloudflare.com; "
+        "connect-src 'self'; "
+        # pdf.js (vendored locally) spins up its renderer as a blob: worker.
         "worker-src 'self' blob:; "
         "object-src 'none'; "
         "base-uri 'self'; "
