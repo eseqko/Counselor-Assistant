@@ -215,6 +215,8 @@ def grades_upload():
         not_on_caseload = 0
         errors = []
         BATCH_SIZE = 200
+        # course_number -> teacher name, collected to backfill Course.instructor
+        course_teacher = {}
 
         # Pre-load student lookup caches
         student_cache = {
@@ -263,6 +265,7 @@ def grades_upload():
             audit_class = col(row, col_map, 'audit_class')
             credits_att = col(row, col_map, 'credits_att')
             student_name = col(row, col_map, 'student_name')
+            teacher_clean = str(col(row, col_map, 'staff_name') or '').strip()
 
             if not student_id_str and not course_name:
                 continue
@@ -357,6 +360,8 @@ def grades_upload():
                 existing.course_number = str(course_number or '').strip() or existing.course_number
                 existing.is_honors_ap = is_honors_ap
                 existing.credits_earned = credits_val
+                if teacher_clean:
+                    existing.teacher = teacher_clean
                 updated += 1
             else:
                 record = GradeRecord(
@@ -366,6 +371,7 @@ def grades_upload():
                     course_name=course_title_clean,
                     course_number=str(course_number or '').strip(),
                     period=period_val,
+                    teacher=teacher_clean or None,
                     letter_grade=letter_clean,
                     grade_type=form_grade_type,
                     credits_earned=credits_val,
@@ -377,15 +383,37 @@ def grades_upload():
                 db.session.add(record)
                 added += 1
 
+            # Remember the teacher for each catalog course number (backfill below)
+            cnum = str(course_number or '').strip()
+            if cnum and teacher_clean:
+                course_teacher.setdefault(cnum, teacher_clean)
+
             # Batch commit to avoid holding SQLite lock too long
             if (added + updated) % BATCH_SIZE == 0:
                 db.session.commit()
 
         db.session.commit()
+
+        # Backfill Course.instructor from the staff names in this import, but only
+        # where the catalog course has no instructor yet (never overwrite a
+        # counselor's manual entry).
+        backfilled = 0
+        if course_teacher:
+            from app.models.course import Course
+            catalog = Course.query.filter(
+                Course.course_number.in_(list(course_teacher.keys()))).all()
+            for c in catalog:
+                if not (c.instructor or '').strip():
+                    c.instructor = course_teacher[c.course_number]
+                    backfilled += 1
+            if backfilled:
+                db.session.commit()
+
         log_action('import', 'grades',
                    details=f'Imported {form_grade_type} grades: {added} added, {updated} updated'
                            + (f', {not_on_caseload} not on caseload' if not_on_caseload else '')
-                           + (f', {purged} progress grades replaced' if purged else ''))
+                           + (f', {purged} progress grades replaced' if purged else '')
+                           + (f', {backfilled} course instructors set' if backfilled else ''))
 
         # Log the import
         db.session.add(ImportLog(

@@ -152,6 +152,7 @@ def create_app(config_class=Config):
     from app.routes.documents import documents_bp
     from app.routes.post_grad import post_grad_bp
     from app.routes.elpac import elpac_bp
+    from app.routes.staff import staff_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -197,6 +198,7 @@ def create_app(config_class=Config):
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(post_grad_bp, url_prefix='/post-grad')
     app.register_blueprint(elpac_bp, url_prefix='/elpac')
+    app.register_blueprint(staff_bp, url_prefix='/staff')
 
     # Demo mode: register zero-friction auto-login + reset routes
     if os.environ.get('COUNSELOR_DEMO') == '1':

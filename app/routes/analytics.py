@@ -149,6 +149,7 @@ def _insights_grades(student_ids, year, final_only):
     grades = q.all()
 
     by_course = defaultdict(lambda: {'f': 0, 'd': 0, 'total': 0, 'students': set()})
+    by_teacher = defaultdict(lambda: {'f': 0, 'd': 0, 'total': 0, 'students': set()})
     by_period = defaultdict(lambda: {'df': 0, 'total': 0})
     by_subject = defaultdict(lambda: {'f': 0, 'd': 0})
     dist = Counter()
@@ -168,7 +169,10 @@ def _insights_grades(student_ids, year, final_only):
         elif lg: dist['Other'] += 1
 
         course = (g.course_name or 'Unknown').strip()
+        teacher = (g.teacher or '').strip()
         by_course[course]['total'] += 1
+        if teacher:
+            by_teacher[teacher]['total'] += 1
         if g.period is not None:
             by_period[g.period]['total'] += 1
 
@@ -181,12 +185,16 @@ def _insights_grades(student_ids, year, final_only):
             if g.period is not None:
                 by_period[g.period]['df'] += 1
             subj = g.subject_area or course or 'Unknown'
-            if lg == 'F' or lg == 'NP':
+            is_f = lg in ('F', 'NP')
+            if is_f:
                 by_course[course]['f'] += 1
                 by_subject[subj]['f'] += 1
             else:
                 by_course[course]['d'] += 1
                 by_subject[subj]['d'] += 1
+            if teacher:
+                by_teacher[teacher]['students'].add(g.student_id)
+                by_teacher[teacher]['f' if is_f else 'd'] += 1
 
     # D/F by course — rank by total D/F, then by rate
     course_rows = []
@@ -201,6 +209,20 @@ def _insights_grades(student_ids, year, final_only):
         })
     course_rows.sort(key=lambda r: (-r['df'], -r['rate']))
     top_courses = course_rows[:15]
+
+    # D/F by teacher — same shape as by course
+    teacher_rows = []
+    for name, c in by_teacher.items():
+        df = c['f'] + c['d']
+        if df == 0:
+            continue
+        teacher_rows.append({
+            'teacher': name, 'df': df, 'f': c['f'], 'd': c['d'],
+            'students': len(c['students']), 'total': c['total'],
+            'rate': round(df / c['total'] * 100, 1) if c['total'] else 0,
+        })
+    teacher_rows.sort(key=lambda r: (-r['df'], -r['rate']))
+    top_teachers = teacher_rows[:15]
 
     # D/F by period (sorted by period number)
     periods = sorted(by_period.keys())
@@ -231,6 +253,13 @@ def _insights_grades(student_ids, year, final_only):
         },
         'df_by_period': period_payload,
         'df_by_subject': subj_payload,
+        'df_by_teacher': {
+            'labels': [r['teacher'] for r in top_teachers],
+            'f_values': [r['f'] for r in top_teachers],
+            'd_values': [r['d'] for r in top_teachers],
+            'rows': teacher_rows,
+            'has_data': bool(by_teacher),
+        },
         'grade_distribution': {
             'labels': dist_order,
             'values': [dist.get(k, 0) for k in dist_order],

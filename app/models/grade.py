@@ -15,6 +15,7 @@ class GradeRecord(db.Model):
     course_name = db.Column(db.String(200), nullable=False)
     course_number = db.Column(db.String(20))  # links to course catalog if available
     period = db.Column(db.Integer)            # 1-4
+    teacher = db.Column(db.String(120), index=True)  # staff name from the grade export
 
     # Grade type: 'final' (quarter grades) or 'progress' (mid-quarter progress report)
     grade_type = db.Column(db.String(10), default='final')  # 'final' | 'progress'

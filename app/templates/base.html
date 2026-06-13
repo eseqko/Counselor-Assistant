@@ -123,6 +123,9 @@
                         <span class="nav-icon">&#128218;</span> Course Catalog
                     </a>
                     {% if app_state.has_students %}
+                    <a href="{{ url_for('staff.index') }}" class="nav-item {% if request.blueprint == 'staff' %}active{% endif %}">
+                        <span class="nav-icon">&#128104;&#8205;&#127979;</span> Staff Directory
+                    </a>
                     <a href="{{ url_for('post_grad.index') }}" class="nav-item {% if request.blueprint == 'post_grad' %}active{% endif %}">
                         <span class="nav-icon">&#127891;</span> Post-Grad
                     </a>

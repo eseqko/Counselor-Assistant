@@ -133,6 +133,15 @@
         html += card('c-gsubject', 'D/F by Subject', 'Failing/near-failing grouped by subject area');
         html += '</div>';
 
+        /* ── By teacher (only if staff names are in the grade data) ── */
+        if (g.df_by_teacher && g.df_by_teacher.has_data && g.df_by_teacher.labels.length) {
+            html += '<div class="section-header">D/F by Teacher'
+                  + '<span class="hint">From the Staff Name column · use to target support, not evaluation</span></div>';
+            html += '<div class="chart-grid"><div class="chart-card full">'
+                  + '<h3>D/F by Teacher</h3><div class="chart-subtitle">Combined D and F count across each teacher’s classes</div>'
+                  + '<canvas id="c-teacher"></canvas></div></div>';
+        }
+
         /* ── Grade distribution ── */
         html += '<div class="section-header">Overall Grade Distribution</div>';
         html += '<div class="chart-grid">';
@@ -173,6 +182,10 @@
             charts.push(stackedHBar('c-gsubject', g.df_by_subject.labels,
                 [{label:'F / NP', data:g.df_by_subject.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_subject.d_values, color:'#F39C12'}]));
+        if (g.df_by_teacher && g.df_by_teacher.has_data && g.df_by_teacher.labels.length)
+            charts.push(stackedHBar('c-teacher', g.df_by_teacher.labels,
+                [{label:'F / NP', data:g.df_by_teacher.f_values, color:'#E74C3C'},
+                 {label:'D', data:g.df_by_teacher.d_values, color:'#F39C12'}]));
         if (g.grade_distribution.values.some(function(v){return v;})) {
             charts.push(doughnut('c-dist', g.grade_distribution.labels, g.grade_distribution.values));
             charts.push(bar('c-dist-bar', g.grade_distribution.labels, g.grade_distribution.values, 'Grades', '#4A90D9'));
@@ -264,7 +277,7 @@
 
     /* The course chart needs a fixed height since it uses maintainAspectRatio:false */
     var style = document.createElement('style');
-    style.textContent = '#c-course{min-height:360px;} #c-gsubject{min-height:300px;}';
+    style.textContent = '#c-course{min-height:360px;} #c-gsubject{min-height:300px;} #c-teacher{min-height:340px;}';
     document.head.appendChild(style);
 
     reload();

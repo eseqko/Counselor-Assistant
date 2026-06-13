@@ -247,6 +247,7 @@
                     <th>Year</th>
                     <th>Qtr</th>
                     <th>Course</th>
+                    <th>Teacher</th>
                     <th>Grade</th>
                     <th>Credits</th>
                     <th>Subject</th>
@@ -260,6 +261,7 @@
                     <td>{{ g.school_year or '—' }}</td>
                     <td>{{ g.quarter or '—' }}</td>
                     <td>{{ g.course_name }}</td>
+                    <td>{{ g.teacher or '—' }}</td>
                     <td class="{% if g.is_passing %}grade-pass{% elif g.is_passing == false %}grade-fail{% endif %}">
                         {{ g.letter_grade or '—' }}
                     </td>
