@@ -65,7 +65,8 @@
     <button class="range-btn" data-range="90" onclick="loadData('90')">90 Days</button>
     <button class="range-btn" data-range="semester" onclick="loadData('semester')">Semester</button>
     <button class="range-btn active" data-range="year" onclick="loadData('year')">School Year</button>
-    <button class="btn btn-sm btn-outline print-btn" onclick="window.print()">Print / Export</button>
+    <a href="{{ url_for('analytics.insights') }}" class="btn btn-sm btn-primary print-btn" style="text-decoration:none;">&#128269; Insights 360 &rarr;</a>
+    <button class="btn btn-sm btn-outline" onclick="window.print()">Print / Export</button>
 </div>
 
 <div id="analytics-content">

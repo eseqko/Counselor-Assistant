@@ -60,6 +60,277 @@ def api_data():
     return jsonify(data)
 
 
+# ── Insights 360: academic-risk + attendance pattern drill-down ───
+
+# Grade buckets used across the insights aggregations.
+_FAILING = {'F', 'NP'}
+_NEAR_FAILING = {'D+', 'D', 'D-'}
+_DF = _FAILING | _NEAR_FAILING
+
+
+@analytics_bp.route('/insights')
+@login_required
+def insights():
+    """360 drill-down: which classes give the most D/F, which periods students
+    miss the most, grade distribution, and the academic+attendance overlap."""
+    return render_template('analytics/insights.html')
+
+
+@analytics_bp.route('/api/insights')
+@login_required
+def api_insights():
+    """Single-payload data for the Insights 360 page."""
+    uid = current_user.id
+    today = date.today()
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=uid, status='active').all()
+    student_ids = [s.id for s in students]
+    name_by_id = {s.id: s for s in students}
+
+    if not student_ids:
+        return jsonify({'empty': True})
+
+    # School-year filter. Default to the most recent year present in grades.
+    years = sorted({y[0] for y in db.session.query(GradeRecord.school_year)
+                    .filter(GradeRecord.student_id.in_(student_ids),
+                            GradeRecord.school_year.isnot(None)).distinct().all()},
+                   reverse=True)
+    year = request.args.get('year') or (years[0] if years else None)
+    final_only = request.args.get('final_only', '1') != '0'
+
+    grades_payload = _insights_grades(student_ids, year, final_only)
+    attend_payload = _insights_attendance(student_ids, today - timedelta(days=365), today)
+    overlap = _insights_overlap(grades_payload['_per_student_df'],
+                                attend_payload['_per_student_absent'], name_by_id)
+
+    # Headline summary cards
+    course_rows = grades_payload['df_by_course']['rows']
+    worst_course = course_rows[0] if course_rows else None
+    ap = attend_payload['attend_by_period']
+    worst_period = None
+    if ap['labels']:
+        idx = max(range(len(ap['labels'])), key=lambda i: ap['absent'][i])
+        if ap['absent'][idx] > 0:
+            worst_period = {'label': ap['labels'][idx], 'count': ap['absent'][idx]}
+
+    summary = {
+        'total_df': grades_payload['total_df'],
+        'courses_with_df': len(course_rows),
+        'worst_course': worst_course['course'] if worst_course else '--',
+        'worst_course_df': worst_course['df'] if worst_course else 0,
+        'failing_students': grades_payload['failing_students'],
+        'total_absences': attend_payload['total_absences'],
+        'worst_period': worst_period,
+        'at_risk_overlap': len(overlap),
+    }
+
+    # Drop internal scratch keys before serializing.
+    grades_payload.pop('_per_student_df', None)
+    attend_payload.pop('_per_student_absent', None)
+
+    return jsonify({
+        'filters': {'year': year, 'years': years, 'final_only': final_only},
+        'summary': summary,
+        'grades': grades_payload,
+        'attendance': attend_payload,
+        'high_risk': overlap,
+    })
+
+
+def _insights_grades(student_ids, year, final_only):
+    """Academic-risk aggregations: D/F by course, by period, by subject, and the
+    overall grade distribution."""
+    q = GradeRecord.query.filter(GradeRecord.student_id.in_(student_ids))
+    if final_only:
+        q = q.filter(GradeRecord.grade_type == 'final')
+    if year:
+        q = q.filter(GradeRecord.school_year == year)
+    grades = q.all()
+
+    by_course = defaultdict(lambda: {'f': 0, 'd': 0, 'total': 0, 'students': set()})
+    by_period = defaultdict(lambda: {'df': 0, 'total': 0})
+    by_subject = defaultdict(lambda: {'f': 0, 'd': 0})
+    dist = Counter()
+    per_student_df = defaultdict(int)
+    total_df = 0
+    failing_students = set()
+
+    for g in grades:
+        lg = (g.letter_grade or '').strip()
+        # Overall grade distribution bucket
+        if lg in ('A+', 'A', 'A-'): dist['A'] += 1
+        elif lg in ('B+', 'B', 'B-'): dist['B'] += 1
+        elif lg in ('C+', 'C', 'C-'): dist['C'] += 1
+        elif lg in _NEAR_FAILING: dist['D'] += 1
+        elif lg == 'F': dist['F'] += 1
+        elif lg in ('P', 'NP'): dist['P/NP'] += 1
+        elif lg: dist['Other'] += 1
+
+        course = (g.course_name or 'Unknown').strip()
+        by_course[course]['total'] += 1
+        if g.period is not None:
+            by_period[g.period]['total'] += 1
+
+        is_df = lg in _DF
+        if is_df:
+            total_df += 1
+            per_student_df[g.student_id] += 1
+            failing_students.add(g.student_id)
+            by_course[course]['students'].add(g.student_id)
+            if g.period is not None:
+                by_period[g.period]['df'] += 1
+            subj = g.subject_area or course or 'Unknown'
+            if lg == 'F' or lg == 'NP':
+                by_course[course]['f'] += 1
+                by_subject[subj]['f'] += 1
+            else:
+                by_course[course]['d'] += 1
+                by_subject[subj]['d'] += 1
+
+    # D/F by course — rank by total D/F, then by rate
+    course_rows = []
+    for name, c in by_course.items():
+        df = c['f'] + c['d']
+        if df == 0:
+            continue
+        course_rows.append({
+            'course': name, 'df': df, 'f': c['f'], 'd': c['d'],
+            'students': len(c['students']), 'total': c['total'],
+            'rate': round(df / c['total'] * 100, 1) if c['total'] else 0,
+        })
+    course_rows.sort(key=lambda r: (-r['df'], -r['rate']))
+    top_courses = course_rows[:15]
+
+    # D/F by period (sorted by period number)
+    periods = sorted(by_period.keys())
+    period_payload = {
+        'labels': [f'Period {p}' for p in periods],
+        'df': [by_period[p]['df'] for p in periods],
+        'total': [by_period[p]['total'] for p in periods],
+        'rate': [round(by_period[p]['df'] / by_period[p]['total'] * 100, 1)
+                 if by_period[p]['total'] else 0 for p in periods],
+    }
+
+    # D/F by subject (sorted by total)
+    subj_sorted = sorted(by_subject.items(),
+                         key=lambda kv: -(kv[1]['f'] + kv[1]['d']))
+    subj_payload = {
+        'labels': [s for s, _ in subj_sorted],
+        'f_values': [v['f'] for _, v in subj_sorted],
+        'd_values': [v['d'] for _, v in subj_sorted],
+    }
+
+    dist_order = ['A', 'B', 'C', 'D', 'F', 'P/NP', 'Other']
+    return {
+        'df_by_course': {
+            'labels': [r['course'] for r in top_courses],
+            'f_values': [r['f'] for r in top_courses],
+            'd_values': [r['d'] for r in top_courses],
+            'rows': course_rows,
+        },
+        'df_by_period': period_payload,
+        'df_by_subject': subj_payload,
+        'grade_distribution': {
+            'labels': dist_order,
+            'values': [dist.get(k, 0) for k in dist_order],
+        },
+        'total_df': total_df,
+        'failing_students': len(failing_students),
+        '_per_student_df': per_student_df,
+    }
+
+
+_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+
+def _insights_attendance(student_ids, start, end):
+    """Attendance patterns: absences/tardies by period, by weekday, by status,
+    and the courses students miss most."""
+    records = AttendanceRecord.query.filter(
+        AttendanceRecord.student_id.in_(student_ids),
+        AttendanceRecord.date >= start,
+        AttendanceRecord.date <= end,
+    ).all()
+
+    by_period = defaultdict(lambda: {'absent': 0, 'tardy': 0})
+    by_weekday = defaultdict(lambda: {'absent': 0, 'tardy': 0})
+    by_status = Counter()
+    by_course = defaultdict(int)
+    per_student_absent = defaultdict(int)
+    total_absences = 0
+
+    for r in records:
+        status = (r.status or '').lower()
+        by_status[status] += 1
+        if status == 'absent':
+            total_absences += 1
+            per_student_absent[r.student_id] += 1
+        # Period-level breakdown (daily rows have period NULL — skip those here)
+        if r.period is not None and r.period >= 1:
+            if status == 'absent':
+                by_period[r.period]['absent'] += 1
+            elif status == 'tardy':
+                by_period[r.period]['tardy'] += 1
+        # Weekday pattern (any record with a date)
+        if r.date and status in ('absent', 'tardy'):
+            by_weekday[r.date.weekday()][status] += 1
+        # Course the student is missing
+        if status in ('absent', 'tardy') and r.course_name:
+            by_course[r.course_name.strip()] += 1
+
+    periods = sorted(by_period.keys())
+    weekday_idx = list(range(5))  # Mon-Fri
+    course_sorted = sorted(by_course.items(), key=lambda kv: -kv[1])[:12]
+    status_order = ['present', 'absent', 'tardy', 'excused']
+
+    return {
+        'attend_by_period': {
+            'labels': [f'Period {p}' for p in periods],
+            'absent': [by_period[p]['absent'] for p in periods],
+            'tardy': [by_period[p]['tardy'] for p in periods],
+        },
+        'attend_by_weekday': {
+            'labels': [_WEEKDAYS[i] for i in weekday_idx],
+            'absent': [by_weekday[i]['absent'] for i in weekday_idx],
+            'tardy': [by_weekday[i]['tardy'] for i in weekday_idx],
+        },
+        'attend_by_status': {
+            'labels': [s.title() for s in status_order if by_status.get(s)],
+            'values': [by_status[s] for s in status_order if by_status.get(s)],
+        },
+        'attend_by_course': {
+            'labels': [c for c, _ in course_sorted],
+            'values': [n for _, n in course_sorted],
+        },
+        'has_period_data': bool(periods),
+        'total_absences': total_absences,
+        '_per_student_absent': per_student_absent,
+    }
+
+
+def _insights_overlap(per_student_df, per_student_absent, name_by_id):
+    """Highest-risk students: 2+ D/F grades AND 5+ absences — the overlap where
+    academic and attendance risk compound."""
+    rows = []
+    for sid in set(per_student_df) | set(per_student_absent):
+        df = per_student_df.get(sid, 0)
+        absent = per_student_absent.get(sid, 0)
+        if df >= 2 and absent >= 5:
+            s = name_by_id.get(sid)
+            if not s:
+                continue
+            rows.append({
+                'id': sid,
+                'name': f'{s.first_name} {s.last_name}',
+                'grade': s.grade_level,
+                'df_count': df,
+                'absences': absent,
+            })
+    rows.sort(key=lambda r: (-(r['df_count'] + r['absences'])))
+    return rows
+
+
 # ── ELPAC Analytics Dashboard ─────────────────────────────────────
 
 

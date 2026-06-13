@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}Insights 360{% endblock %}
+{% block page_title %}Insights 360 — Academic &amp; Attendance Risk{% endblock %}
+{% block head %}
+<style>
+.analytics-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+.analytics-toolbar select {
+    padding:6px 12px; border:1px solid var(--light-gray); border-radius:6px;
+    background:var(--white); font-size:0.84rem; font-weight:600; color:var(--text);
+}
+.toolbar-toggle { display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--gray); }
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+@media (max-width:900px) { .chart-grid { grid-template-columns:1fr; } }
+.chart-card { background:var(--white); border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+.chart-card h3 { font-size:0.92rem; color:var(--primary-dark); margin:0 0 4px; }
+.chart-card .chart-subtitle { font-size:0.78rem; color:var(--gray); margin-bottom:12px; }
+.chart-card canvas { max-height:300px; }
+.chart-card.full { grid-column:1/-1; }
+.kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+.kpi-card { background:var(--white); border-radius:10px; padding:16px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+.kpi-value { font-size:1.5rem; font-weight:800; color:var(--primary-dark); }
+.kpi-value.danger { color:var(--danger); }
+.kpi-label { font-size:0.76rem; color:var(--gray); margin-top:2px; }
+.section-header { font-size:1.05rem; font-weight:700; color:var(--text); margin:24px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--light-gray); }
+.section-header:first-of-type { margin-top:0; }
+.section-header .hint { font-size:0.76rem; font-weight:400; color:var(--gray); margin-left:8px; }
+.print-btn { margin-left:auto; }
+.data-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+.data-table th { text-align:left; padding:8px 10px; background:var(--bg); color:var(--gray); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.4px; border-bottom:2px solid var(--light-gray); }
+.data-table td { padding:8px 10px; border-bottom:1px solid var(--light-gray); }
+.data-table tr:hover td { background:var(--bg); }
+.pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.74rem; font-weight:700; }
+.pill.f { background:#FCE8E8; color:var(--danger); }
+.pill.d { background:#FFF3D6; color:#996300; }
+.pill.rate { background:#EEF1F6; color:var(--primary-dark); }
+.empty-note { color:var(--gray); font-size:0.85rem; font-style:italic; padding:30px; text-align:center; }
+.loading-overlay { text-align:center; padding:60px 20px; color:var(--gray); font-size:0.95rem; }
+@media print {
+    .analytics-toolbar, .sidebar, .top-bar, .print-btn { display:none !important; }
+    .chart-grid, .chart-card { break-inside:avoid; }
+    .chart-card { box-shadow:none; border:1px solid #ddd; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-toolbar">
+    <label class="toolbar-toggle">School year:
+        <select id="year-select" onchange="reload()"></select>
+    </label>
+    <label class="toolbar-toggle">
+        <input type="checkbox" id="final-only" checked onchange="reload()"> Final grades only
+    </label>
+    <button class="btn btn-sm btn-outline print-btn" onclick="window.print()">Print / Export</button>
+</div>
+
+<div id="insights-content">
+    <div class="loading-overlay">Loading insights…</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script>
+(function(){
+    var API = "{{ url_for('analytics.api_insights') }}";
+    var charts = [];
+    var COLORS = ['#4A90D9','#2ECC71','#F39C12','#E74C3C','#9B59B6','#1ABC9C','#E67E22','#34495E','#E91E63','#607D8B'];
+    var yearsLoaded = false;
+
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+    window.reload = function(){
+        var year = document.getElementById('year-select').value;
+        var finalOnly = document.getElementById('final-only').checked ? '1' : '0';
+        document.getElementById('insights-content').innerHTML =
+            '<div class="loading-overlay">Loading insights…</div>';
+        charts.forEach(function(c){ c.destroy(); }); charts = [];
+        fetch(API + '?year=' + encodeURIComponent(year) + '&final_only=' + finalOnly)
+            .then(function(r){ return r.json(); })
+            .then(render)
+            .catch(function(){ document.getElementById('insights-content').innerHTML =
+                '<div class="loading-overlay">Failed to load.</div>'; });
+    };
+
+    function render(data){
+        if (data.empty) {
+            document.getElementById('insights-content').innerHTML =
+                '<div class="empty-note">No active students on your caseload yet. Import a caseload and grade/attendance data to see insights.</div>';
+            return;
+        }
+
+        // Populate year dropdown once
+        if (!yearsLoaded) {
+            var sel = document.getElementById('year-select');
+            sel.innerHTML = '';
+            (data.filters.years || []).forEach(function(y){
+                var o = document.createElement('option'); o.value = y; o.textContent = y;
+                if (y === data.filters.year) o.selected = true; sel.appendChild(o);
+            });
+            if (!data.filters.years || !data.filters.years.length) {
+                var o = document.createElement('option'); o.textContent = '(no grade data)'; sel.appendChild(o);
+            }
+            yearsLoaded = true;
+        }
+
+        var g = data.grades, at = data.attendance, sm = data.summary;
+        var html = '';
+
+        /* KPIs */
+        html += '<div class="kpi-row">';
+        html += kpi(sm.total_df, 'D/F Grades', true);
+        html += kpi(sm.courses_with_df, 'Classes w/ D-F');
+        html += kpi(sm.failing_students, 'Students w/ D-F', true);
+        html += kpi(sm.total_absences, 'Absences (1 yr)');
+        html += kpi(sm.worst_period ? sm.worst_period.label.replace('Period ','P') : '--', 'Most-Missed Period');
+        html += kpi(sm.at_risk_overlap, 'Compounding Risk', true);
+        html += '</div>';
+
+        /* ── Classes with the most D/F ── */
+        html += '<div class="section-header">Classes With the Most D/F Grades'
+              + '<span class="hint">Worst: ' + esc(sm.worst_course) + ' (' + sm.worst_course_df + ')</span></div>';
+        html += '<div class="chart-grid"><div class="chart-card full">'
+              + '<h3>D/F by Class</h3><div class="chart-subtitle">Top classes by combined D and F count</div>'
+              + '<canvas id="c-course"></canvas></div></div>';
+        html += courseTable(g.df_by_course.rows);
+
+        /* ── Period & subject ── */
+        html += '<div class="section-header">Where Failing Concentrates</div>';
+        html += '<div class="chart-grid">';
+        html += card('c-gperiod', 'D/F by Period', 'Which periods produce the most failing marks');
+        html += card('c-gsubject', 'D/F by Subject', 'Failing/near-failing grouped by subject area');
+        html += '</div>';
+
+        /* ── Grade distribution ── */
+        html += '<div class="section-header">Overall Grade Distribution</div>';
+        html += '<div class="chart-grid">';
+        html += card('c-dist', 'Grade Spread', 'All grades for the selected year');
+        html += card('c-dist-bar', 'Grade Counts', 'A through F across the caseload');
+        html += '</div>';
+
+        /* ── Attendance patterns ── */
+        html += '<div class="section-header">Attendance Patterns</div>';
+        html += '<div class="chart-grid">';
+        if (at.has_period_data) {
+            html += card('c-aperiod', 'Absences by Period', 'Which periods students miss most');
+        } else {
+            html += '<div class="chart-card"><h3>Absences by Period</h3>'
+                  + '<div class="empty-note">No period-level attendance imported.<br>'
+                  + 'Import attendance with a Period column (1-6) to see this breakdown.</div></div>';
+        }
+        html += card('c-aweekday', 'Absences by Weekday', 'Monday/Friday patterns');
+        html += card('c-astatus', 'Attendance Breakdown', 'Present / Absent / Tardy / Excused');
+        html += card('c-acourse', 'Most-Missed Classes', 'Classes by absence + tardy count');
+        html += '</div>';
+
+        /* ── Compounding risk ── */
+        html += '<div class="section-header">Compounding Risk'
+              + '<span class="hint">2+ D/F grades AND 5+ absences</span></div>';
+        html += riskTable(data.high_risk);
+
+        document.getElementById('insights-content').innerHTML = html;
+
+        /* Build charts */
+        if (g.df_by_course.labels.length)
+            charts.push(stackedHBar('c-course', g.df_by_course.labels,
+                [{label:'F / NP', data:g.df_by_course.f_values, color:'#E74C3C'},
+                 {label:'D', data:g.df_by_course.d_values, color:'#F39C12'}]));
+        if (g.df_by_period.labels.length)
+            charts.push(bar('c-gperiod', g.df_by_period.labels, g.df_by_period.df, 'D/F grades', '#E74C3C'));
+        if (g.df_by_subject.labels.length)
+            charts.push(stackedHBar('c-gsubject', g.df_by_subject.labels,
+                [{label:'F / NP', data:g.df_by_subject.f_values, color:'#E74C3C'},
+                 {label:'D', data:g.df_by_subject.d_values, color:'#F39C12'}]));
+        if (g.grade_distribution.values.some(function(v){return v;})) {
+            charts.push(doughnut('c-dist', g.grade_distribution.labels, g.grade_distribution.values));
+            charts.push(bar('c-dist-bar', g.grade_distribution.labels, g.grade_distribution.values, 'Grades', '#4A90D9'));
+        }
+        if (at.has_period_data && at.attend_by_period.labels.length)
+            charts.push(groupedBar('c-aperiod', at.attend_by_period.labels,
+                [{label:'Absent', data:at.attend_by_period.absent, color:'#E74C3C'},
+                 {label:'Tardy', data:at.attend_by_period.tardy, color:'#F39C12'}]));
+        if (at.attend_by_weekday.labels.length)
+            charts.push(groupedBar('c-aweekday', at.attend_by_weekday.labels,
+                [{label:'Absent', data:at.attend_by_weekday.absent, color:'#E74C3C'},
+                 {label:'Tardy', data:at.attend_by_weekday.tardy, color:'#F39C12'}]));
+        if (at.attend_by_status.labels.length)
+            charts.push(doughnut('c-astatus', at.attend_by_status.labels, at.attend_by_status.values));
+        if (at.attend_by_course.labels.length)
+            charts.push(hbar('c-acourse', at.attend_by_course.labels, at.attend_by_course.values, 'Missed'));
+    }
+
+    /* ── Tables ── */
+    function courseTable(rows){
+        if (!rows || !rows.length) return '<div class="empty-note">No D or F grades for the selected year. 🎉</div>';
+        var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
+            + '<th>Class</th><th>F / NP</th><th>D</th><th>Total D/F</th><th>Students</th><th>Fail Rate</th></tr></thead><tbody>';
+        rows.slice(0, 30).forEach(function(r){
+            h += '<tr><td>' + esc(r.course) + '</td>'
+              + '<td><span class="pill f">' + r.f + '</span></td>'
+              + '<td><span class="pill d">' + r.d + '</span></td>'
+              + '<td><strong>' + r.df + '</strong></td>'
+              + '<td>' + r.students + '</td>'
+              + '<td><span class="pill rate">' + r.rate + '%</span> <span style="color:var(--gray);font-size:0.74rem;">of ' + r.total + '</span></td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+    function riskTable(rows){
+        if (!rows || !rows.length) return '<div class="empty-note">No students currently have both 2+ D/F grades and 5+ absences.</div>';
+        var h = '<div class="chart-card full"><table class="data-table"><thead><tr>'
+            + '<th>Student</th><th>Grade</th><th>D/F Grades</th><th>Absences</th><th></th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            h += '<tr><td>' + esc(r.name) + '</td>'
+              + '<td>' + (r.grade != null ? r.grade : '--') + '</td>'
+              + '<td><span class="pill f">' + r.df_count + '</span></td>'
+              + '<td><span class="pill d">' + r.absences + '</span></td>'
+              + '<td><a href="/caseload/' + r.id + '" class="btn btn-sm btn-outline" style="font-size:0.74rem;">Open</a></td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+
+    /* ── Chart builders ── */
+    function bar(id, labels, values, label, color){
+        var el = document.getElementById(id); if(!el) return null;
+        return new Chart(el, {type:'bar', data:{labels:labels, datasets:[{label:label, data:values,
+            backgroundColor:(color||'#4A90D9')+'80', borderColor:color||'#4A90D9', borderWidth:1}]},
+            options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
+    }
+    function hbar(id, labels, values, label){
+        var el = document.getElementById(id); if(!el) return null;
+        return new Chart(el, {type:'bar', data:{labels:labels, datasets:[{label:label, data:values,
+            backgroundColor:'#9B59B680', borderColor:'#9B59B6', borderWidth:1}]},
+            options:{indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, ticks:{precision:0}}}}});
+    }
+    function groupedBar(id, labels, datasets){
+        var el = document.getElementById(id); if(!el) return null;
+        return new Chart(el, {type:'bar', data:{labels:labels, datasets:datasets.map(function(d){
+            return {label:d.label, data:d.data, backgroundColor:d.color+'80', borderColor:d.color, borderWidth:1};})},
+            options:{responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
+    }
+    function stackedHBar(id, labels, datasets){
+        var el = document.getElementById(id); if(!el) return null;
+        return new Chart(el, {type:'bar', data:{labels:labels, datasets:datasets.map(function(d){
+            return {label:d.label, data:d.data, backgroundColor:d.color+'80', borderColor:d.color, borderWidth:1};})},
+            options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+                plugins:{legend:{position:'bottom'}}, scales:{x:{stacked:true, beginAtZero:true, ticks:{precision:0}}, y:{stacked:true}}}});
+    }
+    function doughnut(id, labels, values){
+        var el = document.getElementById(id); if(!el) return null;
+        return new Chart(el, {type:'doughnut', data:{labels:labels, datasets:[{data:values,
+            backgroundColor:COLORS.slice(0,values.length), borderWidth:2}]},
+            options:{responsive:true, plugins:{legend:{position:'bottom', labels:{boxWidth:12}}}}});
+    }
+
+    function card(id, title, subtitle){
+        return '<div class="chart-card"><h3>'+title+'</h3><div class="chart-subtitle">'+subtitle+'</div><canvas id="'+id+'"></canvas></div>';
+    }
+    function kpi(value, label, danger){
+        return '<div class="kpi-card"><div class="kpi-value'+(danger?' danger':'')+'">'+value+'</div><div class="kpi-label">'+label+'</div></div>';
+    }
+
+    /* The course chart needs a fixed height since it uses maintainAspectRatio:false */
+    var style = document.createElement('style');
+    style.textContent = '#c-course{min-height:360px;} #c-gsubject{min-height:300px;}';
+    document.head.appendChild(style);
+
+    reload();
+})();
+</script>
+{% endblock %}
