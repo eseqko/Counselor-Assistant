@@ -356,6 +356,7 @@ def create_app(config_class=Config):
         from app.models import asca_program
         from app.models import rollover
         from app.models import school_calendar
+        from app.models import staff
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

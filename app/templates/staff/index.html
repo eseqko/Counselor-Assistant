@@ -9,7 +9,11 @@
 .staff-card { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:14px; overflow:hidden; }
 .staff-head { display:flex; align-items:center; gap:14px; padding:14px 18px; cursor:pointer; }
 .staff-head:hover { background:var(--bg); }
-.staff-name { font-weight:700; font-size:1rem; color:var(--text); flex:1; }
+.staff-name { font-weight:700; font-size:1rem; color:var(--text); }
+.staff-name:hover { text-decoration:underline !important; }
+.staff-meta { color:var(--gray); font-size:0.78rem; margin-top:2px; }
+.staff-meta a { color:var(--gray); }
+.staff-meta a:hover { color:var(--primary); }
 .staff-stat { text-align:center; min-width:64px; }
 .staff-stat .v { font-weight:800; font-size:1.05rem; color:var(--primary-dark); }
 .staff-stat .v.danger { color:var(--danger); }
@@ -50,7 +54,20 @@
     {% for t in rows %}
     <div class="staff-card" id="staff-{{ loop.index }}">
         <div class="staff-head" onclick="document.getElementById('staff-{{ loop.index }}').classList.toggle('open')">
-            <span class="staff-name">{{ t.name }}</span>
+            <div style="flex:1;">
+                {% if t.has_record %}
+                <a href="{{ url_for('staff.detail', staff_id=t.id) }}" class="staff-name"
+                   onclick="event.stopPropagation();"
+                   style="color:var(--primary);text-decoration:none;">{{ t.name }}</a>
+                {% else %}
+                <span class="staff-name">{{ t.name }}</span>
+                {% endif %}
+                <div class="staff-meta">
+                    {% if t.department %}<span>{{ t.department }}</span>{% endif %}
+                    {% if t.email %}<span> · <a href="mailto:{{ t.email }}" onclick="event.stopPropagation();">{{ t.email }}</a></span>{% endif %}
+                    {% if t.room %}<span> · Rm {{ t.room }}</span>{% endif %}
+                </div>
+            </div>
             <div class="staff-stat"><div class="v">{{ t.class_count }}</div><div class="l">Classes</div></div>
             <div class="staff-stat"><div class="v">{{ t.student_count }}</div><div class="l">My Students</div></div>
             <div class="staff-stat"><div class="v {% if t.df %}danger{% endif %}">{{ t.df }}</div><div class="l">D/F</div></div>

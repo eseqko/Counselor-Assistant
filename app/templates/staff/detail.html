@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}{{ staff.name }} — Staff{% endblock %}
+{% block page_title %}{{ staff.name }}{% endblock %}
+{% block head %}
+<style>
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+@media (max-width:900px) { .detail-grid { grid-template-columns:1fr; } }
+.card { background:var(--white); border-radius:10px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+.card h3 { font-size:0.92rem; color:var(--primary-dark); margin:0 0 12px; }
+.contact-row { display:grid; grid-template-columns:80px 1fr; gap:6px 12px; font-size:0.88rem; margin-bottom:6px; }
+.contact-row .l { color:var(--gray); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px; padding-top:2px; }
+.contact-row .v { color:var(--text); }
+.contact-row .v.empty { color:var(--light-gray); font-style:italic; }
+.form-row { display:grid; grid-template-columns:90px 1fr; gap:8px 12px; margin-bottom:10px; align-items:center; }
+.form-row label { color:var(--gray); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.3px; }
+.form-row input, .form-row select, .form-row textarea {
+    width:100%; padding:6px 10px; border:1px solid var(--light-gray); border-radius:6px;
+    font-size:0.88rem; background:var(--white); color:var(--text);
+}
+.form-row textarea { resize:vertical; min-height:80px; }
+.form-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+.toolbar { display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+.toolbar select { padding:6px 12px; border:1px solid var(--light-gray); border-radius:6px; background:var(--white); font-size:0.84rem; font-weight:600; color:var(--text); }
+.toolbar .hint { color:var(--gray); font-size:0.82rem; }
+.class-block { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:14px; overflow:hidden; }
+.class-head { padding:12px 18px; background:var(--bg); border-bottom:1px solid var(--light-gray); display:flex; align-items:center; gap:14px; }
+.class-head .title { font-weight:700; color:var(--text); flex:1; }
+.class-head .meta { color:var(--gray); font-size:0.82rem; }
+.class-head .badge-df { background:#FCE8E8; color:var(--danger); padding:2px 8px; border-radius:10px; font-size:0.74rem; font-weight:700; }
+.student-table { width:100%; border-collapse:collapse; font-size:0.86rem; }
+.student-table th { text-align:left; padding:8px 18px; color:var(--gray); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid var(--light-gray); background:var(--bg); }
+.student-table td { padding:8px 18px; border-bottom:1px solid var(--light-gray); }
+.student-table tr.df td { background:#FFFBEC; }
+.student-table tr:hover td { background:var(--bg); }
+.student-table a { color:var(--primary); text-decoration:none; }
+.student-table a:hover { text-decoration:underline; }
+.gp { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.74rem; font-weight:700; min-width:28px; text-align:center; }
+.gp.ok { background:#E8F8E8; color:var(--success); }
+.gp.df { background:#FCE8E8; color:var(--danger); }
+.gp.none { color:var(--gray); }
+.empty-note { color:var(--gray); font-size:0.9rem; padding:30px; text-align:center; background:var(--white); border-radius:10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:14px;">
+    <a href="{{ url_for('staff.index') }}" class="btn btn-sm btn-outline">&larr; Staff Directory</a>
+</div>
+
+<div class="detail-grid">
+    {# ── Read-only contact card ── #}
+    <div class="card">
+        <h3>Contact &amp; Profile</h3>
+        <div class="contact-row">
+            <div class="l">Title</div>
+            <div class="v {% if not staff.title %}empty{% endif %}">{{ staff.title or '—' }}</div>
+        </div>
+        <div class="contact-row">
+            <div class="l">Department</div>
+            <div class="v {% if not staff.department and not derived_dept %}empty{% endif %}">
+                {{ staff.department or derived_dept or '—' }}
+                {% if not staff.department and derived_dept %}
+                    <span style="color:var(--gray);font-size:0.74rem;">(from grade data)</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="contact-row">
+            <div class="l">Room</div>
+            <div class="v {% if not staff.room %}empty{% endif %}">{{ staff.room or '—' }}</div>
+        </div>
+        <div class="contact-row">
+            <div class="l">Email</div>
+            <div class="v {% if not staff.email %}empty{% endif %}">
+                {% if staff.email %}<a href="mailto:{{ staff.email }}">{{ staff.email }}</a>{% else %}—{% endif %}
+            </div>
+        </div>
+        <div class="contact-row">
+            <div class="l">Phone</div>
+            <div class="v {% if not staff.phone %}empty{% endif %}">{{ staff.phone or '—' }}</div>
+        </div>
+        {% if staff.notes %}
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--light-gray);">
+            <div class="l" style="color:var(--gray);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px;">Notes</div>
+            <div style="font-size:0.88rem;white-space:pre-wrap;">{{ staff.notes }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ── Edit form ── #}
+    <div class="card">
+        <h3>Edit</h3>
+        <form method="POST" action="{{ url_for('staff.update', staff_id=staff.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row"><label>Name</label>
+                <input type="text" name="name" value="{{ staff.name }}" required></div>
+            <div class="form-row"><label>Title</label>
+                <select name="title">
+                    <option value=""></option>
+                    {% for t in titles %}
+                    <option value="{{ t }}" {% if staff.title == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select></div>
+            <div class="form-row"><label>Department</label>
+                <input type="text" name="department" value="{{ staff.department or '' }}"
+                       placeholder="{{ derived_dept or 'e.g., Math' }}"></div>
+            <div class="form-row"><label>Email</label>
+                <input type="email" name="email" value="{{ staff.email or '' }}"></div>
+            <div class="form-row"><label>Phone</label>
+                <input type="text" name="phone" value="{{ staff.phone or '' }}"></div>
+            <div class="form-row"><label>Room</label>
+                <input type="text" name="room" value="{{ staff.room or '' }}"></div>
+            <div class="form-row"><label>Notes</label>
+                <textarea name="notes" placeholder="Anything you want to remember…">{{ staff.notes or '' }}</textarea></div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Your students in this staff member's classes ── #}
+<div class="toolbar">
+    <h2 style="margin:0;font-size:1.05rem;color:var(--text);">My Students in {{ staff.name }}'s Classes</h2>
+    {% if years %}
+    <label class="hint">School year:
+        <select onchange="location.href='?year='+encodeURIComponent(this.value)">
+            {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select>
+    </label>
+    {% endif %}
+</div>
+
+{% if not classes %}
+<div class="empty-note">
+    None of your students are in {{ staff.name }}'s classes for {{ year or 'this year' }} yet.
+</div>
+{% else %}
+    {% for block in classes %}
+    <div class="class-block">
+        <div class="class-head">
+            <div class="title">
+                {% if block.period is not none %}Period {{ block.period }} —{% endif %}
+                {{ block.course }}
+            </div>
+            <div class="meta">{{ block.students }} student{{ '' if block.students == 1 else 's' }}</div>
+            {% if block.df %}<div class="badge-df">{{ block.df }} D/F</div>{% endif %}
+        </div>
+        <table class="student-table">
+            <thead><tr><th>Student</th><th>Grade Level</th><th>Latest Grade</th><th>Quarter</th><th></th></tr></thead>
+            <tbody>
+            {% for r in block.rows %}
+                <tr class="{% if r.is_df %}df{% endif %}">
+                    <td>{{ r.name }}</td>
+                    <td>{{ r.grade_level if r.grade_level is not none else '—' }}</td>
+                    <td>
+                        {% if not r.letter %}<span class="gp none">—</span>
+                        {% elif r.is_df %}<span class="gp df">{{ r.letter }}</span>
+                        {% else %}<span class="gp ok">{{ r.letter }}</span>{% endif %}
+                    </td>
+                    <td>{{ r.quarter or '—' }}</td>
+                    <td style="text-align:right;">
+                        <a href="{{ url_for('caseload.view_student', id=r.id) }}" class="btn btn-sm btn-outline" style="font-size:0.74rem;">Open</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+{% endif %}
+{% endblock %}

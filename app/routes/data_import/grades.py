@@ -383,7 +383,9 @@ def grades_upload():
                 db.session.add(record)
                 added += 1
 
-            # Remember the teacher for each catalog course number (backfill below)
+            # Remember the teacher for each catalog course number (backfill below).
+            # Names are also auto-upserted into the Staff table after the loop so
+            # the counselor can add email/phone/notes against a real record.
             cnum = str(course_number or '').strip()
             if cnum and teacher_clean:
                 course_teacher.setdefault(cnum, teacher_clean)
@@ -409,11 +411,36 @@ def grades_upload():
             if backfilled:
                 db.session.commit()
 
+        # Auto-upsert Staff records for every teacher name seen this import.
+        # Match case-insensitively against existing names so "Ms. Rivera" doesn't
+        # duplicate against "ms. rivera". Counselor's edits to email/notes survive.
+        staff_added = 0
+        all_teachers = {t for t in course_teacher.values()}
+        # Also pull any teachers that appeared on rows without a course number
+        for row in rows:
+            t = str(col(row, col_map, 'staff_name') or '').strip()
+            if t:
+                all_teachers.add(t)
+        if all_teachers:
+            from app.models.staff import Staff
+            existing_by_lower = {
+                s.name.lower(): s for s in
+                Staff.query.filter(db.func.lower(Staff.name).in_(
+                    [t.lower() for t in all_teachers])).all()
+            }
+            for t in all_teachers:
+                if t.lower() not in existing_by_lower:
+                    db.session.add(Staff(name=t, title='Teacher'))
+                    staff_added += 1
+            if staff_added:
+                db.session.commit()
+
         log_action('import', 'grades',
                    details=f'Imported {form_grade_type} grades: {added} added, {updated} updated'
                            + (f', {not_on_caseload} not on caseload' if not_on_caseload else '')
                            + (f', {purged} progress grades replaced' if purged else '')
-                           + (f', {backfilled} course instructors set' if backfilled else ''))
+                           + (f', {backfilled} course instructors set' if backfilled else '')
+                           + (f', {staff_added} staff records created' if staff_added else ''))
 
         # Log the import
         db.session.add(ImportLog(
