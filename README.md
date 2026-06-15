@@ -15,9 +15,9 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 
 | Pillar | Tools |
 |--------|-------|
-| **Executive Assistant** | Dashboard, Smart Alerts, Calendar, Scheduling, Follow-Ups |
-| **Operations** | Caseload, Notes, Goals, Referrals, Groups, MTSS/RTI, Screeners, IEP/504, Consents, Documents, Service Log |
-| **Marketing & Data** | Analytics, Reports, Activity Log, Communication Log/Drafts, Mail Merge, Knowledge Base, AI Tools |
+| **Executive Assistant** | Dashboard, Smart Alerts, Today's Reminders, Calendar, Scheduling, Follow-Ups |
+| **Operations** | Caseload, Notes, Goals, Referrals, Groups, MTSS/RTI, Screeners, IEP/504, Consents, Documents, Service Log, Staff Directory |
+| **Marketing & Data** | Analytics, Insights 360, Reports, Activity Log, Communication Log/Drafts, Mail Merge, Knowledge Base, AI Tools |
 
 ---
 
@@ -26,11 +26,12 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 ### Daily Workflow
 | Module | Description |
 |--------|-------------|
-| **Dashboard** | Daily overview: critical alerts, today's schedule, follow-ups due, weekly activity totals, charts |
+| **Dashboard** | Daily overview: critical alerts, today's schedule, follow-ups due (with a "From Staff" subsection for teacher communications), weekly activity totals, charts |
 | **Caseload** | Full student profiles, demographics, IEP/504/EL flags, tagging, search & filter, paginated |
 | **Calendar** | Daily/weekly/monthly views, optional Google Calendar sync via OAuth |
 | **Conference Notes** | Confidential session notes (Flow / Structured / Cornell / Outline formats), ASCA domain alignment, follow-up tracking, paginated |
-| **Follow-Ups** | Single inbox for everything that needs follow-up across notes, referrals, and interventions |
+| **Today's Reminders** | Print-friendly daily digest of every open follow-up — counseling notes and staff communications merged into one inbox, grouped Overdue / Today / This Week / Later, with one-click "Mark done" |
+| **Follow-Ups** | Lightweight student-only follow-up tracker (sits alongside the unified Reminders digest) |
 
 ### Student Services
 | Module | Description |
@@ -43,6 +44,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 | **IEP / 504** | Plan tracking, accommodations, review-date alerts, optional PDF parsing via local AI |
 | **Consents** | Parental consent forms with expiration tracking |
 | **Student Documents** | Per-student file uploads (PDF, Office, images) — counselor-scoped, never shared |
+| **Staff Directory** | Auto-built from the Staff Name column in your grade imports — each teacher gets a profile with editable contact info, room/department/notes, the class list they teach, and which of your students are on each roster. Log emails or meetings against a teacher with follow-up reminders; those reminders flow into Today's Reminders and the dashboard's "From Staff" widget. Course-catalog instructor field auto-backfills from imports (never overwrites a manual entry) |
 
 ### Academics
 | Module | Description |
@@ -59,7 +61,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 |--------|-------------|
 | **Meeting Notes** | Multi-student meetings with @mentions; optional audio recording + local transcription + AI summary (faster-whisper) |
 | **Meeting Prep** | Pre-meeting student summaries with key data points |
-| **Communication Log** | Phone/email/parent-contact log per student, paginated |
+| **Communication Log** | Phone / email / in-person log per student **and per teacher**. Logging from a staff page records the contact against both the student and the teacher; follow-up reminders flow into Today's Reminders and the dashboard's "From Staff" widget. Paginated |
 | **Communication Drafts** | Email templates, Google Classroom posts, newsletters, quick messages |
 | **Mail Merge** | Bulk personalized letters (e.g., graduation risk letters) from caseload data |
 
@@ -67,6 +69,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 | Module | Description |
 |--------|-------------|
 | **Analytics Dashboard** | Interactive charts: caseload demographics, academics, attendance, services, activities |
+| **Insights 360** | Cross-cutting drill-down on academic and attendance risk: D/F counts by class, period, subject, and teacher; attendance patterns by period and day-of-week; and a compounding-risk overlap of students who are both failing classes **and** missing school. School-year filter; finals-only toggle |
 | **ELPAC Analytics** | English Learner dashboard with Overall PL distribution, domain weakness, reclassification pipeline, **Reclassification Candidates** (students at PL 4 not yet RFEP, with newly-at-4 flagged), **ELPI Status** (both simplified PL-1-4 and full CDE rubric with L/H sublevels), and a **Big Movers** table of students who changed 2+ levels in either direction |
 | **Use-of-Time Report** | ASCA service-type breakdown |
 | **Student Services Report** | Per-student touch counts and topics |
@@ -84,7 +87,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 ### More
 | Module | Description |
 |--------|-------------|
-| **AI Tools Hub** | 14 counselor-focused AI generators (crisis scripts, parent comms, college, documentation) plus AI Course Recommendations on each student profile — all run locally via Ollama |
+| **AI Tools Hub** | 14 counselor-focused AI generators (crisis scripts, parent comms, college, documentation) plus AI Course Recommendations on each student profile — all run locally via Ollama. Every endpoint inherits a **17-rule counselor system prompt** (hard stops on crisis content, no-guessing on law/policy, no diagnostic language in note rewrites, PII boundaries on general-use drafts). A **COMPACT 6-rule variant** is auto-selected for small instruction-followers (Phi-3 Mini, Llama 3.2 3B). Override via `COUNSELOR_PROMPT_VARIANT=full\|compact` |
 | **Student Portal** | Public token-gated AI tools for students (no login, shareable link). Essay coaching, study planning, career exploration |
 | **Scheduling** | Public booking pages for parents/students, availability slots, conflict detection. **Cohort auto-scheduler** batch-books a filtered cohort (by grade, EL status, IEP/504, AB-population flag) into back-to-back individual slots or one group meeting; subscribed Google Calendars pick up the appointments via the existing ICS feed — no OAuth required |
 | **School Calendars** | Configurable district calendar per school year — quarter and semester windows, with optional progress-due and final grades-due dates. Upload a district PDF and the parser pre-fills the form for review; manual entry also supported. The AI Insights, rollover, and credit-pace logic all read from this so quarter boundaries follow your district instead of a hardcoded month grid |
@@ -186,11 +189,15 @@ Every step is skippable. You can change all settings later under **Settings**.
 
 - All data stored in a local SQLite database (`data/counselor.db`)
 - No network requests except optional Google Calendar / Forms / Classroom integration (your FERPA-covered Google Workspace)
-- Session auto-timeout after 30 minutes of inactivity
-- Complete audit trail of all data access (view, create, update, delete, export)
-- Password-protected login with hashed passwords (Werkzeug `generate_password_hash` -- scrypt by default)
-- CSRF protection on all state-changing forms
-- Per-resource ownership checks on notes and documents (cross-user access returns 403)
+- Session auto-timeout after 30 minutes of inactivity, with Flask-Login `session_protection='strong'` (invalidates on remote-address / user-agent change)
+- Complete audit trail of all data access (view, create, update, delete, export). `log_action()` commits immediately so the FERPA "who viewed which record" trail persists even on read-only GETs
+- Password-protected login with hashed passwords (Werkzeug `generate_password_hash` -- scrypt by default). The first-run wizard refuses to complete on the default `changeme` password — combined with the global setup redirect the app is unreachable on the default credential
+- **Login rate-limit:** 5 failed attempts per IP+username trigger a short lockout. A constant-time dummy-hash check on non-existent usernames defeats timing-based user enumeration. Failed + locked-out attempts are written to the audit log
+- CSRF protection on all state-changing forms (Flask-WTF `CSRFProtect`)
+- **Per-resource ownership** enforced via `owned_or_404` across notes, documents, students, goals, referrals, interventions, consents, and communications — non-owned IDs return **404** (deliberately, so a 403 doesn't confirm a record exists on another counselor's caseload). Admins bypass for department-wide oversight
+- **Content-Security-Policy** locks `default-src` to `'self'` — no external hosts. Worker scripts allowed from `'self' blob:` for the transcript renderer. Uploaded SVG logos are served with a tighter `sandbox` CSP that neutralizes SVG-borne XSS
+- **SSRF guard** on the Ollama base URL: only loopback, RFC-1918 private ranges, and the Tailscale CGNAT range (100.64.0.0/10) are accepted. Public hosts and the 169.254.169.254 cloud-metadata IP are refused
+- **CSV/Excel exports** neutralize spreadsheet formula injection (`=`, `+`, `-`, `@` prefixes get an apostrophe)
 - Optional: Ollama AI assistant runs 100% locally (no data sent to cloud)
 - **Factory Reset** -- Settings → Danger Zone → Reset App wipes the database, uploads, and your account in one click (requires typing `RESET` to confirm)
 
@@ -205,6 +212,7 @@ Every step is skippable. You can change all settings later under **Settings**.
 | **Frontend** | HTML5, CSS3, vanilla JavaScript, Jinja2 templates |
 | **Charts** | Chart.js 4.4.1 (vendored locally — works offline) |
 | **Calendar UI** | FullCalendar 6.1.9 (vendored locally — works offline) |
+| **PDF rendering** | pdf.js 4.9.155 (vendored locally — powers the client-side transcript-batch preview, works offline) |
 | **Excel I/O** | openpyxl |
 | **PDF parsing** | PyPDF2 (transcript review, knowledge-base ingestion with encrypted-PDF tolerance) |
 | **Audio transcription** | faster-whisper (optional, runs locally) |
@@ -212,7 +220,7 @@ Every step is skippable. You can change all settings later under **Settings**.
 | **Optional Google APIs** | Calendar, Forms, Classroom (OAuth 2.0) |
 | **Optional networking** | Tailscale (auto-detected at startup) |
 | **Progressive Web App** | Manifest + service worker (installable on phones) |
-| **Themes** | Light, Dark, School (custom colors), Focus, Auto (system) + reduced-motion option |
+| **Themes** | Light, Dark, School (custom colors), Focus, Fiesta (Diseño Mexicano Moderno opt-in theme — Barragán color planes, Wyman geometric system, vendored Fraunces / Hanken Grotesk / JetBrains Mono fonts loaded only when active), Auto (system) + reduced-motion option |
 | **USB distribution** | python-build-standalone runtimes + prebuilt wheel cache, packaged by `scripts/build_usb_bundle.py` |
 | **Testing & CI** | pytest suite (calendar logic, rollover defaults, AI prompt shape, no-500 sweep across every GET route) runs on every push and PR via GitHub Actions |
 
@@ -254,18 +262,25 @@ Counselor-Assistant/
 ├── .github/workflows/      # GitHub Actions (runs pytest on every push/PR)
 ├── scripts/
 │   ├── build_usb_bundle.py # Builds the double-clickable USB demo bundle
-│   └── seed_demo.py        # Re-runs the demo seed against a fresh database
+│   ├── seed_demo.py        # Re-runs the demo seed against a fresh database
+│   └── probe_system_prompt.py
+│                           # Runs the four spec scenarios (crisis stop, no-guessing,
+│                           # note discipline, PII boundary) against your local
+│                           # Ollama; auto-dry-runs when Ollama is unreachable
 ├── app/
 │   ├── __init__.py         # App factory + auto-migration + demo bootstrap
 │   ├── models/             # SQLAlchemy models (students, notes, goals,
 │   │                       #   referrals, interventions, screeners, courses,
 │   │                       #   transcripts, ELPAC scores, school_calendars,
-│   │                       #   rollover snapshots, documents, …)
+│   │                       #   rollover snapshots, documents, staff,
+│   │                       #   communications-with-staff-link, …)
 │   ├── routes/             # Blueprint routes by domain (42 modules +
 │   │                       #   data_import sub-package)
 │   ├── templates/          # Jinja2 templates organized per blueprint
 │   ├── static/
-│   │   ├── vendor/         # Chart.js + FullCalendar (vendored for offline use)
+│   │   ├── vendor/         # Chart.js + FullCalendar + pdf.js + Fiesta-theme
+│   │   │                   #   fonts (Fraunces / Hanken Grotesk / JetBrains Mono)
+│   │   │                   #   — all vendored for offline use
 │   │   └── …               # CSS, JS, icons, PWA manifest, service worker
 │   └── utils/              # Alert engine, audit, demo seed, CTE/ELPI
 │                           #   computation, school-calendar seed + PDF parser,
@@ -314,6 +329,10 @@ A: Install Tailscale on both your work computer and phone, sign in to the same a
 A: Settings → Danger Zone → Reset App. Type `RESET` to confirm. All data is deleted and you go back through the setup wizard. Make a backup first if you might want this data back.
 
 ---
+
+## Roadmap & Research
+
+[`RESEARCH.md`](RESEARCH.md) is a cited reference of the data points and benchmarks the literature says are most vital for a K–12 school counselor to track — synthesized from ASCA, California Ed Code, peer-reviewed dropout-prediction research (Allensworth/Easton, Balfanz/Byrnes), and established practitioner frameworks (Attendance Works, NCII/PBIS, Mapp Dual Capacity, NTAC). Each of the 12 domains closes with an "**App coverage**" note marking what's already implemented in Counselor Assistant vs. what's a gap, and the document ends with a prioritized list of the highest-leverage features to build next. Use it to argue for the existing feature set, to plan your year's data work, and to inform contributions.
 
 ## Contributing
 
