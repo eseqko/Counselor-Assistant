@@ -48,7 +48,10 @@ def is_available():
     try:
         resp = requests.get(f'{get_base_url()}/api/tags', timeout=3)
         return resp.status_code == 200
-    except (requests.ConnectionError, requests.Timeout):
+    except requests.RequestException:
+        # Catch the whole requests hierarchy (ConnectionError, Timeout, and also
+        # MissingSchema/InvalidURL from a malformed saved base_url). This runs on
+        # every authenticated page via the app-state probe, so it must never 500.
         return False
 
 

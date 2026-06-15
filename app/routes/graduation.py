@@ -41,7 +41,11 @@ AG_REQUIREMENTS = {
 # Map GradeRecord subject_area to grad requirement subjects
 _SUBJECT_MAP = {
     'English':                 ['English'],
-    'Math':                    ['Math'],
+    # Math overflow fills the 10-credit State Math Requirement bucket — matches
+    # the transcript front-end (gradSubjects: ['Math', 'State Math Requirement']).
+    # Without this, nothing ever maps to State Math, so even a student who passed
+    # all 225 credits caps at 215 and shows 10 credits short of graduation.
+    'Math':                    ['Math', 'State Math Requirement'],
     'Science':                 ['Life Science', 'Physical Science'],
     'History/Social Science':  ['US History', 'World History, CLT', 'Government', 'Economics'],
     'Fine Arts/LOTE':          ['Fine Arts / LOTE'],

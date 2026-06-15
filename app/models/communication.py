@@ -8,6 +8,9 @@ class CommunicationLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True, index=True)
+    # Optional link to a Staff record so emails/calls from a teacher show up on
+    # their detail page and feed the dashboard's staff follow-up widget.
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=True, index=True)
     counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
 
     contact_date = db.Column(db.Date, nullable=False,
@@ -35,6 +38,8 @@ class CommunicationLog(db.Model):
     counselor = db.relationship('User', backref='communications')
     student = db.relationship('Student', backref=db.backref('communications', lazy='dynamic',
                               order_by='CommunicationLog.contact_date.desc()'))
+    staff = db.relationship('Staff', backref=db.backref('communications', lazy='dynamic',
+                            order_by='CommunicationLog.contact_date.desc()'))
 
     CONTACT_TYPES = [
         ('phone', 'Phone Call'),

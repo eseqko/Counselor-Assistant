@@ -8,6 +8,7 @@ from app.models.consent import ConsentRecord
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import owned_or_404
 
 consents_bp = Blueprint('consents', __name__)
 
@@ -99,7 +100,7 @@ def add():
 @consents_bp.route('/<int:id>')
 @login_required
 def view(id):
-    consent = ConsentRecord.query.get_or_404(id)
+    consent = owned_or_404(ConsentRecord, id)
     log_action('view', 'consent', consent.id)
     return render_template('consents/view.html', consent=consent)
 
@@ -107,7 +108,7 @@ def view(id):
 @consents_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(id):
-    consent = ConsentRecord.query.get_or_404(id)
+    consent = owned_or_404(ConsentRecord, id)
     if request.method == 'POST':
         consent.consent_type = request.form['consent_type']
         consent.description = request.form.get('description', '').strip()
@@ -145,7 +146,7 @@ def edit(id):
 @consents_bp.route('/<int:id>/document')
 @login_required
 def download_document(id):
-    consent = ConsentRecord.query.get_or_404(id)
+    consent = owned_or_404(ConsentRecord, id)
     if not consent.document_filename:
         flash('No document on file.', 'warning')
         return redirect(url_for('consents.view', id=id))
@@ -157,7 +158,7 @@ def download_document(id):
 @consents_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    consent = ConsentRecord.query.get_or_404(id)
+    consent = owned_or_404(ConsentRecord, id)
     log_action('delete', 'consent', consent.id)
     if consent.document_filename:
         try:

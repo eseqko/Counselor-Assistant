@@ -6,6 +6,7 @@ from app.models.communication import CommunicationLog
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import owned_or_404
 
 communications_bp = Blueprint('communications', __name__)
 
@@ -90,7 +91,7 @@ def add():
 @communications_bp.route('/<int:id>')
 @login_required
 def view(id):
-    log = CommunicationLog.query.get_or_404(id)
+    log = owned_or_404(CommunicationLog, id)
     log_action('view', 'communication', log.id)
     return render_template('communications/view.html', log=log)
 
@@ -98,7 +99,7 @@ def view(id):
 @communications_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(id):
-    log = CommunicationLog.query.get_or_404(id)
+    log = owned_or_404(CommunicationLog, id)
     if request.method == 'POST':
         log.contact_date = parse_date(request.form.get('contact_date')) or log.contact_date
         log.contact_type = request.form['contact_type']
@@ -132,7 +133,7 @@ def edit(id):
 @communications_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    log = CommunicationLog.query.get_or_404(id)
+    log = owned_or_404(CommunicationLog, id)
     log_action('delete', 'communication', log.id)
     db.session.delete(log)
     db.session.commit()

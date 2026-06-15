@@ -3,7 +3,7 @@ import json
 import os
 import uuid
 from datetime import datetime, date, timedelta, timezone
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, url_for
 from flask_login import login_required, current_user
 from app import csrf
 
@@ -63,6 +63,89 @@ def _delete_user_followup(followup_id):
 def index():
     """Render the Follow-Up Tracker page."""
     return render_template('followups/index.html')
+
+
+@followups_bp.route('/digest')
+@login_required
+def digest():
+    """Unified reminders inbox: every open follow-up (counseling notes +
+    staff communications) grouped by Overdue / Today / This Week / Later,
+    with one-click actions. Print-friendly so a counselor can take it with
+    them — the right answer for a local/FERPA app instead of email."""
+    from app.models.note import Note
+    from app.models.communication import CommunicationLog
+    from app import db as _db
+
+    today = date.today()
+    horizon = today + timedelta(days=30)
+
+    note_q = Note.query.filter(
+        Note.author_id == current_user.id,
+        Note.follow_up_needed == True,
+        _db.or_(Note.follow_up_completed == False, Note.follow_up_completed.is_(None)),
+    ).order_by(Note.follow_up_date.asc().nullslast())
+    notes = note_q.all()
+
+    comm_q = CommunicationLog.query.filter(
+        CommunicationLog.counselor_id == current_user.id,
+        CommunicationLog.follow_up_needed == True,
+        _db.or_(CommunicationLog.follow_up_completed == False,
+                CommunicationLog.follow_up_completed.is_(None)),
+    ).order_by(CommunicationLog.follow_up_date.asc().nullslast())
+    comms = comm_q.all()
+
+    items = []
+    for n in notes:
+        items.append({
+            'kind': 'note',
+            'id': n.id,
+            'due': n.follow_up_date,
+            'title': (n.title or n.note_type or 'Note'),
+            'who': n.student.display_name if n.student else '(no student)',
+            'who_url': (url_for('caseload.view_student', id=n.student_id)
+                        if n.student_id else None),
+            'detail': (n.follow_up_notes or '').strip(),
+            'open_url': url_for('notes.view_note', id=n.id),
+        })
+    for c in comms:
+        staff_name = c.staff.name if c.staff else c.contact_person
+        items.append({
+            'kind': 'staff',
+            'id': c.id,
+            'due': c.follow_up_date,
+            'title': c.subject or c.type_label,
+            'who': staff_name,
+            'who_url': (url_for('staff.detail', staff_id=c.staff_id) + '#comms'
+                        if c.staff_id else None),
+            'detail': (c.follow_up_notes or '').strip(),
+            'open_url': (url_for('staff.detail', staff_id=c.staff_id) + '#comms'
+                         if c.staff_id else None),
+        })
+
+    overdue, due_today, this_week, later = [], [], [], []
+    for it in items:
+        d = it['due']
+        if d is None:
+            later.append(it)
+        elif d < today:
+            overdue.append(it)
+        elif d == today:
+            due_today.append(it)
+        elif d <= today + timedelta(days=7):
+            this_week.append(it)
+        elif d <= horizon:
+            later.append(it)
+        # Anything past 30 days is hidden — won't surface in the digest.
+
+    def _sort_key(it):
+        return (it['due'] is None, it['due'] or date.max, it['title'].lower())
+    for bucket in (overdue, due_today, this_week, later):
+        bucket.sort(key=_sort_key)
+
+    return render_template('followups/digest.html',
+        today=today, overdue=overdue, due_today=due_today,
+        this_week=this_week, later=later,
+        total_open=len(items))
 
 
 # ── JSON API ──────────────────────────────────────────────────────

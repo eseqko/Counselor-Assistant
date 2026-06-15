@@ -14,6 +14,7 @@
     <title>{% block title %}Counselor Assistant{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v('css/style.css')) }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css', v=static_v('css/themes.css')) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chart-enhancements.css', v=static_v('css/chart-enhancements.css')) }}">
     {% if user_theme == 'fiesta' %}
     <link rel="preload" as="font" type="font/woff2" crossorigin
           href="{{ url_for('static', filename='vendor/fonts/hanken-grotesk/HankenGrotesk-Variable.woff2') }}">
@@ -60,7 +61,10 @@
             <a href="{{ url_for('notes.index') }}" class="nav-item {% if request.blueprint == 'notes' %}active{% endif %}">
                 <span class="nav-icon">&#128221;</span> Notes
             </a>
-            <a href="{{ url_for('followups.index') }}" class="nav-item {% if request.blueprint == 'followups' %}active{% endif %}">
+            <a href="{{ url_for('followups.digest') }}" class="nav-item {% if request.endpoint == 'followups.digest' %}active{% endif %}">
+                <span class="nav-icon">&#9200;</span> Today's Reminders
+            </a>
+            <a href="{{ url_for('followups.index') }}" class="nav-item {% if request.blueprint == 'followups' and request.endpoint != 'followups.digest' %}active{% endif %}">
                 <span class="nav-icon">&#128204;</span> Follow-Ups
             </a>
 
@@ -123,6 +127,9 @@
                         <span class="nav-icon">&#128218;</span> Course Catalog
                     </a>
                     {% if app_state.has_students %}
+                    <a href="{{ url_for('staff.index') }}" class="nav-item {% if request.blueprint == 'staff' %}active{% endif %}">
+                        <span class="nav-icon">&#128104;&#8205;&#127979;</span> Staff Directory
+                    </a>
                     <a href="{{ url_for('post_grad.index') }}" class="nav-item {% if request.blueprint == 'post_grad' %}active{% endif %}">
                         <span class="nav-icon">&#127891;</span> Post-Grad
                     </a>
@@ -168,8 +175,14 @@
                     <a href="{{ url_for('reports.index') }}" class="nav-item {% if request.blueprint == 'reports' and request.endpoint != 'reports.early_warning' %}active{% endif %}">
                         <span class="nav-icon">&#128200;</span> Reports
                     </a>
-                    <a href="{{ url_for('analytics.index') }}" class="nav-item {% if request.blueprint == 'analytics' %}active{% endif %}">
+                    <a href="{{ url_for('analytics.index') }}" class="nav-item {% if request.blueprint == 'analytics' and request.endpoint not in ('analytics.insights','analytics.el_outcomes') %}active{% endif %}">
                         <span class="nav-icon">&#128202;</span> Analytics
+                    </a>
+                    <a href="{{ url_for('analytics.insights') }}" class="nav-item {% if request.endpoint == 'analytics.insights' %}active{% endif %}">
+                        <span class="nav-icon">&#128269;</span> Insights 360
+                    </a>
+                    <a href="{{ url_for('analytics.el_outcomes') }}" class="nav-item {% if request.endpoint == 'analytics.el_outcomes' %}active{% endif %}">
+                        <span class="nav-icon">&#127759;</span> EL Outcomes
                     </a>
                     {% endif %}
                     <a href="{{ url_for('activity_log.index') }}" class="nav-item {% if request.blueprint == 'activity_log' %}active{% endif %}">

@@ -10,6 +10,7 @@ from app.models.grade import GradeRecord
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.security import csv_safe
 from datetime import date, timedelta
 from collections import defaultdict
 from sqlalchemy import func
@@ -977,17 +978,17 @@ def elpac_cohorts_export():
         writer.writerow([group_label, 'Count', 'Level 1', 'Level 2', 'Level 3', 'Level 4'])
         for label, members in sorted(cohorts.items()):
             v = _compute_metric(members, metric)
-            writer.writerow([label, len(members), v.get('1', 0), v.get('2', 0), v.get('3', 0), v.get('4', 0)])
+            writer.writerow([csv_safe(label), len(members), v.get('1', 0), v.get('2', 0), v.get('3', 0), v.get('4', 0)])
     elif metric == 'domain_profile':
         writer.writerow([group_label, 'Count', 'Listening', 'Speaking', 'Reading', 'Writing'])
         for label, members in sorted(cohorts.items()):
             v = _compute_metric(members, metric)
-            writer.writerow([label, len(members), v.get('Listening', 0), v.get('Speaking', 0),
+            writer.writerow([csv_safe(label), len(members), v.get('Listening', 0), v.get('Speaking', 0),
                              v.get('Reading', 0), v.get('Writing', 0)])
     else:
         writer.writerow([group_label, 'Count', metric_label])
         for label, members in sorted(cohorts.items()):
-            writer.writerow([label, len(members), _compute_metric(members, metric)])
+            writer.writerow([csv_safe(label), len(members), _compute_metric(members, metric)])
 
     return Response(buf.getvalue(), mimetype='text/csv',
         headers={'Content-Disposition': 'attachment; filename=ELPAC_Cohorts.csv'})

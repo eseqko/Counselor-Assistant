@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect, CSRFError
@@ -9,6 +9,9 @@ db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 login_manager.login_message_category = 'info'
+# Invalidate the session if the client's remote address / user-agent fingerprint
+# changes — cheap hardening against session hijacking of FERPA data.
+login_manager.session_protection = 'strong'
 csrf = CSRFProtect()
 
 
@@ -149,6 +152,7 @@ def create_app(config_class=Config):
     from app.routes.documents import documents_bp
     from app.routes.post_grad import post_grad_bp
     from app.routes.elpac import elpac_bp
+    from app.routes.staff import staff_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -194,11 +198,21 @@ def create_app(config_class=Config):
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(post_grad_bp, url_prefix='/post-grad')
     app.register_blueprint(elpac_bp, url_prefix='/elpac')
+    app.register_blueprint(staff_bp, url_prefix='/staff')
 
     # Demo mode: register zero-friction auto-login + reset routes
     if os.environ.get('COUNSELOR_DEMO') == '1':
         from app.routes.demo import demo_bp
         app.register_blueprint(demo_bp)
+
+    # Make the session permanent so PERMANENT_SESSION_LIFETIME (30 min) actually
+    # applies as a sliding idle-timeout. Without this the cookie is a non-permanent
+    # session cookie that lives until the browser closes — the advertised FERPA
+    # auto-logout never fires.
+    @app.before_request
+    def make_session_permanent():
+        from flask import session
+        session.permanent = True
 
     # First-run setup redirect (cached after first successful check)
     @app.before_request
@@ -252,6 +266,27 @@ def create_app(config_class=Config):
     def inject_demo_mode():
         return {'demo_mode': os.environ.get('COUNSELOR_DEMO') == '1'}
 
+    # Content-Security-Policy. 'unsafe-inline' is required because the app uses
+    # inline <script>/<style>/onclick throughout; even so, locking default-src
+    # to 'self' blocks data exfiltration to arbitrary hosts (the local-only FERPA
+    # promise) and frame-ancestors/base-uri/form-action block clickjacking and
+    # base-tag hijacking. 'data:' covers the theme SVG/data-URI backgrounds;
+    # cdnjs is the single external dependency (pdf.js on the transcript-import page).
+    CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        # pdf.js (vendored locally) spins up its renderer as a blob: worker.
+        "worker-src 'self' blob:; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'self'; "
+        "form-action 'self'"
+    )
+
     # Security + cache headers
     @app.after_request
     def set_headers(response):
@@ -259,6 +294,12 @@ def create_app(config_class=Config):
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        # Don't clobber the tighter sandbox CSP that the logo routes set themselves.
+        response.headers.setdefault('Content-Security-Policy', CSP)
+        # HSTS only matters (and is only honored) over HTTPS; emit it when the
+        # deployment opts into Secure cookies (i.e. is behind TLS).
+        if app.config.get('SESSION_COOKIE_SECURE'):
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         # Cache static assets so browsers don't re-download CSS/JS every page load
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=43200'
@@ -267,6 +308,26 @@ def create_app(config_class=Config):
             response.headers['Service-Worker-Allowed'] = '/'
             response.headers['Cache-Control'] = 'no-cache'
         return response
+
+    # Graceful error pages — never leak a stack trace to the browser.
+    @app.errorhandler(404)
+    def handle_404(e):
+        if request.path.startswith(('/course-catalog/api/', '/ai/')) or request.is_json:
+            return jsonify({'ok': False, 'error': 'Not found.'}), 404
+        try:
+            return render_template('errors/404.html'), 404
+        except Exception:
+            return 'Not found.', 404
+
+    @app.errorhandler(500)
+    def handle_500(e):
+        db.session.rollback()
+        if request.path.startswith(('/course-catalog/api/', '/ai/')) or request.is_json:
+            return jsonify({'ok': False, 'error': 'Server error.'}), 500
+        try:
+            return render_template('errors/500.html'), 500
+        except Exception:
+            return 'Server error.', 500
 
     # Return JSON (not HTML) for CSRF errors on API endpoints
     @app.errorhandler(CSRFError)
@@ -295,6 +356,7 @@ def create_app(config_class=Config):
         from app.models import asca_program
         from app.models import rollover
         from app.models import school_calendar
+        from app.models import staff
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()
 

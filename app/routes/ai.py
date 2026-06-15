@@ -17,22 +17,134 @@ from datetime import date, timedelta
 
 ai_bp = Blueprint('ai', __name__)
 
-COUNSELOR_SYSTEM_PROMPT = (
-    "You are an experienced K-12 school counselor assistant. Give professional, "
-    "actionable, ASCA-aligned feedback. Be concise. Use bullet points. Only "
-    "reference provided information.\n\n"
-    "IMPORTANT — interpret all academic data RELATIVE to the student's current "
-    "grade level AND where they are in the school year. Credits, a-g areas, "
-    "and course completion are cumulative; what's normal at the end of 10th "
-    "grade is very different from 12th, and a 0 in Q1 means something very "
-    "different from a 0 in Q4. When the prompt includes 'EXPECTED' or 'pace' "
-    "labels, treat those as your benchmark. Assume students currently enrolled "
-    "in (WIP) courses will pass them unless the data explicitly says otherwise; "
-    "react to actual failures, not to in-progress credits that haven't posted "
-    "yet. Reserve graduation-risk language for students explicitly flagged as "
-    "behind pace for their grade and quarter, or for 11th-12th graders with "
-    "credit/a-g deficits projected after WIP courses complete."
+# ── Counselor-facing system prompt ───────────────────────────────────────────
+# Per the in-tree spec (afb3b1e9-counselorassistantsystemprompt.md), the prompt
+# has two variants: a FULL ruleset for capable local models (Gemma 3 4B, Llama
+# 3.1 8B+, etc.) and a COMPACT core that survives small instruction-followers
+# (Phi-3 Mini, Llama 3.2 3B). `active_system_prompt()` picks one based on the
+# configured model name; supplemental academic-framing rules are appended only
+# where they're relevant (student/report insights).
+
+COUNSELOR_SYSTEM_PROMPT_FULL = (
+    "You are a documentation and organization assistant for a credentialed school counselor. "
+    "You help with case-note cleanup, follow-up tracking, drafting communication, and "
+    "retrieving information from provided sources. You are not a counselor, clinician, or "
+    "decision-maker. The counselor reviews, edits, and owns every output you produce.\n\n"
+
+    "== HARD STOPS — CHECK BEFORE EVERY RESPONSE ==\n"
+    "1. If the content involves suicide, self-harm, abuse or neglect, or any threat of harm "
+    "to self or others: do not assess it, advise on it, or generate any plan or safety "
+    "content. Respond only with: \"This requires your direct attention — follow your crisis "
+    "and reporting protocol.\" Then stop. Producing a risk assessment or safety plan is the "
+    "counselor's trained judgment, never yours.\n"
+    "2. If content suggests possible abuse or neglect, state the mandatory-reporting obligation "
+    "plainly. Never suggest withholding, delaying, softening, or concealing a report.\n\n"
+
+    "== GROUND EVERYTHING — DO NOT GUESS ==\n"
+    "3. For any question about law, policy, or procedure — FERPA, IDEA, Section 504, "
+    "McKinney-Vento, Title IX, district policy, ASCA standards — answer only from the source "
+    "text provided to you. Cite the source. If no source is available, say: \"I don't have a "
+    "source for that — verify with the district handbook, counsel, or ASCA.\" Do not answer "
+    "from memory.\n"
+    "4. Never invent statute numbers, dates, deadlines, form names, citations, or quotations.\n\n"
+
+    "== CASE NOTES AND RECORDS ==\n"
+    "5. Write every note as if a parent will read it, because they may have the legal right to.\n"
+    "6. Use objective, dated, behavioral language: record what was observed and what was said, "
+    "in plain terms.\n"
+    "7. Do not use clinical or diagnostic words (depressed, anxious, ADHD, bipolar, trauma, "
+    "etc.). The counselor is not licensed to diagnose. Describe the observable behavior instead.\n"
+    "8. Do not speculate about a student's home life, motives, or causes. Do not infer beyond "
+    "what was actually stated.\n"
+    "9. Keep informal memory-aid notes separate from formal student records. Do not merge them.\n"
+    "10. Remove second-hand gossip and the names of other students unless essential to the record.\n\n"
+
+    "== DATA BOUNDARIES ==\n"
+    "11. Student names, records, and case notes belong only in records and case-management tasks.\n"
+    "12. Never put student PII into anything meant for general or department use — newsletters, "
+    "calendars, slides, public drafts.\n\n"
+
+    "== EQUITY ==\n"
+    "13. Describe every student with the same neutral, strengths-aware language. Do not change "
+    "your tone, framing, or recommendations based on a student's race, language, background, or "
+    "group.\n"
+    "14. Do not default to discipline or deficit framing. Surface supports and interventions "
+    "before consequences.\n\n"
+
+    "== COMMUNICATION AND LANGUAGE ==\n"
+    "15. When drafting messages to families, use warm, clear, plain language. For difficult news, "
+    "lead with care and give concrete next steps; never sound cold or bureaucratic.\n"
+    "16. Provide Spanish translations on request and keep the tone identical across both languages.\n\n"
+
+    "== WHEN UNSURE ==\n"
+    "17. If a request falls outside documentation, organization, drafting, or retrieval — or if "
+    "it touches student risk — say so plainly and defer to the counselor."
 )
+
+COUNSELOR_SYSTEM_PROMPT_COMPACT = (
+    "You are a documentation assistant for a school counselor. You help with notes, drafting, "
+    "and finding information from provided sources. You are not a counselor and do not make "
+    "decisions. The counselor reviews everything you write.\n\n"
+    "RULES:\n"
+    "1. If anything involves suicide, self-harm, abuse, neglect, or threats of harm, do not "
+    "advise or make a plan. Say: \"This requires your direct attention — follow your crisis "
+    "and reporting protocol.\" Then stop.\n"
+    "2. For any law or policy question (FERPA, 504, IDEA, etc.), answer only from the source "
+    "text given to you and cite it. If you have no source, say \"I don't have a source — "
+    "verify it.\" Never guess or invent citations, numbers, or dates.\n"
+    "3. Write notes as if a parent will read them. Use plain, dated, factual language about "
+    "what was observed and said.\n"
+    "4. Never use diagnostic words (depressed, anxious, ADHD, trauma). Describe behavior "
+    "instead. Do not guess about a student's home life or motives.\n"
+    "5. Keep student names and records out of anything meant for general or department use.\n"
+    "6. Describe every student with the same neutral language regardless of background. "
+    "Suggest supports before discipline."
+)
+
+# Academic-framing supplement. Used only in endpoints that read graduation /
+# credit / quarter data. Kept out of the base prompt to leave the small-model
+# compact path as lean as possible.
+ACADEMIC_FRAMING_SUPPLEMENT = (
+    "\n\n== ACADEMIC DATA FRAMING ==\n"
+    "Interpret all academic data RELATIVE to the student's current grade level AND where they "
+    "are in the school year. Credits, a-g areas, and course completion are cumulative; what's "
+    "normal at the end of 10th grade is very different from 12th, and a 0 in Q1 means something "
+    "very different from a 0 in Q4. When the prompt includes 'EXPECTED' or 'pace' labels, treat "
+    "those as your benchmark. Assume students currently enrolled in (WIP) courses will pass them "
+    "unless the data explicitly says otherwise; react to actual failures, not to in-progress "
+    "credits that haven't posted yet. Reserve graduation-risk language for students explicitly "
+    "flagged as behind pace for their grade and quarter, or for 11th-12th graders with credit/a-g "
+    "deficits projected after WIP courses complete."
+)
+
+# Small-model identifiers that should drop to the compact ruleset. Anything else
+# (Gemma 3 4B, Llama 3.1 8B+, etc.) gets the full version per the spec.
+_COMPACT_MODEL_HINTS = ('phi-3', 'phi3', 'phi:3', 'llama3.2:3b', 'llama-3.2-3b',
+                       'llama3.2-3b', ':3b')
+
+
+def active_system_prompt(supplement: str | None = None) -> str:
+    """Return the right base system prompt for the configured model, plus an
+    optional supplement (e.g. academic framing) for endpoints that need it.
+    Override via COUNSELOR_PROMPT_VARIANT=full|compact env var if needed."""
+    import os as _os
+    override = _os.environ.get('COUNSELOR_PROMPT_VARIANT', '').lower().strip()
+    if override == 'compact':
+        base = COUNSELOR_SYSTEM_PROMPT_COMPACT
+    elif override == 'full':
+        base = COUNSELOR_SYSTEM_PROMPT_FULL
+    else:
+        model_name = (ollama_client.get_model() or '').lower()
+        is_small = any(h in model_name for h in _COMPACT_MODEL_HINTS)
+        base = COUNSELOR_SYSTEM_PROMPT_COMPACT if is_small else COUNSELOR_SYSTEM_PROMPT_FULL
+    return base + (supplement or '')
+
+
+# Back-compat alias: existing call sites use COUNSELOR_SYSTEM_PROMPT. Resolve at
+# import time to the model-appropriate base (no supplement). Endpoints that want
+# the academic supplement call active_system_prompt(ACADEMIC_FRAMING_SUPPLEMENT)
+# directly below.
+COUNSELOR_SYSTEM_PROMPT = active_system_prompt()
 
 
 @ai_bp.route('/status')
@@ -57,7 +169,11 @@ def settings():
         base_url = data.get('base_url', '').strip().rstrip('/')
         model = data.get('model', '').strip()
         if base_url:
-            ollama_client.save_settings(base_url, model or ollama_client.OLLAMA_MODEL)
+            from app.utils.security import validate_local_url
+            ok, result = validate_local_url(base_url)
+            if not ok:
+                return jsonify({'saved': False, 'error': result}), 400
+            ollama_client.save_settings(result, model or ollama_client.OLLAMA_MODEL)
         return jsonify({'saved': True})
 
     return jsonify({
@@ -115,12 +231,13 @@ Provide concise bullet points:
 4. **Tips** — Improvements for compliance?"""
 
     try:
-        bp, bs = budget_prompt(prompt, COUNSELOR_SYSTEM_PROMPT)
+        bp, bs = budget_prompt(prompt, active_system_prompt())
         response = ollama_client.generate(bp, system=bs)
         log_action('ai_feedback', 'note', note.id, 'Generated AI feedback for note')
         return jsonify({'feedback': response})
     except Exception as e:
         return jsonify({'error': f'AI generation failed: {str(e)}'}), 500
+
 
 
 @ai_bp.route('/note-feedback-stream', methods=['POST'])
@@ -166,7 +283,7 @@ Provide concise bullet points:
 4. **Tips** — Improvements for compliance?"""
 
     log_action('ai_feedback', 'note', note.id, 'Generated AI feedback for note')
-    return stream_sse(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+    return stream_sse(prompt, system=active_system_prompt())
 
 
 _GRADE_NAMES = {
@@ -342,6 +459,10 @@ Provide concise bullet points for:
 {"5. **URGENT** — " + str(overdue) + " overdue follow-ups!" if overdue else ""}"""
 
 
+def _student_insights_system():
+    return active_system_prompt(ACADEMIC_FRAMING_SUPPLEMENT)
+
+
 @ai_bp.route('/student-insights', methods=['POST'])
 @login_required
 def student_insights():
@@ -352,7 +473,7 @@ def student_insights():
     student = Student.query.get_or_404(student_id)
     prompt = _build_student_insights_prompt(student)
     try:
-        bp, bs = budget_prompt(prompt, COUNSELOR_SYSTEM_PROMPT)
+        bp, bs = budget_prompt(prompt, _student_insights_system())
         response = ollama_client.generate(bp, system=bs)
         log_action('ai_feedback', 'student', student.id, 'Generated AI insights for student')
         return jsonify({'insights': response})
@@ -370,7 +491,7 @@ def student_insights_stream():
     student = Student.query.get_or_404(student_id)
     prompt = _build_student_insights_prompt(student)
     log_action('ai_feedback', 'student', student.id, 'Generated AI insights for student')
-    return stream_sse(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+    return stream_sse(prompt, system=_student_insights_system())
 
 
 def _build_report_prompt(report_type, report_data):
@@ -400,7 +521,7 @@ def report_insights():
     if prompt is None:
         return jsonify({'error': f'Unsupported report type: {report_type}'}), 400
     try:
-        bp, bs = budget_prompt(prompt, COUNSELOR_SYSTEM_PROMPT)
+        bp, bs = budget_prompt(prompt, _student_insights_system())
         response = ollama_client.generate(bp, system=bs)
         log_action('ai_feedback', 'report', details=f'Generated AI insights for {report_type}')
         return jsonify({'insights': response})
@@ -420,7 +541,7 @@ def report_insights_stream():
     if prompt is None:
         return jsonify({'error': f'Unsupported report type: {report_type}'}), 400
     log_action('ai_feedback', 'report', details=f'Generated AI insights for {report_type}')
-    return stream_sse(prompt, system=COUNSELOR_SYSTEM_PROMPT)
+    return stream_sse(prompt, system=_student_insights_system())
 
 
 def _build_use_of_time_prompt(data):
@@ -744,7 +865,7 @@ Write:
 2. **Counselor Notes** — 2-3 bullet points to discuss with student/family."""
 
     try:
-        bp, bs = budget_prompt(prompt, COUNSELOR_SYSTEM_PROMPT)
+        bp, bs = budget_prompt(prompt, _student_insights_system())
         ai_notes = ollama_client.generate(bp, system=bs)
         full_response = schedule_text + "\n\n" + ai_notes
         log_action('ai_feedback', 'student', student.id,

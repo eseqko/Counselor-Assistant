@@ -6,6 +6,7 @@ from app.models.goal import Goal, GoalProgress
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import owned_or_404
 
 goals_bp = Blueprint('goals', __name__)
 
@@ -76,7 +77,7 @@ def add():
 @goals_bp.route('/<int:id>')
 @login_required
 def view(id):
-    goal = Goal.query.get_or_404(id)
+    goal = owned_or_404(Goal, id)
     log_action('view', 'goal', goal.id)
     return render_template('goals/view.html', goal=goal,
         statuses=Goal.STATUSES)
@@ -85,7 +86,7 @@ def view(id):
 @goals_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(id):
-    goal = Goal.query.get_or_404(id)
+    goal = owned_or_404(Goal, id)
     if request.method == 'POST':
         goal.title = request.form['title'].strip()
         goal.description = request.form.get('description', '').strip()
@@ -118,7 +119,7 @@ def edit(id):
 @goals_bp.route('/<int:id>/progress', methods=['POST'])
 @login_required
 def add_progress(id):
-    goal = Goal.query.get_or_404(id)
+    goal = owned_or_404(Goal, id)
     entry = GoalProgress(
         goal_id=goal.id,
         entry_date=parse_date(request.form.get('entry_date')) or date.today(),
@@ -138,7 +139,7 @@ def add_progress(id):
 @goals_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    goal = Goal.query.get_or_404(id)
+    goal = owned_or_404(Goal, id)
     log_action('delete', 'goal', goal.id)
     db.session.delete(goal)
     db.session.commit()

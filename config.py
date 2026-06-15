@@ -28,7 +28,21 @@ class Config:
     # FERPA Compliance settings
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Strict'
-    PERMANENT_SESSION_LIFETIME = 1800  # 30 minutes auto-logout
+    PERMANENT_SESSION_LIFETIME = 1800  # 30 minutes idle auto-logout (sliding)
+    # Re-issue the cookie on every request so the 30-min window is an IDLE
+    # timeout, not a fixed one — combined with session.permanent set per-request.
+    SESSION_REFRESH_EACH_REQUEST = True
+    # Mark the cookie Secure when served over HTTPS. Defaults off because the
+    # app ships as plaintext-HTTP local/Tailscale; a Secure cookie would never
+    # be sent over http:// and would silently break login. Set
+    # SESSION_COOKIE_SECURE=true in the environment behind a TLS proxy.
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', '').lower() == 'true'
+
+    # "Remember me" is disabled app-wide (all login_user(remember=False)), but
+    # harden the remember cookie too in case it is ever enabled.
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = 'Strict'
+    REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
 
     # Local-only: no cloud, no external connections
     UPLOAD_FOLDER = os.path.join(DATA_DIR, 'uploads')

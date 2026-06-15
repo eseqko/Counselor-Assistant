@@ -75,6 +75,10 @@ def add_user():
         flash('Username and password are required.', 'error')
         return redirect(url_for('admin.users'))
 
+    if len(password) < 8:
+        flash('Password must be at least 8 characters.', 'error')
+        return redirect(url_for('admin.users'))
+
     if User.query.filter_by(username=username).first():
         flash(f'Username "{username}" already exists.', 'error')
         return redirect(url_for('admin.users'))
@@ -110,6 +114,9 @@ def edit_user(user_id):
     if role in ('counselor', 'admin'):
         user.role = role
     if new_password:
+        if len(new_password) < 8:
+            flash('Password must be at least 8 characters.', 'error')
+            return redirect(url_for('admin.users'))
         user.set_password(new_password)
 
     db.session.commit()

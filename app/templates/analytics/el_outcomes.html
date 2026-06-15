@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% block title %}EL Outcomes{% endblock %}
+{% block page_title %}EL Outcomes &mdash; Newcomer vs LTEL vs Reclassified{% endblock %}
+{% block head %}
+<style>
+.el-toolbar { display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+.el-toolbar select, .el-toolbar input { padding:6px 12px; border:1px solid var(--light-gray); border-radius:6px; background:var(--white); font-size:0.84rem; font-weight:600; color:var(--text); }
+.el-toolbar input[type=number] { width:60px; }
+.el-toolbar label { font-size:0.82rem; color:var(--gray); display:flex; align-items:center; gap:6px; }
+.el-toolbar .print-btn { margin-left:auto; }
+
+.section-header { font-size:1.05rem; font-weight:700; color:var(--text); margin:24px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--light-gray); }
+.section-header:first-of-type { margin-top:0; }
+.section-header .hint { font-size:0.76rem; font-weight:400; color:var(--gray); margin-left:8px; }
+
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:14px; }
+.kpi { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:14px; text-align:center; border-top:4px solid transparent; }
+.kpi.newcomer { border-top-color:#4A90D9; }
+.kpi.ltel { border-top-color:#E74C3C; }
+.kpi.rfep { border-top-color:#2ECC71; }
+.kpi.eo { border-top-color:#9B59B6; }
+.kpi.unknown { border-top-color:#95A5A6; }
+.kpi .label { font-size:0.76rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.4px; }
+.kpi .count { font-size:1.4rem; font-weight:800; color:var(--text); margin-top:4px; }
+.kpi .meta { font-size:0.74rem; color:var(--gray); margin-top:2px; }
+
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:14px; }
+@media (max-width:900px) { .chart-grid { grid-template-columns:1fr; } }
+.chart-card { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:18px; }
+.chart-card h3 { margin:0 0 4px; font-size:0.92rem; color:var(--primary-dark); }
+.chart-card .subtitle { font-size:0.78rem; color:var(--gray); margin-bottom:12px; }
+.chart-card canvas { max-height:300px; }
+.chart-card.full { grid-column:1/-1; }
+
+.data-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+.data-table th { text-align:left; padding:8px 10px; background:var(--bg); color:var(--gray); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.4px; border-bottom:2px solid var(--light-gray); }
+.data-table td { padding:8px 10px; border-bottom:1px solid var(--light-gray); }
+.data-table tr:hover td { background:var(--bg); }
+.pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.74rem; font-weight:700; }
+.pill.df { background:#FCE8E8; color:var(--danger); }
+.pill.rate { background:#FFF3D6; color:#996300; }
+.pill.ok { background:#E8F8E8; color:var(--success); }
+
+.split-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:1100px) { .split-grid { grid-template-columns:1fr; } }
+.split-card { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:18px; }
+.split-card h3 { margin:0 0 4px; font-size:0.92rem; }
+.split-card.newcomer h3 { color:#2A6FB8; }
+.split-card.ltel h3 { color:#B33A2E; }
+.split-card .subtitle { font-size:0.78rem; color:var(--gray); margin-bottom:12px; }
+
+.empty-note { color:var(--gray); font-size:0.85rem; font-style:italic; padding:30px; text-align:center; }
+.loading { text-align:center; padding:60px 20px; color:var(--gray); }
+
+@media print {
+    .sidebar, .top-bar, .el-toolbar { display:none !important; }
+    .chart-card, .split-card { box-shadow:none; border:1px solid #ddd; break-inside:avoid; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="el-toolbar">
+    <label>School year:
+        <select id="year-select" onchange="reload()"></select>
+    </label>
+    <label title="Years in US schools below this threshold = Newcomer; at or above = LTEL. Default 5; CA formally defines LTEL at 6+.">
+        Newcomer / LTEL cutoff:
+        <input type="number" id="threshold" min="1" max="10" value="5" onchange="reload()"> yrs
+    </label>
+    <button class="btn btn-sm btn-outline print-btn" onclick="window.print()">Print / Export</button>
+</div>
+
+<div id="content"><div class="loading">Loading EL outcomes&hellip;</div></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-enhancements.js', v=static_v('js/chart-enhancements.js')) }}"></script>
+<script>
+(function(){
+    var API = "{{ url_for('analytics.api_el_outcomes') }}";
+    var charts = [];
+    var GROUP_COLOR = {
+        newcomer: '#4A90D9', ltel: '#E74C3C', rfep: '#2ECC71',
+        eo: '#9B59B6', unknown: '#95A5A6',
+    };
+    var yearsLoaded = false;
+
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+    window.reload = function(){
+        var year = document.getElementById('year-select').value;
+        var threshold = document.getElementById('threshold').value || 5;
+        document.getElementById('content').innerHTML = '<div class="loading">Loading EL outcomes&hellip;</div>';
+        charts.forEach(function(c){ c.destroy(); }); charts = [];
+        fetch(API + '?year=' + encodeURIComponent(year) + '&threshold=' + threshold)
+            .then(function(r){ return r.json(); })
+            .then(render)
+            .catch(function(){ document.getElementById('content').innerHTML = '<div class="loading">Failed to load.</div>'; });
+    };
+
+    function render(d){
+        if (d.empty) {
+            document.getElementById('content').innerHTML =
+                '<div class="empty-note">No active students on your caseload yet. Import students with EL status and US School Entry Date to see this report.</div>';
+            return;
+        }
+
+        // Year dropdown (once)
+        if (!yearsLoaded) {
+            var sel = document.getElementById('year-select');
+            sel.innerHTML = '';
+            (d.filters.years || []).forEach(function(y){
+                var o = document.createElement('option'); o.value = y; o.textContent = y;
+                if (y === d.filters.year) o.selected = true; sel.appendChild(o);
+            });
+            if (!d.filters.years || !d.filters.years.length) {
+                var o = document.createElement('option'); o.textContent = '(no grade data)'; sel.appendChild(o);
+            }
+            yearsLoaded = true;
+        }
+
+        var html = '';
+
+        /* ── Composition KPIs ── */
+        html += '<div class="section-header">Caseload Composition'
+              + '<span class="hint">"Newcomer" = EL with &lt; ' + d.filters.ltel_threshold + ' years in US schools; "LTEL" = ≥ ' + d.filters.ltel_threshold + ' years OR formally tagged LTEL</span></div>';
+        html += '<div class="kpi-grid">';
+        d.composition.forEach(function(c){
+            html += '<div class="kpi ' + c.group + '"><div class="label">' + esc(c.label) + '</div>'
+                  + '<div class="count">' + c.count + '</div>'
+                  + '<div class="meta">' + (c.avg_years_us !== null ? 'avg ' + c.avg_years_us + ' yrs in US' : '') + '</div></div>';
+        });
+        html += '</div>';
+
+        /* ── Attendance ── */
+        html += '<div class="section-header">Attendance (last 12 months)</div>';
+        html += '<div class="chart-grid">';
+        html += '<div class="chart-card"><h3>Chronic Absence Rate by Subgroup</h3><div class="subtitle">% of subgroup missing ≥10% of enrolled days (Attendance Works / ESSA)</div><canvas id="c-chronic"></canvas></div>';
+        html += '<div class="chart-card"><h3>Average Absences per Student</h3><div class="subtitle">Mean over the 12-month window</div><canvas id="c-avgabs"></canvas></div>';
+        html += '</div>';
+        if (d.attendance.by_period.periods.length) {
+            html += '<div class="chart-grid"><div class="chart-card full"><h3>Absences by Period &mdash; Each Subgroup</h3><div class="subtitle">Where students are missing class</div><canvas id="c-periods"></canvas></div></div>';
+        }
+        html += attendTable(d.attendance.summary);
+
+        /* ── Academic ── */
+        html += '<div class="section-header">Academic Performance'
+              + '<span class="hint">Final grades, ' + (d.filters.year || '(no year)') + '</span></div>';
+        html += '<div class="chart-grid">';
+        html += '<div class="chart-card"><h3>Average GPA by Subgroup</h3><div class="subtitle">Across all final grades this year</div><canvas id="c-gpa"></canvas></div>';
+        html += '<div class="chart-card"><h3>% of Students with at Least 1 D/F</h3><div class="subtitle">Subgroup share carrying a struggling grade</div><canvas id="c-pctdf"></canvas></div>';
+        html += '</div>';
+        if (d.academic.letter_dist.groups.length) {
+            html += '<div class="chart-grid"><div class="chart-card full"><h3>Grade Distribution by Subgroup</h3><div class="subtitle">A through F spread (%) for each group</div><canvas id="c-letters"></canvas></div></div>';
+        }
+        html += academicTable(d.academic.summary);
+
+        /* ── Classes Where Each Subgroup Struggles ── */
+        html += '<div class="section-header">Classes Where Each Subgroup Struggles'
+              + '<span class="hint">≥5 grades issued AND ≥3 D/F</span></div>';
+        html += '<div class="split-grid">';
+        html += '<div class="split-card newcomer"><h3>Newcomers</h3><div class="subtitle">Classes with the highest D/F rate among your Newcomer students</div>'
+              + classesTable(d.classes.newcomer, 'newcomer') + '</div>';
+        html += '<div class="split-card ltel"><h3>LTELs</h3><div class="subtitle">Classes with the highest D/F rate among your LTEL students</div>'
+              + classesTable(d.classes.ltel, 'ltel') + '</div>';
+        html += '</div>';
+        if (d.classes.both.length) {
+            html += '<div class="section-header">Classes Failing Both Newcomers and LTELs<span class="hint">The intersection &mdash; highest-leverage targets</span></div>';
+            html += bothTable(d.classes.both);
+        }
+
+        /* ── Teachers Where Each Subgroup Struggles ── */
+        if (d.teachers && d.teachers.has_data && (d.teachers.newcomer.length || d.teachers.ltel.length)) {
+            html += '<div class="section-header">Teachers Where Each Subgroup Struggles'
+                  + '<span class="hint">From the Staff Name column &middot; ≥5 grades issued AND ≥3 D/F &middot; use to target support, not evaluation</span></div>';
+            html += '<div class="split-grid">';
+            html += '<div class="split-card newcomer"><h3>Newcomers</h3><div class="subtitle">Teachers issuing the most D/F to your Newcomer students</div>'
+                  + teachersTable(d.teachers.newcomer) + '</div>';
+            html += '<div class="split-card ltel"><h3>LTELs</h3><div class="subtitle">Teachers issuing the most D/F to your LTEL students</div>'
+                  + teachersTable(d.teachers.ltel) + '</div>';
+            html += '</div>';
+            if (d.teachers.both.length) {
+                html += '<div class="section-header">Teachers Struggling With Both Subgroups<span class="hint">The intersection &mdash; classroom-environment signal worth a conversation</span></div>';
+                html += bothTeachersTable(d.teachers.both);
+            }
+        }
+
+        /* ── Compounding risk ── */
+        html += '<div class="section-header">Compounding Risk by Subgroup<span class="hint">≥2 D/F AND ≥5 absences</span></div>';
+        html += compoundingBlock(d.compounding);
+
+        document.getElementById('content').innerHTML = html;
+
+        /* Charts */
+        var a = d.attendance.summary;
+        if (a.length) {
+            charts.push(barByGroup('c-chronic', a, function(r){ return r.chronic_rate; }, '%', 2));
+            charts.push(barByGroup('c-avgabs', a, function(r){ return r.avg_absences_per_student; }, 'absences', 1));
+        }
+        if (d.attendance.by_period.series.length) {
+            charts.push(groupedPeriodBar('c-periods', d.attendance.by_period));
+        }
+        if (d.academic.summary.length) {
+            charts.push(barByGroup('c-gpa', d.academic.summary, function(r){ return r.avg_gpa; }, 'GPA', 2));
+            charts.push(barByGroup('c-pctdf', d.academic.summary, function(r){ return r.students_with_df_pct; }, '%', 1));
+        }
+        if (d.academic.letter_dist.groups.length) {
+            charts.push(letterDistChart('c-letters', d.academic.letter_dist));
+        }
+    }
+
+    /* ── Tables ── */
+    function attendTable(rows){
+        if (!rows || !rows.length) return '<div class="empty-note">No attendance data in window.</div>';
+        var h = '<div class="chart-card full" style="margin-top:14px;"><table class="data-table"><thead><tr>'
+            + '<th>Subgroup</th><th>Students</th><th>Total Absences</th><th>Avg per Student</th><th>Tardies</th><th>Chronic Absentees</th><th>Chronic Rate</th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            h += '<tr><td><strong>' + esc(r.label) + '</strong></td>'
+              + '<td>' + r.count + '</td>'
+              + '<td>' + r.total_absences + '</td>'
+              + '<td>' + r.avg_absences_per_student + '</td>'
+              + '<td>' + r.total_tardies + '</td>'
+              + '<td>' + r.chronic_count + '</td>'
+              + '<td><span class="pill rate">' + r.chronic_rate + '%</span></td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+    function academicTable(rows){
+        if (!rows || !rows.length) return '<div class="empty-note">No grade data for the selected year.</div>';
+        var h = '<div class="chart-card full" style="margin-top:14px;"><table class="data-table"><thead><tr>'
+            + '<th>Subgroup</th><th>Students</th><th>Avg GPA</th><th>Total D/F</th><th>Avg D/F per Student</th><th>Students w/ D/F</th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            h += '<tr><td><strong>' + esc(r.label) + '</strong></td>'
+              + '<td>' + r.count + '</td>'
+              + '<td>' + (r.avg_gpa != null ? r.avg_gpa : '—') + '</td>'
+              + '<td><span class="pill df">' + r.total_df + '</span></td>'
+              + '<td>' + r.avg_df_per_student + '</td>'
+              + '<td>' + r.students_with_df + ' (' + r.students_with_df_pct + '%)</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+    function classesTable(rows, key){
+        if (!rows || !rows.length) return '<div class="empty-note">No struggling classes meet the threshold for this subgroup.</div>';
+        var h = '<table class="data-table"><thead><tr><th>Class</th><th>Period</th><th>D/F</th><th>Fail Rate</th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            h += '<tr><td>' + esc(r.course) + '</td>'
+              + '<td>' + (r.period != null ? r.period : '—') + '</td>'
+              + '<td><span class="pill df">' + r.df + '</span> of ' + r.total + '</td>'
+              + '<td><span class="pill rate">' + r.rate + '%</span></td></tr>';
+        });
+        h += '</tbody></table>';
+        return h;
+    }
+    function teachersTable(rows){
+        if (!rows || !rows.length) return '<div class="empty-note">No teachers meet the threshold for this subgroup.</div>';
+        var h = '<table class="data-table"><thead><tr><th>Teacher</th><th>D/F</th><th>Students</th><th>Fail Rate</th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            h += '<tr><td>' + esc(r.teacher) + '</td>'
+              + '<td><span class="pill df">' + r.df + '</span> of ' + r.total + '</td>'
+              + '<td>' + r.students + '</td>'
+              + '<td><span class="pill rate">' + r.rate + '%</span></td></tr>';
+        });
+        h += '</tbody></table>';
+        return h;
+    }
+    function bothTeachersTable(rows){
+        var h = '<div class="chart-card full"><table class="data-table"><thead><tr>'
+            + '<th>Teacher</th><th>Newcomer D/F</th><th>Newcomer Rate</th><th>LTEL D/F</th><th>LTEL Rate</th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            h += '<tr><td>' + esc(r.teacher) + '</td>'
+              + '<td>' + r.newcomer_df + ' of ' + r.newcomer_students + '</td>'
+              + '<td><span class="pill rate">' + r.newcomer_rate + '%</span></td>'
+              + '<td>' + r.ltel_df + ' of ' + r.ltel_students + '</td>'
+              + '<td><span class="pill rate">' + r.ltel_rate + '%</span></td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+    function bothTable(rows){
+        var h = '<div class="chart-card full"><table class="data-table"><thead><tr>'
+            + '<th>Class</th><th>Period</th><th>Newcomer D/F</th><th>Newcomer Rate</th><th>LTEL D/F</th><th>LTEL Rate</th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            h += '<tr><td>' + esc(r.course) + '</td>'
+              + '<td>' + (r.period != null ? r.period : '—') + '</td>'
+              + '<td>' + r.newcomer_df + ' of ' + r.newcomer_students + '</td>'
+              + '<td><span class="pill rate">' + r.newcomer_rate + '%</span></td>'
+              + '<td>' + r.ltel_df + ' of ' + r.ltel_students + '</td>'
+              + '<td><span class="pill rate">' + r.ltel_rate + '%</span></td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+    function compoundingBlock(rows){
+        if (!rows || !rows.length) return '<div class="empty-note">No grouping data.</div>';
+        var h = '<div class="chart-card full"><table class="data-table"><thead><tr>'
+            + '<th>Subgroup</th><th>Students</th><th>Flagged</th><th>% of Subgroup</th><th>Top Names</th></tr></thead><tbody>';
+        rows.forEach(function(r){
+            var topNames = r.students.slice(0,4).map(function(s){
+                return '<a href="/caseload/' + s.id + '">' + esc(s.name) + '</a> (' + s.df_count + 'D/F · ' + s.absences + 'abs)';
+            }).join(', ');
+            if (r.students.length > 4) topNames += ' &hellip; +' + (r.students.length - 4) + ' more';
+            if (!r.flagged) topNames = '<span style="color:var(--gray);">none flagged</span>';
+            h += '<tr><td><strong>' + esc(r.label) + '</strong></td>'
+              + '<td>' + r.count + '</td>'
+              + '<td><span class="pill df">' + r.flagged + '</span></td>'
+              + '<td><span class="pill rate">' + r.rate + '%</span></td>'
+              + '<td>' + topNames + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+
+    /* ── Chart builders ── */
+    function barByGroup(id, rows, accessor, suffix, precision){
+        var el = document.getElementById(id); if(!el) return null;
+        var labels = rows.map(function(r){ return r.label; });
+        var data = rows.map(function(r){ return accessor(r); });
+        var colors = rows.map(function(r){ return GROUP_COLOR[r.group] || '#888'; });
+        return new Chart(el, {
+            type:'bar',
+            data:{labels:labels, datasets:[{label:suffix, data:data,
+                backgroundColor:colors.map(function(c){return c+'80';}),
+                borderColor:colors, borderWidth:1}]},
+            options:{responsive:true, plugins:{legend:{display:false},
+                tooltip:{callbacks:{label:function(ctx){
+                    return (ctx.parsed.y != null ? ctx.parsed.y : ctx.raw).toFixed(precision || 0) + ' ' + suffix;
+                }}}},
+                scales:{y:{beginAtZero:true}}}
+        });
+    }
+    function groupedPeriodBar(id, payload){
+        var el = document.getElementById(id); if(!el) return null;
+        return new Chart(el, {
+            type:'bar',
+            data:{labels: payload.periods, datasets: payload.series.map(function(s){
+                var c = GROUP_COLOR[s.group] || '#888';
+                return {label:s.label, data:s.values, backgroundColor:c+'80', borderColor:c, borderWidth:1};
+            })},
+            options:{responsive:true, plugins:{legend:{position:'bottom'}},
+                scales:{y:{beginAtZero:true, ticks:{precision:0}}}}
+        });
+    }
+    function letterDistChart(id, dist){
+        var el = document.getElementById(id); if(!el) return null;
+        var letterColors = {'A':'#2ECC71','B':'#1ABC9C','C':'#F39C12','D':'#E67E22','F':'#E74C3C'};
+        return new Chart(el, {
+            type:'bar',
+            data:{
+                labels: dist.groups.map(function(g){ return g.label; }),
+                datasets: dist.letters.map(function(L, idx){
+                    return {label:L, data:dist.groups.map(function(g){ return g.pct[idx]; }),
+                            backgroundColor:letterColors[L]+'CC', borderColor:letterColors[L], borderWidth:1};
+                })
+            },
+            options:{indexAxis:'y', responsive:true,
+                plugins:{legend:{position:'bottom'},
+                    tooltip:{callbacks:{label:function(ctx){ return ctx.dataset.label + ': ' + ctx.parsed.x + '%'; }}}},
+                scales:{x:{stacked:true, beginAtZero:true, max:100, ticks:{callback:function(v){return v+'%';}}},
+                        y:{stacked:true}}}
+        });
+    }
+
+    /* Fixed-height for the period+letter charts (they use no aspect ratio) */
+    var style = document.createElement('style');
+    style.textContent = '#c-periods{min-height:320px;} #c-letters{min-height:340px;}';
+    document.head.appendChild(style);
+
+    reload();
+})();
+</script>
+{% endblock %}

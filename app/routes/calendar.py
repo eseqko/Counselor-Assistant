@@ -47,10 +47,25 @@ def get_events():
 
     query = CalendarEvent.query.filter_by(owner_id=current_user.id)
 
-    if start:
-        query = query.filter(CalendarEvent.start_datetime >= start)
-    if end:
-        query = query.filter(CalendarEvent.end_datetime <= end)
+    # FullCalendar sends ISO-8601 with a 'T' separator and a timezone offset
+    # (e.g. 2026-06-15T00:00:00-07:00). The stored datetimes are naive and SQLite
+    # serializes them with a space separator, so comparing the column against the
+    # raw string does a LEXICOGRAPHIC compare that fails at the 'T' vs ' ' — which
+    # silently drops every event on the first day of the view. Parse to a naive
+    # datetime before filtering.
+    def _parse_fc(s):
+        try:
+            dt = datetime.fromisoformat(s)
+            return dt.replace(tzinfo=None) if dt.tzinfo else dt
+        except (ValueError, TypeError):
+            return None
+
+    start_dt = _parse_fc(start) if start else None
+    end_dt = _parse_fc(end) if end else None
+    if start_dt:
+        query = query.filter(CalendarEvent.start_datetime >= start_dt)
+    if end_dt:
+        query = query.filter(CalendarEvent.end_datetime <= end_dt)
 
     events = query.all()
     event_list = []
@@ -300,9 +315,14 @@ def _parse_ical_feed(ics_text):
         if m:
             tz_map[m.group(1).strip()] = True
 
-    # Window for recurring event expansion: 90 days before/after today
-    window_start = datetime.now(timezone.utc) - timedelta(days=90)
-    window_end = datetime.now(timezone.utc) + timedelta(days=90)
+    # Window for recurring event expansion: 90 days before/after today.
+    # Naive (no tzinfo) to match the rule occurrences, which are built with
+    # rrulestr(..., ignoretz=True) below. A tz-aware window here raises
+    # "can't compare offset-naive and offset-aware datetimes" inside
+    # rule.between(), which the broad except swallows — collapsing every
+    # recurring feed event to a single occurrence.
+    window_start = datetime.now() - timedelta(days=90)
+    window_end = datetime.now() + timedelta(days=90)
 
     blocks = re.split(r'BEGIN:VEVENT', ics_text)
 

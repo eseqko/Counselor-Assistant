@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Staff Directory{% endblock %}
+{% block page_title %}Staff Directory{% endblock %}
+{% block head %}
+<style>
+.staff-toolbar { display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+.staff-toolbar select { padding:6px 12px; border:1px solid var(--light-gray); border-radius:6px; background:var(--white); font-size:0.84rem; font-weight:600; color:var(--text); }
+.staff-toolbar .hint { color:var(--gray); font-size:0.82rem; }
+.staff-card { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:14px; overflow:hidden; }
+.staff-head { display:flex; align-items:center; gap:14px; padding:14px 18px; cursor:pointer; }
+.staff-head:hover { background:var(--bg); }
+.staff-name { font-weight:700; font-size:1rem; color:var(--text); }
+.staff-name:hover { text-decoration:underline !important; }
+.staff-meta { color:var(--gray); font-size:0.78rem; margin-top:2px; }
+.staff-meta a { color:var(--gray); }
+.staff-meta a:hover { color:var(--primary); }
+.staff-create {
+    background:none; border:1px solid var(--primary); color:var(--primary);
+    border-radius:6px; padding:2px 9px; font-size:0.72rem; font-weight:600;
+    cursor:pointer; vertical-align:middle;
+}
+.staff-create:hover { background:var(--primary); color:#fff; }
+.staff-stat { text-align:center; min-width:64px; }
+.staff-stat .v { font-weight:800; font-size:1.05rem; color:var(--primary-dark); }
+.staff-stat .v.danger { color:var(--danger); }
+.staff-stat .l { font-size:0.68rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.4px; }
+.staff-toggle { color:var(--gray); font-size:0.9rem; transition:transform 0.15s; }
+.staff-card.open .staff-toggle { transform:rotate(90deg); }
+.staff-classes { display:none; padding:0 18px 14px; }
+.staff-card.open .staff-classes { display:block; }
+.class-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+.class-table th { text-align:left; padding:6px 10px; color:var(--gray); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid var(--light-gray); }
+.class-table td { padding:6px 10px; border-bottom:1px solid var(--light-gray); }
+.pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.74rem; font-weight:700; }
+.pill.df { background:#FCE8E8; color:var(--danger); }
+.pill.ok { background:#E8F8E8; color:var(--success); }
+.empty-note { color:var(--gray); font-size:0.9rem; padding:40px; text-align:center; background:var(--white); border-radius:10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="staff-toolbar">
+    {% if years %}
+    <label class="hint">School year:
+        <select onchange="location.href='?year='+encodeURIComponent(this.value)">
+            {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select>
+    </label>
+    {% endif %}
+    <span class="hint">Built from the Staff Name column in your imported grades · {{ rows|length }} teacher(s)</span>
+</div>
+
+{% if not has_data %}
+<div class="empty-note">
+    No staff names found yet.<br>
+    Import final grades that include a <strong>Staff Name</strong> column (the Synergy export has one),
+    and each teacher and the classes they teach will appear here automatically.
+</div>
+{% else %}
+    {% for t in rows %}
+    <div class="staff-card" id="staff-{{ loop.index }}">
+        <div class="staff-head" onclick="document.getElementById('staff-{{ loop.index }}').classList.toggle('open')">
+            <div style="flex:1;">
+                {% if t.has_record %}
+                <a href="{{ url_for('staff.detail', staff_id=t.id) }}" class="staff-name"
+                   onclick="event.stopPropagation();"
+                   style="color:var(--primary);text-decoration:none;">{{ t.name }}</a>
+                {% else %}
+                <span class="staff-name">{{ t.name }}</span>
+                <form method="POST" action="{{ url_for('staff.create_from_name') }}"
+                      style="display:inline;margin-left:8px;"
+                      onclick="event.stopPropagation();" onsubmit="event.stopPropagation();">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="name" value="{{ t.name }}">
+                    <button type="submit" class="staff-create" title="Add contact info, notes, etc.">+ Create record</button>
+                </form>
+                {% endif %}
+                <div class="staff-meta">
+                    {% if t.department %}<span>{{ t.department }}</span>{% endif %}
+                    {% if t.email %}<span> · <a href="mailto:{{ t.email }}" onclick="event.stopPropagation();">{{ t.email }}</a></span>{% endif %}
+                    {% if t.room %}<span> · Rm {{ t.room }}</span>{% endif %}
+                    {% if not t.has_record %}<span style="color:var(--gray);font-style:italic;"> · No record yet — derived from grades</span>{% endif %}
+                </div>
+            </div>
+            <div class="staff-stat"><div class="v">{{ t.class_count }}</div><div class="l">Classes</div></div>
+            <div class="staff-stat"><div class="v">{{ t.student_count }}</div><div class="l">My Students</div></div>
+            <div class="staff-stat"><div class="v {% if t.df %}danger{% endif %}">{{ t.df }}</div><div class="l">D/F</div></div>
+            <span class="staff-toggle">&#9656;</span>
+        </div>
+        <div class="staff-classes">
+            <table class="class-table">
+                <thead><tr><th>Period</th><th>Class</th><th>My Students</th><th>D/F</th><th>Fail Rate</th></tr></thead>
+                <tbody>
+                {% for c in t.classes %}
+                    <tr>
+                        <td>{{ c.period if c.period is not none else '—' }}</td>
+                        <td>{{ c.course }}</td>
+                        <td>{{ c.students }}</td>
+                        <td>{% if c.df %}<span class="pill df">{{ c.df }}</span>{% else %}<span class="pill ok">0</span>{% endif %}</td>
+                        <td>{{ c.rate }}% <span style="color:var(--gray);font-size:0.74rem;">of {{ c.total }}</span></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+{% endif %}
+{% endblock %}
