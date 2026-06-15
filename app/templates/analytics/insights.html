@@ -177,17 +177,17 @@
         /* Build charts */
         if (g.df_by_course.labels.length)
             charts.push(stackedHBar('c-course', g.df_by_course.labels,
-                [{label:'F / NP', data:g.df_by_course.f_values, color:'#E74C3C'},
+                [{label:'Fail (F / NP / NM)', data:g.df_by_course.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_course.d_values, color:'#F39C12'}]));
         if (g.df_by_period.labels.length)
             charts.push(bar('c-gperiod', g.df_by_period.labels, g.df_by_period.df, 'D/F grades', '#E74C3C'));
         if (g.df_by_subject.labels.length)
             charts.push(stackedHBar('c-gsubject', g.df_by_subject.labels,
-                [{label:'F / NP', data:g.df_by_subject.f_values, color:'#E74C3C'},
+                [{label:'Fail (F / NP / NM)', data:g.df_by_subject.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_subject.d_values, color:'#F39C12'}]));
         if (g.df_by_teacher && g.df_by_teacher.has_data && g.df_by_teacher.labels.length)
             charts.push(stackedHBar('c-teacher', g.df_by_teacher.labels,
-                [{label:'F / NP', data:g.df_by_teacher.f_values, color:'#E74C3C'},
+                [{label:'Fail (F / NP / NM)', data:g.df_by_teacher.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_teacher.d_values, color:'#F39C12'}]));
         if (g.grade_distribution.values.some(function(v){return v;})) {
             charts.push(doughnut('c-dist', g.grade_distribution.labels, g.grade_distribution.values));
@@ -211,7 +211,7 @@
     function teacherTable(t){
         if (!t.rows || !t.rows.length) return '';
         var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
-            + '<th>Teacher</th><th>F / NP</th><th>D</th><th>Total D/F</th><th>Grades Issued</th><th>Fail Rate</th><th>Flag</th></tr></thead><tbody>';
+            + '<th>Teacher</th><th>Fail</th><th>D</th><th>Total D/F</th><th>Grades Issued</th><th>Fail Rate</th><th>Flag</th></tr></thead><tbody>';
         t.rows.slice(0, 30).forEach(function(r){
             var diff = (r.rate - t.school_avg_rate).toFixed(1);
             var diffPill = diff > 0 ? '<span style="color:var(--danger);font-weight:700;">+' + diff + 'pp</span>'
@@ -221,7 +221,7 @@
                 : '';
             h += '<tr' + (r.is_outlier ? ' style="background:#FFFBEC;"' : '') + '>'
               + '<td>' + esc(r.teacher) + '</td>'
-              + '<td><span class="pill f">' + r.f + '</span></td>'
+              + '<td><span class="pill f">' + r.fail + '</span></td>'
               + '<td><span class="pill d">' + r.d + '</span></td>'
               + '<td><strong>' + r.df + '</strong></td>'
               + '<td>' + r.total + '</td>'
@@ -235,12 +235,18 @@
     function courseTable(rows){
         if (!rows || !rows.length) return '<div class="empty-note">No D or F grades for the selected year. 🎉</div>';
         var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
-            + '<th>Class</th><th>F / NP</th><th title="Literal F only — excludes NP (No Pass) from pass/no-pass courses">Fail (F only)</th>'
-            + '<th>D</th><th>Total D/F</th><th>Students</th><th>Fail Rate</th><th>D/F List</th></tr></thead><tbody>';
+            + '<th>Class</th>'
+            + '<th title="Count of F, NP (No Pass), and NM (No Mark) grades">Fail</th>'
+            + '<th>D</th>'
+            + '<th>Total D/F</th>'
+            + '<th title="Total students in the class — denominator for the % columns">Students</th>'
+            + '<th title="% of students in the class with at least one F / NP / NM">% Fail</th>'
+            + '<th title="% of students in the class with at least one D, F, NP, or NM">% D/F</th>'
+            + '<th>D/F List</th></tr></thead><tbody>';
         rows.slice(0, 30).forEach(function(r){
             // Build the collapsible D/F List
             var namesHtml = (r.df_students || []).map(function(s){
-                var pillClass = (s.letter === 'F' || s.letter === 'NP') ? 'df' : 'rate';
+                var pillClass = (s.letter === 'F' || s.letter === 'NP' || s.letter === 'NM') ? 'df' : 'rate';
                 return '<a href="/caseload/' + s.id + '" style="text-decoration:none;color:var(--text);">'
                      + esc(s.name) + '</a> <span class="pill ' + pillClass + '" style="font-size:0.68rem;padding:1px 6px;">' + esc(s.letter) + '</span>';
             }).join(', ');
@@ -251,12 +257,12 @@
                   + '</details>'
                 : '<span style="color:var(--gray);">—</span>';
             h += '<tr><td>' + esc(r.course) + '</td>'
-              + '<td><span class="pill f">' + r.f + '</span></td>'
-              + '<td><span class="pill f">' + (r.f_only != null ? r.f_only : r.f) + '</span></td>'
+              + '<td><span class="pill f">' + r.fail + '</span></td>'
               + '<td><span class="pill d">' + r.d + '</span></td>'
               + '<td><strong>' + r.df + '</strong></td>'
-              + '<td>' + r.students + '</td>'
-              + '<td><span class="pill rate">' + r.rate + '%</span> <span style="color:var(--gray);font-size:0.74rem;">of ' + r.total + '</span></td>'
+              + '<td>' + r.class_size + '</td>'
+              + '<td><span class="pill f">' + r.fail_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + r.students_fail + ' of ' + r.class_size + '</span></td>'
+              + '<td><span class="pill rate">' + r.df_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + r.students_df + ' of ' + r.class_size + '</span></td>'
               + '<td>' + listHtml + '</td></tr>';
         });
         h += '</tbody></table></div>';
