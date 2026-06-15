@@ -48,6 +48,9 @@
     <label class="toolbar-toggle">School year:
         <select id="year-select" onchange="reload()"></select>
     </label>
+    <label class="toolbar-toggle">Period:
+        <select id="quarter-select" onchange="reload()"><option value="">Whole Year</option></select>
+    </label>
     <label class="toolbar-toggle">
         <input type="checkbox" id="final-only" checked onchange="reload()"> Final grades only
     </label>
@@ -74,16 +77,29 @@
 
     window.reload = function(){
         var year = document.getElementById('year-select').value;
+        var quarter = document.getElementById('quarter-select').value;
         var finalOnly = document.getElementById('final-only').checked ? '1' : '0';
         document.getElementById('insights-content').innerHTML =
             '<div class="loading-overlay">Loading insights…</div>';
         charts.forEach(function(c){ c.destroy(); }); charts = [];
-        fetch(API + '?year=' + encodeURIComponent(year) + '&final_only=' + finalOnly)
+        fetch(API + '?year=' + encodeURIComponent(year) + '&quarter=' + encodeURIComponent(quarter) + '&final_only=' + finalOnly)
             .then(function(r){ return r.json(); })
             .then(render)
             .catch(function(){ document.getElementById('insights-content').innerHTML =
                 '<div class="loading-overlay">Failed to load.</div>'; });
     };
+
+    function populateQuarters(data){
+        var sel = document.getElementById('quarter-select');
+        var current = data.filters.quarter ? String(data.filters.quarter) : '';
+        sel.innerHTML = '<option value="">Whole Year</option>';
+        (data.filters.quarters || []).forEach(function(q){
+            var o = document.createElement('option');
+            o.value = String(q); o.textContent = 'Quarter ' + q;
+            if (String(q) === current) o.selected = true;
+            sel.appendChild(o);
+        });
+    }
 
     function render(data){
         if (data.empty) {
@@ -105,9 +121,22 @@
             }
             yearsLoaded = true;
         }
+        populateQuarters(data);
 
         var g = data.grades, at = data.attendance, sm = data.summary;
+        var trend = data.quarter_trend || [];
+        var scopeLabel = data.filters.quarter ? ('Quarter ' + data.filters.quarter) : 'Whole Year';
         var html = '';
+
+        /* Scope banner */
+        html += '<div style="font-size:0.82rem;color:var(--gray);margin-bottom:10px;">'
+              + 'Showing: <strong style="color:var(--text);">' + scopeLabel + '</strong>'
+              + ' &middot; ' + (data.filters.final_only ? 'final grades' : 'all grades')
+              + ' &middot; ' + esc(data.filters.year || '')
+              + (data.filters.quarters && data.filters.quarters.length
+                  ? ' &middot; ' + data.filters.quarters.length + ' quarter' + (data.filters.quarters.length === 1 ? '' : 's') + ' of data imported'
+                  : '')
+              + '</div>';
 
         /* KPIs */
         html += '<div class="kpi-row">';
@@ -118,6 +147,19 @@
         html += kpi(sm.worst_period ? sm.worst_period.label.replace('Period ','P') : '--', 'Most-Missed Period');
         html += kpi(sm.at_risk_overlap, 'Compounding Risk', true);
         html += '</div>';
+
+        /* ── Across the Year: per-quarter trend (whole-year analysis) ── */
+        if (trend.length >= 2) {
+            html += '<div class="section-header">Across the Year'
+                  + '<span class="hint">% of graded students with a Fail / D-F, by quarter &mdash; the arc of the year</span></div>';
+            html += '<div class="chart-grid"><div class="chart-card full">'
+                  + '<h3>D/F Trend by Quarter</h3><div class="chart-subtitle">Lower is better. Each point is the share of students struggling that quarter.</div>'
+                  + '<canvas id="c-trend"></canvas></div></div>';
+            html += trendTable(trend);
+        } else if (trend.length === 1) {
+            html += '<div class="section-header">Across the Year'
+                  + '<span class="hint">Only Q' + trend[0].quarter + ' final grades imported so far &mdash; import more quarters to see the trend</span></div>';
+        }
 
         /* ── Classes with the most D/F ── */
         html += '<div class="section-header">Classes With the Most D/F Grades'
@@ -175,6 +217,8 @@
         document.getElementById('insights-content').innerHTML = html;
 
         /* Build charts */
+        if (trend.length >= 2)
+            charts.push(trendChart('c-trend', trend));
         if (g.df_by_course.labels.length)
             charts.push(stackedHBar('c-course', g.df_by_course.labels,
                 [{label:'Fail (F / NP / NM)', data:g.df_by_course.f_values, color:'#E74C3C'},
@@ -283,12 +327,53 @@
         return h;
     }
 
+    function trendTable(trend){
+        var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
+            + '<th>Quarter</th><th>Students Graded</th><th>Fail Grades</th><th>D Grades</th>'
+            + '<th title="% of graded students with at least one F / NP / NM">% Fail</th>'
+            + '<th title="% of graded students with at least one D / F / NP / NM">% D/F</th>'
+            + '<th>Change vs Prior</th></tr></thead><tbody>';
+        trend.forEach(function(t, i){
+            var delta = '';
+            if (i > 0) {
+                var d = (t.df_pct - trend[i-1].df_pct).toFixed(1);
+                if (d > 0) delta = '<span style="color:var(--danger);font-weight:700;">&#9650; +' + d + 'pp</span>';
+                else if (d < 0) delta = '<span style="color:var(--success);font-weight:700;">&#9660; ' + d + 'pp</span>';
+                else delta = '<span style="color:var(--gray);">no change</span>';
+            } else {
+                delta = '<span style="color:var(--gray);">&mdash;</span>';
+            }
+            h += '<tr><td><strong>' + esc(t.label) + '</strong></td>'
+              + '<td>' + t.students + '</td>'
+              + '<td><span class="pill f">' + t.fail_grades + '</span></td>'
+              + '<td><span class="pill d">' + t.d_grades + '</span></td>'
+              + '<td><span class="pill f">' + t.fail_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + t.fail_students + ' of ' + t.students + '</span></td>'
+              + '<td><span class="pill rate">' + t.df_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + t.df_students + ' of ' + t.students + '</span></td>'
+              + '<td>' + delta + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+
     /* ── Chart builders ── */
     function bar(id, labels, values, label, color){
         var el = document.getElementById(id); if(!el) return null;
         return new Chart(el, {type:'bar', data:{labels:labels, datasets:[{label:label, data:values,
             backgroundColor:(color||'#4A90D9')+'80', borderColor:color||'#4A90D9', borderWidth:1}]},
             options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
+    }
+    function trendChart(id, trend){
+        var el = document.getElementById(id); if(!el) return null;
+        var labels = trend.map(function(t){ return t.label; });
+        return new Chart(el, {type:'line', data:{labels:labels, datasets:[
+            {label:'% with a Fail', data:trend.map(function(t){return t.fail_pct;}),
+             borderColor:'#E74C3C', backgroundColor:'#E74C3C20', fill:true, tension:0.25, pointRadius:4},
+            {label:'% with a D/F', data:trend.map(function(t){return t.df_pct;}),
+             borderColor:'#F39C12', backgroundColor:'#F39C1218', fill:true, tension:0.25, pointRadius:4},
+        ]},
+        options:{responsive:true, plugins:{legend:{position:'bottom'},
+            tooltip:{callbacks:{label:function(ctx){ return ctx.dataset.label + ': ' + ctx.parsed.y + '%'; }}}},
+            scales:{y:{beginAtZero:true, ticks:{callback:function(v){return v+'%';}}}}}});
     }
     function hbar(id, labels, values, label){
         var el = document.getElementById(id); if(!el) return null;

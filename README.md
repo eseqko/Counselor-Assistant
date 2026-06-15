@@ -69,7 +69,7 @@ Most school counselor tools are cloud-based, expensive, and raise FERPA concerns
 | Module | Description |
 |--------|-------------|
 | **Analytics Dashboard** | Interactive charts: caseload demographics, academics, attendance, services, activities |
-| **Insights 360** | Cross-cutting drill-down on academic and attendance risk: D/F counts by class, period, subject, and teacher; attendance patterns by period and day-of-week; and a compounding-risk overlap of students who are both failing classes **and** missing school. School-year filter; finals-only toggle |
+| **Insights 360** | Cross-cutting drill-down on academic and attendance risk: D/F counts by class, period, subject, and teacher; per-class % Fail and % D/F (student-based); attendance patterns by period and day-of-week; and a compounding-risk overlap of students who are both failing classes **and** missing school. Import each quarter's final grades and **filter by period (Q1-Q4) or view the whole year**, with a per-quarter trend chart showing whether struggling-student rates are climbing or easing across the year. School-year filter; finals-only toggle |
 | **ELPAC Analytics** | English Learner dashboard with Overall PL distribution, domain weakness, reclassification pipeline, **Reclassification Candidates** (students at PL 4 not yet RFEP, with newly-at-4 flagged), **ELPI Status** (both simplified PL-1-4 and full CDE rubric with L/H sublevels), and a **Big Movers** table of students who changed 2+ levels in either direction |
 | **Use-of-Time Report** | ASCA service-type breakdown |
 | **Student Services Report** | Per-student touch counts and topics |

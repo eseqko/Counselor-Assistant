@@ -103,7 +103,25 @@ def api_insights():
     year = request.args.get('year') or (years[0] if years else None)
     final_only = request.args.get('final_only', '1') != '0'
 
-    grades_payload = _insights_grades(student_ids, year, final_only)
+    # Quarter filter: blank/"all" = whole-year aggregate; 1-4 = single period.
+    quarter_raw = request.args.get('quarter', '')
+    try:
+        quarter = int(quarter_raw) if quarter_raw not in ('', 'all', None) else None
+        if quarter not in (1, 2, 3, 4):
+            quarter = None
+    except (TypeError, ValueError):
+        quarter = None
+    # Which quarters actually have final grades for this year (drives the dropdown).
+    qfilter = [GradeRecord.student_id.in_(student_ids), GradeRecord.quarter.isnot(None)]
+    if final_only:
+        qfilter.append(GradeRecord.grade_type == 'final')
+    if year:
+        qfilter.append(GradeRecord.school_year == year)
+    quarters = sorted({q[0] for q in db.session.query(GradeRecord.quarter)
+                       .filter(*qfilter).distinct().all() if q[0]})
+
+    grades_payload = _insights_grades(student_ids, year, final_only, quarter)
+    quarter_trend = _quarter_trend(student_ids, year, final_only)
     attend_payload = _insights_attendance(student_ids, today - timedelta(days=365), today)
     overlap = _insights_overlap(grades_payload['_per_student_df'],
                                 attend_payload['_per_student_absent'], name_by_id)
@@ -134,22 +152,31 @@ def api_insights():
     attend_payload.pop('_per_student_absent', None)
 
     return jsonify({
-        'filters': {'year': year, 'years': years, 'final_only': final_only},
+        'filters': {'year': year, 'years': years, 'final_only': final_only,
+                    'quarter': quarter, 'quarters': quarters},
         'summary': summary,
+        'quarter_trend': quarter_trend,
         'grades': grades_payload,
         'attendance': attend_payload,
         'high_risk': overlap,
     })
 
 
-def _insights_grades(student_ids, year, final_only):
+def _insights_grades(student_ids, year, final_only, quarter=None):
     """Academic-risk aggregations: D/F by course, by period, by subject, and the
-    overall grade distribution."""
+    overall grade distribution.
+
+    `quarter` (1-4) narrows to a single grading period; None aggregates the
+    whole year. Student-based percentages dedupe across quarters, so the
+    whole-year view reads as "% of students who failed the class at any point".
+    """
     q = GradeRecord.query.filter(GradeRecord.student_id.in_(student_ids))
     if final_only:
         q = q.filter(GradeRecord.grade_type == 'final')
     if year:
         q = q.filter(GradeRecord.school_year == year)
+    if quarter:
+        q = q.filter(GradeRecord.quarter == quarter)
     grades = q.all()
 
     # Student-name lookup for the per-course D/F list column.
@@ -338,6 +365,61 @@ def _insights_grades(student_ids, year, final_only):
         'failing_students': len(failing_students),
         '_per_student_df': per_student_df,
     }
+
+
+def _quarter_trend(student_ids, year, final_only):
+    """Per-quarter fail/D-F rates across the whole year — the arc that answers
+    'is the school getting better or worse over the year?'.
+
+    Always spans every quarter present for the year (independent of any quarter
+    filter on the rest of the page), so it stays a constant reference while the
+    counselor drills into a single quarter. Rates are student-based:
+      fail_pct = students with >=1 F/NP/NM that quarter / students graded that quarter
+      df_pct   = students with >=1 D/F/NP/NM that quarter / students graded that quarter
+    """
+    if not student_ids:
+        return []
+    q = GradeRecord.query.filter(
+        GradeRecord.student_id.in_(student_ids),
+        GradeRecord.quarter.isnot(None))
+    if final_only:
+        q = q.filter(GradeRecord.grade_type == 'final')
+    if year:
+        q = q.filter(GradeRecord.school_year == year)
+    grades = q.all()
+
+    by_q = defaultdict(lambda: {'graded': set(), 'fail': set(), 'df': set(),
+                                'fail_grades': 0, 'd_grades': 0, 'total': 0})
+    for g in grades:
+        lg = (g.letter_grade or '').strip()
+        cell = by_q[g.quarter]
+        cell['graded'].add(g.student_id)
+        cell['total'] += 1
+        if lg in _FAIL:
+            cell['fail'].add(g.student_id)
+            cell['df'].add(g.student_id)
+            cell['fail_grades'] += 1
+        elif lg in _NEAR_FAILING:
+            cell['df'].add(g.student_id)
+            cell['d_grades'] += 1
+
+    rows = []
+    for qn in sorted(by_q.keys()):
+        c = by_q[qn]
+        denom = len(c['graded']) or 1
+        rows.append({
+            'quarter': qn,
+            'label': f'Q{qn}',
+            'students': len(c['graded']),
+            'fail_students': len(c['fail']),
+            'df_students': len(c['df']),
+            'fail_pct': round(len(c['fail']) / denom * 100, 1),
+            'df_pct': round(len(c['df']) / denom * 100, 1),
+            'fail_grades': c['fail_grades'],
+            'd_grades': c['d_grades'],
+            'total_grades': c['total'],
+        })
+    return rows
 
 
 _WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
