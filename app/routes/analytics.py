@@ -148,7 +148,17 @@ def _insights_grades(student_ids, year, final_only):
         q = q.filter(GradeRecord.school_year == year)
     grades = q.all()
 
-    by_course = defaultdict(lambda: {'f': 0, 'd': 0, 'total': 0, 'students': set()})
+    # Student-name lookup for the per-course D/F list column.
+    name_by_id = {s.id: f'{s.first_name} {s.last_name}'
+                  for s in Student.query.filter(Student.id.in_(student_ids)).all()}
+
+    # Per-course aggregates. `f` keeps the F+NP combined count so the existing
+    # chart stays unchanged; `f_only` and `np_only` are new for the "real F"
+    # column the counselor table now exposes. `df_list` is (sid, letter) tuples
+    # for the new "D/F List" expandable column.
+    by_course = defaultdict(lambda: {'f': 0, 'f_only': 0, 'np_only': 0,
+                                     'd': 0, 'total': 0,
+                                     'students': set(), 'df_list': []})
     by_teacher = defaultdict(lambda: {'f': 0, 'd': 0, 'total': 0, 'students': set()})
     by_period = defaultdict(lambda: {'df': 0, 'total': 0})
     by_subject = defaultdict(lambda: {'f': 0, 'd': 0})
@@ -182,6 +192,7 @@ def _insights_grades(student_ids, year, final_only):
             per_student_df[g.student_id] += 1
             failing_students.add(g.student_id)
             by_course[course]['students'].add(g.student_id)
+            by_course[course]['df_list'].append((g.student_id, lg))
             if g.period is not None:
                 by_period[g.period]['df'] += 1
             subj = g.subject_area or course or 'Unknown'
@@ -189,6 +200,10 @@ def _insights_grades(student_ids, year, final_only):
             if is_f:
                 by_course[course]['f'] += 1
                 by_subject[subj]['f'] += 1
+                if lg == 'F':
+                    by_course[course]['f_only'] += 1
+                else:
+                    by_course[course]['np_only'] += 1
             else:
                 by_course[course]['d'] += 1
                 by_subject[subj]['d'] += 1
@@ -202,10 +217,25 @@ def _insights_grades(student_ids, year, final_only):
         df = c['f'] + c['d']
         if df == 0:
             continue
+        # Per-student rosters for the "D/F List" column — one entry per student
+        # showing their worst grade in the class (multiple D/F across quarters
+        # collapse to the lowest).
+        worst = {}   # sid -> worst letter so far
+        WORST_RANK = {'F': 0, 'NP': 1, 'D-': 2, 'D': 3, 'D+': 4}
+        for sid, letter in c['df_list']:
+            if sid not in worst or WORST_RANK.get(letter, 9) < WORST_RANK.get(worst[sid], 9):
+                worst[sid] = letter
+        df_students = sorted(
+            [{'id': sid, 'name': name_by_id.get(sid, f'Student #{sid}'),
+              'letter': worst[sid]} for sid in worst],
+            key=lambda r: (WORST_RANK.get(r['letter'], 9), r['name'].lower()),
+        )
         course_rows.append({
             'course': name, 'df': df, 'f': c['f'], 'd': c['d'],
+            'f_only': c['f_only'], 'np_only': c['np_only'],
             'students': len(c['students']), 'total': c['total'],
             'rate': round(df / c['total'] * 100, 1) if c['total'] else 0,
+            'df_students': df_students,
         })
     course_rows.sort(key=lambda r: (-r['df'], -r['rate']))
     top_courses = course_rows[:15]
