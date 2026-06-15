@@ -235,14 +235,29 @@
     function courseTable(rows){
         if (!rows || !rows.length) return '<div class="empty-note">No D or F grades for the selected year. 🎉</div>';
         var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
-            + '<th>Class</th><th>F / NP</th><th>D</th><th>Total D/F</th><th>Students</th><th>Fail Rate</th></tr></thead><tbody>';
+            + '<th>Class</th><th>F / NP</th><th title="Literal F only — excludes NP (No Pass) from pass/no-pass courses">Fail (F only)</th>'
+            + '<th>D</th><th>Total D/F</th><th>Students</th><th>Fail Rate</th><th>D/F List</th></tr></thead><tbody>';
         rows.slice(0, 30).forEach(function(r){
+            // Build the collapsible D/F List
+            var namesHtml = (r.df_students || []).map(function(s){
+                var pillClass = (s.letter === 'F' || s.letter === 'NP') ? 'df' : 'rate';
+                return '<a href="/caseload/' + s.id + '" style="text-decoration:none;color:var(--text);">'
+                     + esc(s.name) + '</a> <span class="pill ' + pillClass + '" style="font-size:0.68rem;padding:1px 6px;">' + esc(s.letter) + '</span>';
+            }).join(', ');
+            var listHtml = r.df_students && r.df_students.length
+                ? '<details style="display:inline-block;"><summary style="cursor:pointer;color:var(--primary);font-size:0.82rem;list-style:none;">'
+                  + r.df_students.length + ' student' + (r.df_students.length === 1 ? '' : 's') + ' &#9662;</summary>'
+                  + '<div style="margin-top:6px;font-size:0.82rem;line-height:1.7;max-width:480px;">' + namesHtml + '</div>'
+                  + '</details>'
+                : '<span style="color:var(--gray);">—</span>';
             h += '<tr><td>' + esc(r.course) + '</td>'
               + '<td><span class="pill f">' + r.f + '</span></td>'
+              + '<td><span class="pill f">' + (r.f_only != null ? r.f_only : r.f) + '</span></td>'
               + '<td><span class="pill d">' + r.d + '</span></td>'
               + '<td><strong>' + r.df + '</strong></td>'
               + '<td>' + r.students + '</td>'
-              + '<td><span class="pill rate">' + r.rate + '%</span> <span style="color:var(--gray);font-size:0.74rem;">of ' + r.total + '</span></td></tr>';
+              + '<td><span class="pill rate">' + r.rate + '%</span> <span style="color:var(--gray);font-size:0.74rem;">of ' + r.total + '</span></td>'
+              + '<td>' + listHtml + '</td></tr>';
         });
         h += '</tbody></table></div>';
         return h;
