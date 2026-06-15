@@ -34,7 +34,7 @@
     </div>
     {% if app_state.has_students %}
     <div class="stat-card">
-        <div class="stat-value" id="follow-up-count">{{ follow_ups|length }}</div>
+        <div class="stat-value" id="follow-up-count">{{ follow_ups|length + (staff_follow_ups|length if staff_follow_ups else 0) }}</div>
         <div class="stat-label">Follow-Ups Due</div>
     </div>
     {% endif %}
@@ -174,6 +174,26 @@
             {% endfor %}
             {% else %}
             <div class="empty-state"><p>No follow-ups due.</p></div>
+            {% endif %}
+
+            {% if staff_follow_ups %}
+            <div style="margin-top:14px; padding-top:12px; border-top:1px solid #E8ECF0;">
+                <div style="font-size:0.78rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.4px; font-weight:700; margin-bottom:6px;">
+                    From Staff
+                </div>
+                {% for c in staff_follow_ups %}
+                <div style="padding:8px 0; border-bottom:1px solid #F0F4F8; display:flex; align-items:flex-start; gap:8px;">
+                    <span style="font-size:1rem;">&#9993;</span>
+                    <a href="{{ url_for('staff.detail', staff_id=c.staff_id) }}#comms" style="text-decoration:none;color:var(--dark);flex:1;">
+                        <strong>{{ c.contact_person }}</strong> — {{ c.subject or c.type_label }}
+                        <div style="font-size:0.82rem;color:var(--gray);">
+                            Follow up by {{ c.follow_up_date.strftime('%m/%d/%Y') if c.follow_up_date else '—' }}
+                            {% if c.follow_up_notes %} · {{ c.follow_up_notes[:60] }}{% endif %}
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
             {% endif %}
 
             {% if archived_follow_ups %}

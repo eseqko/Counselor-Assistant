@@ -216,6 +216,18 @@ def index():
         db.or_(Note.follow_up_completed == False, Note.follow_up_completed.is_(None))
     ).order_by(Note.follow_up_date).limit(10).all()
 
+    # Staff follow-ups due — same shape, sourced from CommunicationLog rows
+    # that are linked to a Staff record.
+    from app.models.communication import CommunicationLog
+    staff_follow_ups = CommunicationLog.query.filter(
+        CommunicationLog.counselor_id == current_user.id,
+        CommunicationLog.staff_id.isnot(None),
+        CommunicationLog.follow_up_needed == True,
+        CommunicationLog.follow_up_date <= today + timedelta(days=7),
+        db.or_(CommunicationLog.follow_up_completed == False,
+               CommunicationLog.follow_up_completed.is_(None)),
+    ).order_by(CommunicationLog.follow_up_date).limit(10).all()
+
     # Archived (completed) follow-ups still within 5-day window
     archived_follow_ups = Note.query.filter(
         Note.author_id == current_user.id,
@@ -286,6 +298,7 @@ def index():
         recent_notes=recent_notes,
         follow_ups=follow_ups,
         archived_follow_ups=archived_follow_ups,
+        staff_follow_ups=staff_follow_ups,
         total_minutes=total_minutes,
         direct_minutes=direct_minutes,
         indirect_minutes=indirect_minutes,

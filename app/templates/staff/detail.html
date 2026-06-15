@@ -118,6 +118,95 @@
     </div>
 </div>
 
+{# ── Communications + follow-ups ── #}
+<div id="comms" style="margin-top:6px;"></div>
+<div class="toolbar" style="margin-bottom:10px;">
+    <h2 style="margin:0;font-size:1.05rem;color:var(--text);">Communications &amp; Follow-Ups</h2>
+    <span class="hint">{{ comms|length }} logged · {{ open_followups|length }} open follow-up{{ '' if open_followups|length == 1 else 's' }}</span>
+</div>
+
+<div class="detail-grid" style="margin-bottom:18px;">
+    {# Log form #}
+    <div class="card">
+        <h3>Log Email / Call / Meeting</h3>
+        <form method="POST" action="{{ url_for('staff.log_communication', staff_id=staff.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row"><label>Date</label>
+                <input type="date" name="contact_date" value="{{ today.isoformat() }}"></div>
+            <div class="form-row"><label>Type</label>
+                <select name="contact_type">
+                    {% for value, label in contact_types %}
+                    <option value="{{ value }}" {% if value == 'email' %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select></div>
+            <div class="form-row"><label>Direction</label>
+                <select name="direction">
+                    <option value="incoming" selected>From {{ staff.name }}</option>
+                    <option value="outgoing">To {{ staff.name }}</option>
+                </select></div>
+            <div class="form-row"><label>Subject</label>
+                <input type="text" name="subject" placeholder="e.g., Question about Maya's missing assignments"></div>
+            <div class="form-row" style="align-items:flex-start;"><label style="padding-top:6px;">Summary</label>
+                <textarea name="summary" rows="3" placeholder="Paste the email or jot a quick summary…"></textarea></div>
+            <div style="border-top:1px solid var(--light-gray); margin:12px 0 10px;"></div>
+            <div class="form-row" style="align-items:center;">
+                <label>Follow-up</label>
+                <label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--text);text-transform:none;letter-spacing:0;font-size:0.86rem;">
+                    <input type="checkbox" name="follow_up_needed" value="1"> Remind me to follow up
+                </label>
+            </div>
+            <div class="form-row"><label>By</label>
+                <input type="date" name="follow_up_date" value=""></div>
+            <div class="form-row" style="align-items:flex-start;"><label style="padding-top:6px;">Reminder note</label>
+                <textarea name="follow_up_notes" rows="2" placeholder="What to do next…"></textarea></div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Log it</button>
+            </div>
+        </form>
+    </div>
+
+    {# Recent communications + open follow-ups #}
+    <div class="card">
+        <h3>Recent</h3>
+        {% if not comms %}
+        <div class="empty-note" style="padding:18px;">No communications logged with {{ staff.name }} yet.</div>
+        {% else %}
+            {% for c in comms[:8] %}
+            <div style="padding:10px 0; border-bottom:1px solid var(--light-gray);">
+                <div style="display:flex; gap:10px; align-items:baseline;">
+                    <span class="gp {% if c.direction == 'incoming' %}ok{% else %}none{% endif %}" style="background:{% if c.direction == 'incoming' %}#EEF1F6{% else %}#F3F4F6{% endif %}; color:var(--primary-dark);">
+                        {{ '←' if c.direction == 'incoming' else '→' }} {{ c.type_label }}
+                    </span>
+                    <strong style="flex:1; font-size:0.9rem;">{{ c.subject or '(no subject)' }}</strong>
+                    <span style="color:var(--gray); font-size:0.78rem;">{{ c.contact_date.strftime('%b %-d') }}</span>
+                </div>
+                {% if c.summary %}
+                <div style="color:var(--text); font-size:0.84rem; margin-top:4px; white-space:pre-wrap;">{{ c.summary[:200] }}{% if c.summary|length > 200 %}…{% endif %}</div>
+                {% endif %}
+                {% if c.follow_up_needed %}
+                <div style="margin-top:6px; display:flex; gap:8px; align-items:center; font-size:0.82rem;">
+                    {% if c.follow_up_completed %}
+                    <span style="color:var(--gray); text-decoration:line-through;">
+                        Followed up {{ c.follow_up_date.strftime('%b %-d') if c.follow_up_date else '' }}
+                    </span>
+                    {% else %}
+                    <span style="background:#FFF3D6; color:#996300; padding:2px 8px; border-radius:10px; font-weight:600;">
+                        Follow up{% if c.follow_up_date %} by {{ c.follow_up_date.strftime('%b %-d') }}{% endif %}
+                    </span>
+                    {% if c.follow_up_notes %}<span style="color:var(--gray);">— {{ c.follow_up_notes[:80] }}</span>{% endif %}
+                    <form method="POST" action="{{ url_for('staff.complete_followup', comm_id=c.id) }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline" style="font-size:0.72rem;">Mark done</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+
 {# ── Your students in this staff member's classes ── #}
 <div class="toolbar">
     <h2 style="margin:0;font-size:1.05rem;color:var(--text);">My Students in {{ staff.name }}'s Classes</h2>

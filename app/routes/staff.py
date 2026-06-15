@@ -6,6 +6,7 @@ which of the counselor's students are in those classes, and any contact info
 or notes the counselor has added.
 """
 from collections import defaultdict
+from datetime import date as _date
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, abort)
 from flask_login import login_required, current_user
@@ -13,7 +14,9 @@ from app import db
 from app.models.staff import Staff
 from app.models.student import Student
 from app.models.grade import GradeRecord
+from app.models.communication import CommunicationLog
 from app.utils.audit import log_action
+from app.utils.helpers import parse_date
 
 staff_bp = Blueprint('staff', __name__)
 
@@ -219,10 +222,20 @@ def detail(staff_id):
     derived_dept = next(iter(subjects_all), '') if len(subjects_all) == 1 else (
         '/'.join(sorted(subjects_all)) if subjects_all else '')
 
+    # Communications + open follow-ups with this staff member (most recent first)
+    comms = CommunicationLog.query.filter_by(
+        staff_id=staff.id, counselor_id=current_user.id
+    ).order_by(CommunicationLog.contact_date.desc(),
+               CommunicationLog.created_at.desc()).limit(50).all()
+    open_followups = [c for c in comms if c.follow_up_needed and not c.follow_up_completed]
+
     log_action('view', 'staff', staff.id)
     return render_template('staff/detail.html', staff=staff, classes=class_blocks,
                            year=year, years=years, derived_dept=derived_dept,
-                           titles=Staff.TITLES)
+                           titles=Staff.TITLES,
+                           comms=comms, open_followups=open_followups,
+                           contact_types=CommunicationLog.CONTACT_TYPES,
+                           today=_date.today())
 
 
 @staff_bp.route('/<int:staff_id>/edit', methods=['POST'])
@@ -260,3 +273,74 @@ def update(staff_id):
     log_action('update', 'staff', staff.id, f'Edited staff: {staff.name}')
     flash(f'Saved changes to {staff.name}.', 'success')
     return redirect(url_for('staff.detail', staff_id=staff.id))
+
+
+@staff_bp.route('/<int:staff_id>/log-communication', methods=['POST'])
+@login_required
+def log_communication(staff_id):
+    """Log an email/call/meeting from this staff member, optionally with a
+    follow-up reminder. The defaults (incoming, email) match the common case
+    of a teacher emailing the counselor."""
+    staff = Staff.query.get_or_404(staff_id)
+
+    contact_type = (request.form.get('contact_type') or 'email').strip()
+    direction = (request.form.get('direction') or 'incoming').strip()
+    contact_date = parse_date(request.form.get('contact_date')) or _date.today()
+    subject = (request.form.get('subject') or '').strip()
+    summary = (request.form.get('summary') or '').strip()
+
+    follow_up_needed = 'follow_up_needed' in request.form
+    follow_up_date = parse_date(request.form.get('follow_up_date'))
+    follow_up_notes = (request.form.get('follow_up_notes') or '').strip()
+    # Common-case safeguard: a follow-up checked without a date defaults to one
+    # week out so the reminder still surfaces somewhere.
+    if follow_up_needed and not follow_up_date:
+        from datetime import timedelta
+        follow_up_date = _date.today() + timedelta(days=7)
+
+    student_id = request.form.get('student_id')
+    try:
+        student_id = int(student_id) if student_id else None
+    except ValueError:
+        student_id = None
+
+    log = CommunicationLog(
+        staff_id=staff.id,
+        student_id=student_id,
+        counselor_id=current_user.id,
+        contact_date=contact_date,
+        contact_type=contact_type,
+        direction=direction,
+        contact_person=staff.name,
+        contact_role='teacher' if (staff.title or '').lower() == 'teacher' else 'other',
+        contact_email=staff.email or '',
+        contact_phone=staff.phone or '',
+        subject=subject,
+        summary=summary,
+        follow_up_needed=follow_up_needed,
+        follow_up_date=follow_up_date,
+        follow_up_notes=follow_up_notes,
+    )
+    db.session.add(log)
+    db.session.commit()
+    log_action('create', 'communication', log.id,
+               f'Logged {contact_type} with {staff.name}'
+               + (f' · follow-up {follow_up_date.isoformat()}' if follow_up_date else ''))
+    flash(f'Logged {dict(CommunicationLog.CONTACT_TYPES).get(contact_type, contact_type)} from {staff.name}.', 'success')
+    return redirect(url_for('staff.detail', staff_id=staff.id) + '#comms')
+
+
+@staff_bp.route('/communications/<int:comm_id>/complete', methods=['POST'])
+@login_required
+def complete_followup(comm_id):
+    """Mark a staff communication's follow-up complete (the dashboard widget
+    and the staff detail page both POST here)."""
+    log = CommunicationLog.query.filter_by(
+        id=comm_id, counselor_id=current_user.id).first_or_404()
+    log.follow_up_completed = True
+    db.session.commit()
+    log_action('update', 'communication', log.id, 'Marked follow-up complete')
+    if request.is_json:
+        from flask import jsonify
+        return jsonify({'ok': True})
+    return redirect(request.referrer or url_for('staff.detail', staff_id=log.staff_id or 0))
