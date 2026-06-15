@@ -135,11 +135,13 @@
 
         /* ── By teacher (only if staff names are in the grade data) ── */
         if (g.df_by_teacher && g.df_by_teacher.has_data && g.df_by_teacher.labels.length) {
+            var t = g.df_by_teacher;
             html += '<div class="section-header">D/F by Teacher'
-                  + '<span class="hint">From the Staff Name column · use to target support, not evaluation</span></div>';
+                  + '<span class="hint">School average: ' + t.school_avg_rate + '% &middot; outlier = ' + t.outlier_multiplier + '× average AND ≥' + t.min_sample + ' grades &middot; use to target support, not evaluation</span></div>';
             html += '<div class="chart-grid"><div class="chart-card full">'
                   + '<h3>D/F by Teacher</h3><div class="chart-subtitle">Combined D and F count across each teacher’s classes</div>'
                   + '<canvas id="c-teacher"></canvas></div></div>';
+            html += teacherTable(t);
         }
 
         /* ── Grade distribution ── */
@@ -205,6 +207,30 @@
     }
 
     /* ── Tables ── */
+    function teacherTable(t){
+        if (!t.rows || !t.rows.length) return '';
+        var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
+            + '<th>Teacher</th><th>F / NP</th><th>D</th><th>Total D/F</th><th>Grades Issued</th><th>Fail Rate</th><th>Flag</th></tr></thead><tbody>';
+        t.rows.slice(0, 30).forEach(function(r){
+            var diff = (r.rate - t.school_avg_rate).toFixed(1);
+            var diffPill = diff > 0 ? '<span style="color:var(--danger);font-weight:700;">+' + diff + 'pp</span>'
+                                    : '<span style="color:var(--gray);">' + diff + 'pp</span>';
+            var flag = r.is_outlier
+                ? '<span style="background:#FCE8E8;color:var(--danger);padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">High</span>'
+                : '';
+            h += '<tr' + (r.is_outlier ? ' style="background:#FFFBEC;"' : '') + '>'
+              + '<td>' + esc(r.teacher) + '</td>'
+              + '<td><span class="pill f">' + r.f + '</span></td>'
+              + '<td><span class="pill d">' + r.d + '</span></td>'
+              + '<td><strong>' + r.df + '</strong></td>'
+              + '<td>' + r.total + '</td>'
+              + '<td><span class="pill rate">' + r.rate + '%</span> ' + diffPill + '</td>'
+              + '<td>' + flag + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+
     function courseTable(rows){
         if (!rows || !rows.length) return '<div class="empty-note">No D or F grades for the selected year. 🎉</div>';
         var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'

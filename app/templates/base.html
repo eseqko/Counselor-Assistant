@@ -174,11 +174,14 @@
                     <a href="{{ url_for('reports.index') }}" class="nav-item {% if request.blueprint == 'reports' and request.endpoint != 'reports.early_warning' %}active{% endif %}">
                         <span class="nav-icon">&#128200;</span> Reports
                     </a>
-                    <a href="{{ url_for('analytics.index') }}" class="nav-item {% if request.blueprint == 'analytics' and request.endpoint not in ('analytics.insights',) %}active{% endif %}">
+                    <a href="{{ url_for('analytics.index') }}" class="nav-item {% if request.blueprint == 'analytics' and request.endpoint not in ('analytics.insights','analytics.el_outcomes') %}active{% endif %}">
                         <span class="nav-icon">&#128202;</span> Analytics
                     </a>
                     <a href="{{ url_for('analytics.insights') }}" class="nav-item {% if request.endpoint == 'analytics.insights' %}active{% endif %}">
                         <span class="nav-icon">&#128269;</span> Insights 360
+                    </a>
+                    <a href="{{ url_for('analytics.el_outcomes') }}" class="nav-item {% if request.endpoint == 'analytics.el_outcomes' %}active{% endif %}">
+                        <span class="nav-icon">&#127759;</span> EL Outcomes
                     </a>
                     {% endif %}
                     <a href="{{ url_for('activity_log.index') }}" class="nav-item {% if request.blueprint == 'activity_log' %}active{% endif %}">

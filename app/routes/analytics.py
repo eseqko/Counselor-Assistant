@@ -211,17 +211,31 @@ def _insights_grades(student_ids, year, final_only):
     top_courses = course_rows[:15]
 
     # D/F by teacher — same shape as by course
+    # School-wide D/F rate across all teachers — the benchmark for flagging
+    # teachers whose rate is well above average. Requires ≥10 grades issued
+    # by the teacher to avoid flagging on small samples (a teacher with 3
+    # grades, 2 D/F = 67%, isn't a meaningful signal).
+    total_teacher_grades = sum(c['total'] for c in by_teacher.values()) or 1
+    total_teacher_df = sum(c['f'] + c['d'] for c in by_teacher.values())
+    school_df_rate = round(total_teacher_df / total_teacher_grades * 100, 1)
+    OUTLIER_MULT = 1.5      # rate must exceed school_avg × 1.5 to flag
+    MIN_SAMPLE = 10         # AND teacher must have ≥10 grades issued
     teacher_rows = []
     for name, c in by_teacher.items():
         df = c['f'] + c['d']
         if df == 0:
             continue
+        rate = round(df / c['total'] * 100, 1) if c['total'] else 0
         teacher_rows.append({
             'teacher': name, 'df': df, 'f': c['f'], 'd': c['d'],
             'students': len(c['students']), 'total': c['total'],
-            'rate': round(df / c['total'] * 100, 1) if c['total'] else 0,
+            'rate': rate,
+            'is_outlier': (
+                c['total'] >= MIN_SAMPLE and rate >= school_df_rate * OUTLIER_MULT
+                and school_df_rate > 0
+            ),
         })
-    teacher_rows.sort(key=lambda r: (-r['df'], -r['rate']))
+    teacher_rows.sort(key=lambda r: (-r['rate'], -r['df']))
     top_teachers = teacher_rows[:15]
 
     # D/F by period (sorted by period number)
@@ -259,6 +273,9 @@ def _insights_grades(student_ids, year, final_only):
             'd_values': [r['d'] for r in top_teachers],
             'rows': teacher_rows,
             'has_data': bool(by_teacher),
+            'school_avg_rate': school_df_rate,
+            'outlier_multiplier': OUTLIER_MULT,
+            'min_sample': MIN_SAMPLE,
         },
         'grade_distribution': {
             'labels': dist_order,
@@ -358,6 +375,404 @@ def _insights_overlap(per_student_df, per_student_absent, name_by_id):
             })
     rows.sort(key=lambda r: (-(r['df_count'] + r['absences'])))
     return rows
+
+
+# ── EL Outcomes report ───────────────────────────────────────────
+
+# Subgroup keys used across the report. Order matters — drives display order.
+_EL_GROUPS = ['newcomer', 'ltel', 'rfep', 'eo', 'unknown']
+_EL_GROUP_LABELS = {
+    'newcomer': 'Newcomer',
+    'ltel': 'LTEL',
+    'rfep': 'Reclassified (RFEP)',
+    'eo': 'English Only',
+    'unknown': 'EL — duration unknown',
+}
+
+
+def _classify_el_subgroup(student, ltel_threshold=5):
+    """Classify each student into one of: newcomer / ltel / rfep / eo / unknown.
+
+    "Newcomer" is operationally defined as an EL student with fewer than
+    `ltel_threshold` years in US schools (default 5 per the counselor's
+    working definition; CDE's formal LTEL line is 6+). A student formally
+    tagged el_status='LTEL' always classifies as LTEL regardless of years.
+    Returns None for non-EL/non-RFEP/non-EO cases (very rare).
+    """
+    el = (student.el_status or '').strip()
+    if el == 'RFEP':
+        return 'rfep'
+    if el in ('', 'EO'):
+        return 'eo'
+    if el == 'LTEL':
+        return 'ltel'
+    # Remaining: an active EL student (Newcomer / EL 1-3). Bucket by duration.
+    yrs = student.years_in_us_schools
+    if yrs is None:
+        return 'unknown'
+    return 'newcomer' if yrs < ltel_threshold else 'ltel'
+
+
+@analytics_bp.route('/el-outcomes')
+@login_required
+def el_outcomes():
+    """EL subgroup outcomes: Newcomer vs LTEL vs RFEP attendance + grades.
+
+    Uses each student's US School Entry Date + EL status to bucket them, then
+    surfaces (1) demographic spread, (2) attendance comparisons, (3) academic
+    performance, (4) classes where each subgroup struggles most, (5) the
+    high-risk overlap split by subgroup.
+    """
+    return render_template('analytics/el_outcomes.html')
+
+
+@analytics_bp.route('/api/el-outcomes')
+@login_required
+def api_el_outcomes():
+    """Data payload for the EL Outcomes page."""
+    uid = current_user.id
+    today = date.today()
+
+    try:
+        ltel_threshold = int(request.args.get('threshold', 5))
+    except ValueError:
+        ltel_threshold = 5
+    ltel_threshold = max(1, min(ltel_threshold, 10))
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=uid, status='active').all()
+    if not students:
+        return jsonify({'empty': True})
+
+    # Group every active student.
+    subgroup = {s.id: _classify_el_subgroup(s, ltel_threshold) for s in students}
+    by_group_ids = defaultdict(list)
+    for sid, g in subgroup.items():
+        if g:
+            by_group_ids[g].append(sid)
+
+    # Composition + average years-in-US per group.
+    years_by_group = defaultdict(list)
+    for s in students:
+        if s.years_in_us_schools is not None:
+            years_by_group[subgroup[s.id]].append(s.years_in_us_schools)
+    composition = []
+    for g in _EL_GROUPS:
+        if not by_group_ids.get(g):
+            continue
+        years_list = years_by_group.get(g, [])
+        composition.append({
+            'group': g,
+            'label': _EL_GROUP_LABELS[g],
+            'count': len(by_group_ids[g]),
+            'avg_years_us': round(sum(years_list) / len(years_list), 1) if years_list else None,
+        })
+
+    # School-year filter for grades. Default to the most recent year present.
+    student_ids = [s.id for s in students]
+    years = sorted({y[0] for y in db.session.query(GradeRecord.school_year)
+                    .filter(GradeRecord.student_id.in_(student_ids),
+                            GradeRecord.school_year.isnot(None)).distinct().all()},
+                   reverse=True)
+    year = request.args.get('year') or (years[0] if years else None)
+    grades = []
+    if year:
+        grades = GradeRecord.query.filter(
+            GradeRecord.student_id.in_(student_ids),
+            GradeRecord.school_year == year,
+            GradeRecord.grade_type == 'final',
+        ).all()
+
+    # Attendance covers the last 365 days, matching Insights 360.
+    attend_start = today - timedelta(days=365)
+    attendance = AttendanceRecord.query.filter(
+        AttendanceRecord.student_id.in_(student_ids),
+        AttendanceRecord.date >= attend_start,
+        AttendanceRecord.date <= today,
+    ).all()
+
+    # ── Attendance aggregates ──
+    per_student_absent = defaultdict(int)
+    per_student_total = defaultdict(int)
+    per_student_tardy = defaultdict(int)
+    days_seen = defaultdict(set)
+    period_absent = defaultdict(lambda: defaultdict(int))  # group -> period -> count
+    for r in attendance:
+        st = (r.status or '').lower()
+        per_student_total[r.student_id] += 1
+        days_seen[r.student_id].add(r.date)
+        if st == 'absent':
+            per_student_absent[r.student_id] += 1
+            g = subgroup.get(r.student_id)
+            if g and r.period is not None and r.period >= 1:
+                period_absent[g][r.period] += 1
+        elif st == 'tardy':
+            per_student_tardy[r.student_id] += 1
+
+    attend_summary = []
+    for g in _EL_GROUPS:
+        ids = by_group_ids.get(g, [])
+        if not ids:
+            continue
+        total_abs = sum(per_student_absent.get(sid, 0) for sid in ids)
+        total_records = sum(per_student_total.get(sid, 0) for sid in ids)
+        total_tardy = sum(per_student_tardy.get(sid, 0) for sid in ids)
+        # Chronic absenteeism: ≥10% of distinct enrolled days missed (Attendance
+        # Works / federal ESSA definition).
+        chronic = 0
+        for sid in ids:
+            ds = len(days_seen.get(sid, set())) or 1
+            if per_student_absent.get(sid, 0) / ds >= 0.10:
+                chronic += 1
+        attend_summary.append({
+            'group': g,
+            'label': _EL_GROUP_LABELS[g],
+            'count': len(ids),
+            'total_absences': total_abs,
+            'avg_absences_per_student': round(total_abs / len(ids), 1),
+            'total_tardies': total_tardy,
+            'chronic_count': chronic,
+            'chronic_rate': round(chronic / len(ids) * 100, 1),
+            'absence_rate': round(total_abs / total_records * 100, 1) if total_records else 0.0,
+        })
+
+    # Period-level absences chart: one bar per group at each period.
+    period_set = sorted({p for g in period_absent.values() for p in g.keys()})
+    period_chart = {
+        'periods': [f'Period {p}' for p in period_set],
+        'series': [
+            {
+                'group': g,
+                'label': _EL_GROUP_LABELS[g],
+                'values': [period_absent[g].get(p, 0) for p in period_set],
+            }
+            for g in _EL_GROUPS if by_group_ids.get(g) and period_absent.get(g)
+        ],
+    }
+
+    # ── Academic aggregates ──
+    GPA_MAP = {'A+': 4.0, 'A': 4.0, 'A-': 3.7, 'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+               'C+': 2.3, 'C': 2.0, 'C-': 1.7, 'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+               'F': 0.0}
+    per_student_df = defaultdict(int)
+    per_student_gpa_points = defaultdict(list)
+    grades_by_group_letter = defaultdict(lambda: Counter())
+    # course key (course, period) -> group -> {'df', 'total', 'students'}
+    course_by_group = defaultdict(lambda: defaultdict(lambda: {'df': 0, 'total': 0, 'students': set()}))
+    # teacher -> group -> {'df', 'total', 'students'} for the teacher-outlier view
+    teacher_by_group = defaultdict(lambda: defaultdict(lambda: {'df': 0, 'total': 0, 'students': set()}))
+    for grec in grades:
+        g = subgroup.get(grec.student_id)
+        if not g:
+            continue
+        lg = (grec.letter_grade or '').strip()
+        # GPA letter spread (A/B/C/D/F)
+        if lg in ('A+', 'A', 'A-'): grades_by_group_letter[g]['A'] += 1
+        elif lg in ('B+', 'B', 'B-'): grades_by_group_letter[g]['B'] += 1
+        elif lg in ('C+', 'C', 'C-'): grades_by_group_letter[g]['C'] += 1
+        elif lg in ('D+', 'D', 'D-'): grades_by_group_letter[g]['D'] += 1
+        elif lg in ('F', 'NP'): grades_by_group_letter[g]['F'] += 1
+        # GPA points
+        if lg in GPA_MAP:
+            per_student_gpa_points[grec.student_id].append(GPA_MAP[lg])
+        # D/F tallying
+        is_df = lg in _DF
+        course_key = (grec.course_name or 'Unknown', grec.period)
+        course_by_group[course_key][g]['total'] += 1
+        course_by_group[course_key][g]['students'].add(grec.student_id)
+        teacher_name = (grec.teacher or '').strip()
+        if teacher_name:
+            teacher_by_group[teacher_name][g]['total'] += 1
+            teacher_by_group[teacher_name][g]['students'].add(grec.student_id)
+        if is_df:
+            per_student_df[grec.student_id] += 1
+            course_by_group[course_key][g]['df'] += 1
+            if teacher_name:
+                teacher_by_group[teacher_name][g]['df'] += 1
+
+    # Per-group GPA average + D/F per student
+    academic_summary = []
+    for g in _EL_GROUPS:
+        ids = by_group_ids.get(g, [])
+        if not ids:
+            continue
+        gpa_vals = []
+        for sid in ids:
+            pts = per_student_gpa_points.get(sid, [])
+            if pts:
+                gpa_vals.append(sum(pts) / len(pts))
+        total_df = sum(per_student_df.get(sid, 0) for sid in ids)
+        students_with_df = sum(1 for sid in ids if per_student_df.get(sid, 0) >= 1)
+        academic_summary.append({
+            'group': g,
+            'label': _EL_GROUP_LABELS[g],
+            'count': len(ids),
+            'avg_gpa': round(sum(gpa_vals) / len(gpa_vals), 2) if gpa_vals else None,
+            'total_df': total_df,
+            'avg_df_per_student': round(total_df / len(ids), 2),
+            'students_with_df': students_with_df,
+            'students_with_df_pct': round(students_with_df / len(ids) * 100, 1),
+        })
+
+    # Letter-grade distribution per group (for stacked-bar chart)
+    letters_order = ['A', 'B', 'C', 'D', 'F']
+    letter_dist = []
+    for g in _EL_GROUPS:
+        counts = grades_by_group_letter.get(g)
+        if not counts:
+            continue
+        total = sum(counts.values()) or 1
+        letter_dist.append({
+            'group': g,
+            'label': _EL_GROUP_LABELS[g],
+            'values': [counts.get(L, 0) for L in letters_order],
+            'pct': [round(counts.get(L, 0) / total * 100, 1) for L in letters_order],
+        })
+
+    # ── Classes where each subgroup struggles most ──
+    # For each (course, period), compute per-group D/F rate. Then surface top
+    # classes for Newcomers, top for LTELs, plus the intersection where BOTH
+    # subgroups fail at high rates (≥25% of grades issued + 3+ D/F).
+    def _course_rows(group_key, min_total=5, min_df=3):
+        rows = []
+        for (course, period), per_g in course_by_group.items():
+            cell = per_g.get(group_key)
+            if not cell or cell['total'] < min_total or cell['df'] < min_df:
+                continue
+            rows.append({
+                'course': course, 'period': period,
+                'df': cell['df'], 'total': cell['total'],
+                'students': len(cell['students']),
+                'rate': round(cell['df'] / cell['total'] * 100, 1),
+            })
+        rows.sort(key=lambda r: (-r['rate'], -r['df']))
+        return rows[:15]
+
+    classes_newcomer = _course_rows('newcomer')
+    classes_ltel = _course_rows('ltel')
+
+    # Teachers whose classes generate disproportionate D/F for each subgroup.
+    # Require ≥5 grades to a subgroup AND ≥3 D/F before listing — small samples
+    # produce misleading rates ("100% fail rate" off 1 grade isn't a signal).
+    def _teacher_rows(group_key, min_total=5, min_df=3):
+        rows = []
+        for teacher, per_g in teacher_by_group.items():
+            cell = per_g.get(group_key)
+            if not cell or cell['total'] < min_total or cell['df'] < min_df:
+                continue
+            rows.append({
+                'teacher': teacher,
+                'df': cell['df'], 'total': cell['total'],
+                'students': len(cell['students']),
+                'rate': round(cell['df'] / cell['total'] * 100, 1),
+            })
+        rows.sort(key=lambda r: (-r['rate'], -r['df']))
+        return rows[:15]
+
+    teachers_newcomer = _teacher_rows('newcomer')
+    teachers_ltel = _teacher_rows('ltel')
+
+    # Teachers struggling with BOTH subgroups (the intersection list)
+    nc_teacher_set = {r['teacher'] for r in teachers_newcomer}
+    lt_teacher_set = {r['teacher'] for r in teachers_ltel}
+    shared_teachers = nc_teacher_set & lt_teacher_set
+    teachers_both = []
+    for t_name in shared_teachers:
+        nc = next((r for r in teachers_newcomer if r['teacher'] == t_name), None)
+        lt = next((r for r in teachers_ltel if r['teacher'] == t_name), None)
+        if nc and lt:
+            teachers_both.append({
+                'teacher': t_name,
+                'newcomer_df': nc['df'], 'newcomer_rate': nc['rate'],
+                'newcomer_students': nc['students'],
+                'ltel_df': lt['df'], 'ltel_rate': lt['rate'],
+                'ltel_students': lt['students'],
+            })
+    teachers_both.sort(key=lambda r: -(r['newcomer_rate'] + r['ltel_rate']))
+
+    # Intersection: courses with high D/F for both Newcomers AND LTELs.
+    nc_set = {(r['course'], r['period']) for r in classes_newcomer}
+    lt_set = {(r['course'], r['period']) for r in classes_ltel}
+    shared_keys = nc_set & lt_set
+    classes_both = []
+    for key in shared_keys:
+        course, period = key
+        nc = next((r for r in classes_newcomer if (r['course'], r['period']) == key), None)
+        lt = next((r for r in classes_ltel if (r['course'], r['period']) == key), None)
+        if nc and lt:
+            classes_both.append({
+                'course': course, 'period': period,
+                'newcomer_df': nc['df'], 'newcomer_rate': nc['rate'], 'newcomer_students': nc['students'],
+                'ltel_df': lt['df'], 'ltel_rate': lt['rate'], 'ltel_students': lt['students'],
+            })
+    classes_both.sort(key=lambda r: -(r['newcomer_rate'] + r['ltel_rate']))
+
+    # ── Compounding risk by subgroup ──
+    # Same metric as Insights 360 (≥2 D/F AND ≥5 absences) but bucketed.
+    name_by_id = {s.id: s for s in students}
+    compounding_by_group = defaultdict(list)
+    for sid, s in name_by_id.items():
+        df = per_student_df.get(sid, 0)
+        absent = per_student_absent.get(sid, 0)
+        if df >= 2 and absent >= 5:
+            g = subgroup.get(sid)
+            if g:
+                compounding_by_group[g].append({
+                    'id': sid,
+                    'name': f'{s.first_name} {s.last_name}',
+                    'grade': s.grade_level,
+                    'df_count': df,
+                    'absences': absent,
+                    'years_us': s.years_in_us_schools,
+                })
+    for ids in compounding_by_group.values():
+        ids.sort(key=lambda r: -(r['df_count'] + r['absences']))
+
+    compounding_summary = []
+    for g in _EL_GROUPS:
+        ids = by_group_ids.get(g, [])
+        flagged = compounding_by_group.get(g, [])
+        if not ids:
+            continue
+        compounding_summary.append({
+            'group': g,
+            'label': _EL_GROUP_LABELS[g],
+            'count': len(ids),
+            'flagged': len(flagged),
+            'rate': round(len(flagged) / len(ids) * 100, 1),
+            'students': flagged[:25],
+        })
+
+    return jsonify({
+        'filters': {
+            'year': year, 'years': years,
+            'ltel_threshold': ltel_threshold,
+        },
+        'composition': composition,
+        'attendance': {
+            'summary': attend_summary,
+            'by_period': period_chart,
+        },
+        'academic': {
+            'summary': academic_summary,
+            'letter_dist': {
+                'letters': letters_order,
+                'groups': letter_dist,
+            },
+        },
+        'classes': {
+            'newcomer': classes_newcomer,
+            'ltel': classes_ltel,
+            'both': classes_both,
+        },
+        'teachers': {
+            'newcomer': teachers_newcomer,
+            'ltel': teachers_ltel,
+            'both': teachers_both,
+            'has_data': bool(teacher_by_group),
+        },
+        'compounding': compounding_summary,
+    })
 
 
 # ── ELPAC Analytics Dashboard ─────────────────────────────────────
