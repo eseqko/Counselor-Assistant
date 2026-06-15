@@ -44,7 +44,7 @@ class GradeRecord(db.Model):
     imported_by = db.relationship('User', backref='grade_imports')
 
     LETTER_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-',
-                     'D+', 'D', 'D-', 'F', 'P', 'NP', 'I', 'W']
+                     'D+', 'D', 'D-', 'F', 'P', 'NP', 'I', 'W', 'NM']
 
     SUBJECT_AREAS = [
         'English', 'Math', 'Science', 'History/Social Science',
@@ -53,6 +53,11 @@ class GradeRecord(db.Model):
 
     @property
     def is_passing(self):
+        # 'NM' (No Mark) means the teacher didn't enter a grade — it carries no
+        # pass/fail signal, same as a missing letter. Return None so it isn't
+        # counted as either passing or failing in aggregates.
+        if self.letter_grade == 'NM':
+            return None
         if self.letter_grade:
             return self.letter_grade not in ('F', 'NP', 'I', 'W')
         if self.percent_grade is not None:

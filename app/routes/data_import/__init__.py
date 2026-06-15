@@ -30,7 +30,7 @@ data_import_bp = Blueprint('data_import', __name__)
 
 VALID_ATTENDANCE = {'present', 'absent', 'tardy', 'excused'}
 VALID_GRADES = {'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-',
-                'D+', 'D', 'D-', 'F', 'P', 'NP', 'I', 'W'}
+                'D+', 'D', 'D-', 'F', 'P', 'NP', 'I', 'W', 'NM'}
 
 # Synergy SIS attendance code → (status, reason)
 SYNERGY_STATUS_MAP = {
