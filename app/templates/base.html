@@ -14,6 +14,7 @@
     <title>{% block title %}Counselor Assistant{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v('css/style.css')) }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css', v=static_v('css/themes.css')) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chart-enhancements.css', v=static_v('css/chart-enhancements.css')) }}">
     {% if user_theme == 'fiesta' %}
     <link rel="preload" as="font" type="font/woff2" crossorigin
           href="{{ url_for('static', filename='vendor/fonts/hanken-grotesk/HankenGrotesk-Variable.woff2') }}">

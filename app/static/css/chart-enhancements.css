@@ -1,0 +1,51 @@
+/* Chart-card depth — lifts every chart, KPI, and stat card off the page so the
+   analytics surfaces don't read as flat rectangles. Pairs with the Chart.js
+   shadow plugin in chart-enhancements.js.
+   Loaded globally (small, harmless on non-chart pages). */
+
+.chart-card,
+.kpi-card,
+.kpi,
+.stat-card,
+.split-card,
+.section {
+    /* Layered shadow: a tight inner shadow for crispness + a wider outer one
+       for elevation. Reads as a real card without being heavy. */
+    box-shadow:
+        0 1px 2px rgba(20, 30, 50, 0.04),
+        0 4px 14px rgba(20, 30, 50, 0.07) !important;
+    transition: box-shadow 0.22s ease, transform 0.22s ease;
+}
+
+/* Hover lift — applies only to chart-card / kpi-card so users still get static
+   stat cards in non-analytics contexts. Subtle, not jumpy. */
+.chart-card:hover,
+.kpi-card:hover,
+.kpi:hover {
+    box-shadow:
+        0 2px 4px rgba(20, 30, 50, 0.06),
+        0 8px 22px rgba(20, 30, 50, 0.10) !important;
+    transform: translateY(-1px);
+}
+
+/* The data tables under charts feel more anchored with a hair more separation
+   from their headers. */
+.data-table thead th {
+    box-shadow: inset 0 -2px 0 rgba(20, 30, 50, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chart-card, .kpi-card, .kpi {
+        transition: none;
+    }
+    .chart-card:hover, .kpi-card:hover, .kpi:hover {
+        transform: none;
+    }
+}
+
+@media print {
+    .chart-card, .kpi-card, .kpi, .stat-card, .split-card {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+}
