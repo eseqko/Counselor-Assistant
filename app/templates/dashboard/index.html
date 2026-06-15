@@ -158,7 +158,10 @@
     </div>
 
     <div class="card">
-        <div class="card-header">Follow-Ups Due</div>
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Follow-Ups Due</span>
+            <a href="{{ url_for('followups.digest') }}" style="font-size:0.78rem;font-weight:500;color:var(--primary);text-decoration:none;">See all &rarr;</a>
+        </div>
         <div class="card-body">
             {% if follow_ups %}
             {% for note in follow_ups %}

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Today's Reminders{% endblock %}
+{% block page_title %}Today's Reminders{% endblock %}
+{% block head %}
+<style>
+.digest-toolbar { display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+.digest-toolbar .hint { color:var(--gray); font-size:0.82rem; }
+.digest-toolbar .print-btn { margin-left:auto; }
+
+.section { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:14px; overflow:hidden; }
+.section-head { display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px solid var(--light-gray); }
+.section-head h3 { margin:0; font-size:1rem; color:var(--text); }
+.section-head .pill {
+    display:inline-block; padding:2px 10px; border-radius:10px; font-size:0.74rem; font-weight:700;
+}
+.pill.overdue { background:#FCE8E8; color:var(--danger); }
+.pill.today { background:#FFF3D6; color:#996300; }
+.pill.week { background:#EEF1F6; color:var(--primary-dark); }
+.pill.later { background:#F3F4F6; color:var(--gray); }
+
+.item { padding:10px 18px; border-bottom:1px solid var(--light-gray); display:flex; align-items:center; gap:12px; }
+.item:last-child { border-bottom:none; }
+.item .kind {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; border-radius:6px; font-size:0.95rem;
+    background:var(--bg); flex-shrink:0;
+}
+.item .body { flex:1; min-width:0; }
+.item .title { font-weight:600; color:var(--text); font-size:0.92rem; }
+.item .title a { color:inherit; text-decoration:none; }
+.item .title a:hover { text-decoration:underline; }
+.item .meta { color:var(--gray); font-size:0.78rem; margin-top:2px; }
+.item .meta a { color:var(--gray); }
+.item .meta a:hover { color:var(--primary); }
+.item .due { font-weight:600; }
+.item .due.overdue { color:var(--danger); }
+.item .due.today { color:#996300; }
+.item .actions { display:flex; gap:6px; flex-shrink:0; }
+.item.done { opacity:0.45; }
+.item.done .title { text-decoration:line-through; }
+
+.all-clear { padding:40px; text-align:center; color:var(--gray); }
+.all-clear h2 { color:var(--success); font-size:1.4rem; margin-bottom:6px; }
+
+@media print {
+    .sidebar, .top-bar, .digest-toolbar, .item .actions { display:none !important; }
+    .section { box-shadow:none; border:1px solid #ddd; break-inside:avoid; }
+    .item { padding:6px 12px; }
+}
+</style>
+{% endblock %}
+
+{# Reusable row macro — defined before the content block so it's in scope. #}
+{% macro item_row(it, urgency='') %}
+<div class="item" id="item-{{ it.kind }}-{{ it.id }}">
+    <span class="kind" title="{{ 'Counseling note' if it.kind == 'note' else 'Staff communication' }}">
+        {% if it.kind == 'note' %}&#128221;{% else %}&#9993;{% endif %}
+    </span>
+    <div class="body">
+        <div class="title">
+            {% if it.open_url %}<a href="{{ it.open_url }}">{{ it.title }}</a>{% else %}{{ it.title }}{% endif %}
+        </div>
+        <div class="meta">
+            <span class="due {{ urgency }}">
+                {% if it.due %}{{ it.due.strftime('%a %b %-d') }}{% else %}No date{% endif %}
+            </span>
+            ·
+            {% if it.who_url %}<a href="{{ it.who_url }}">{{ it.who }}</a>{% else %}{{ it.who }}{% endif %}
+            {% if it.detail %} · {{ it.detail[:140] }}{% if it.detail|length > 140 %}…{% endif %}{% endif %}
+        </div>
+    </div>
+    <div class="actions">
+        <button type="button" class="btn btn-sm btn-outline"
+                onclick="markDone('{{ it.kind }}', {{ it.id }})">Mark done</button>
+    </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="digest-toolbar">
+    <span class="hint">
+        {% if total_open %}
+            {{ total_open }} open follow-up{{ '' if total_open == 1 else 's' }}
+            · {{ today.strftime('%A, %b %-d') }}
+        {% else %}
+            All caught up — {{ today.strftime('%A, %b %-d') }}
+        {% endif %}
+    </span>
+    <a href="{{ url_for('followups.index') }}" class="btn btn-sm btn-outline">Student Follow-Up Tracker</a>
+    <button class="btn btn-sm btn-outline print-btn" onclick="window.print()">Print</button>
+</div>
+
+{% if total_open == 0 %}
+<div class="section">
+    <div class="all-clear">
+        <h2>You're all caught up.</h2>
+        <p>No open follow-ups. New reminders will show up here as you log them.</p>
+    </div>
+</div>
+{% endif %}
+
+{% if overdue %}
+<div class="section">
+    <div class="section-head"><h3>Overdue</h3><span class="pill overdue">{{ overdue|length }}</span></div>
+    {% for it in overdue %}{{ item_row(it, 'overdue') }}{% endfor %}
+</div>
+{% endif %}
+
+{% if due_today %}
+<div class="section">
+    <div class="section-head"><h3>Today</h3><span class="pill today">{{ due_today|length }}</span></div>
+    {% for it in due_today %}{{ item_row(it, 'today') }}{% endfor %}
+</div>
+{% endif %}
+
+{% if this_week %}
+<div class="section">
+    <div class="section-head"><h3>This Week</h3><span class="pill week">{{ this_week|length }}</span></div>
+    {% for it in this_week %}{{ item_row(it, 'week') }}{% endfor %}
+</div>
+{% endif %}
+
+{% if later %}
+<div class="section">
+    <div class="section-head"><h3>Later (next 30 days)</h3><span class="pill later">{{ later|length }}</span></div>
+    {% for it in later %}{{ item_row(it) }}{% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function markDone(kind, id) {
+    var url = (kind === 'note')
+        ? '/follow-up/' + id + '/toggle-complete'
+        : '/staff/communications/' + id + '/complete';
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: '{}'
+    })
+    .then(function(r){ if (!r.ok) throw r; return r.json().catch(function(){return{};}); })
+    .then(function(){
+        var row = document.getElementById('item-' + kind + '-' + id);
+        if (!row) return;
+        row.classList.add('done');
+        row.style.transition = 'opacity 0.3s, max-height 0.4s';
+        setTimeout(function(){
+            row.style.maxHeight = '0';
+            row.style.padding = '0';
+            row.style.border = 'none';
+            row.style.overflow = 'hidden';
+        }, 250);
+    })
+    .catch(function(){ alert('Could not mark done. Refresh and try again.'); });
+}
+</script>
+{% endblock %}

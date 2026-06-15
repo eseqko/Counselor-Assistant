@@ -60,7 +60,10 @@
             <a href="{{ url_for('notes.index') }}" class="nav-item {% if request.blueprint == 'notes' %}active{% endif %}">
                 <span class="nav-icon">&#128221;</span> Notes
             </a>
-            <a href="{{ url_for('followups.index') }}" class="nav-item {% if request.blueprint == 'followups' %}active{% endif %}">
+            <a href="{{ url_for('followups.digest') }}" class="nav-item {% if request.endpoint == 'followups.digest' %}active{% endif %}">
+                <span class="nav-icon">&#9200;</span> Today's Reminders
+            </a>
+            <a href="{{ url_for('followups.index') }}" class="nav-item {% if request.blueprint == 'followups' and request.endpoint != 'followups.digest' %}active{% endif %}">
                 <span class="nav-icon">&#128204;</span> Follow-Ups
             </a>
 
