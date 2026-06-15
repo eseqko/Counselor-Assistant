@@ -14,6 +14,12 @@
 .staff-meta { color:var(--gray); font-size:0.78rem; margin-top:2px; }
 .staff-meta a { color:var(--gray); }
 .staff-meta a:hover { color:var(--primary); }
+.staff-create {
+    background:none; border:1px solid var(--primary); color:var(--primary);
+    border-radius:6px; padding:2px 9px; font-size:0.72rem; font-weight:600;
+    cursor:pointer; vertical-align:middle;
+}
+.staff-create:hover { background:var(--primary); color:#fff; }
 .staff-stat { text-align:center; min-width:64px; }
 .staff-stat .v { font-weight:800; font-size:1.05rem; color:var(--primary-dark); }
 .staff-stat .v.danger { color:var(--danger); }
@@ -61,11 +67,19 @@
                    style="color:var(--primary);text-decoration:none;">{{ t.name }}</a>
                 {% else %}
                 <span class="staff-name">{{ t.name }}</span>
+                <form method="POST" action="{{ url_for('staff.create_from_name') }}"
+                      style="display:inline;margin-left:8px;"
+                      onclick="event.stopPropagation();" onsubmit="event.stopPropagation();">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="name" value="{{ t.name }}">
+                    <button type="submit" class="staff-create" title="Add contact info, notes, etc.">+ Create record</button>
+                </form>
                 {% endif %}
                 <div class="staff-meta">
                     {% if t.department %}<span>{{ t.department }}</span>{% endif %}
                     {% if t.email %}<span> · <a href="mailto:{{ t.email }}" onclick="event.stopPropagation();">{{ t.email }}</a></span>{% endif %}
                     {% if t.room %}<span> · Rm {{ t.room }}</span>{% endif %}
+                    {% if not t.has_record %}<span style="color:var(--gray);font-style:italic;"> · No record yet — derived from grades</span>{% endif %}
                 </div>
             </div>
             <div class="staff-stat"><div class="v">{{ t.class_count }}</div><div class="l">Classes</div></div>

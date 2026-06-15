@@ -129,6 +129,30 @@ def _build_row(staff, classes):
     }
 
 
+@staff_bp.route('/create', methods=['POST'])
+@login_required
+def create_from_name():
+    """Promote a grade-derived (placeholder) teacher into a real Staff record.
+
+    Idempotent: if a Staff row with this name already exists (case-insensitive),
+    we land on that one instead of creating a duplicate. Either way, redirect
+    to the detail page so the counselor can fill in email/notes immediately.
+    """
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash('Teacher name is required.', 'error')
+        return redirect(url_for('staff.index'))
+    existing = Staff.query.filter(db.func.lower(Staff.name) == name.lower()).first()
+    if existing:
+        return redirect(url_for('staff.detail', staff_id=existing.id))
+    staff = Staff(name=name, title='Teacher')
+    db.session.add(staff)
+    db.session.commit()
+    log_action('create', 'staff', staff.id, f'Created staff record: {name}')
+    flash(f'Created staff record for {name}. Add their contact info here.', 'success')
+    return redirect(url_for('staff.detail', staff_id=staff.id))
+
+
 @staff_bp.route('/<int:staff_id>')
 @login_required
 def detail(staff_id):
