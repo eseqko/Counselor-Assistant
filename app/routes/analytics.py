@@ -63,9 +63,13 @@ def api_data():
 # ── Insights 360: academic-risk + attendance pattern drill-down ───
 
 # Grade buckets used across the insights aggregations.
-_FAILING = {'F', 'NP'}
+# Per the counselor: F, NP (No Pass in P/NP courses), and NM (No Mark in P/NP
+# courses) all count as a failing outcome. _FAIL is the failing-letter set used
+# for the Fail count and % Fail; _DF additionally includes D-/D/D+ for the
+# total "struggling" set and the % D/F column.
+_FAIL = {'F', 'NP', 'NM'}
 _NEAR_FAILING = {'D+', 'D', 'D-'}
-_DF = _FAILING | _NEAR_FAILING
+_DF = _FAIL | _NEAR_FAILING
 
 
 @analytics_bp.route('/insights')
@@ -99,7 +103,25 @@ def api_insights():
     year = request.args.get('year') or (years[0] if years else None)
     final_only = request.args.get('final_only', '1') != '0'
 
-    grades_payload = _insights_grades(student_ids, year, final_only)
+    # Quarter filter: blank/"all" = whole-year aggregate; 1-4 = single period.
+    quarter_raw = request.args.get('quarter', '')
+    try:
+        quarter = int(quarter_raw) if quarter_raw not in ('', 'all', None) else None
+        if quarter not in (1, 2, 3, 4):
+            quarter = None
+    except (TypeError, ValueError):
+        quarter = None
+    # Which quarters actually have final grades for this year (drives the dropdown).
+    qfilter = [GradeRecord.student_id.in_(student_ids), GradeRecord.quarter.isnot(None)]
+    if final_only:
+        qfilter.append(GradeRecord.grade_type == 'final')
+    if year:
+        qfilter.append(GradeRecord.school_year == year)
+    quarters = sorted({q[0] for q in db.session.query(GradeRecord.quarter)
+                       .filter(*qfilter).distinct().all() if q[0]})
+
+    grades_payload = _insights_grades(student_ids, year, final_only, quarter)
+    quarter_trend = _quarter_trend(student_ids, year, final_only)
     attend_payload = _insights_attendance(student_ids, today - timedelta(days=365), today)
     overlap = _insights_overlap(grades_payload['_per_student_df'],
                                 attend_payload['_per_student_absent'], name_by_id)
@@ -130,36 +152,54 @@ def api_insights():
     attend_payload.pop('_per_student_absent', None)
 
     return jsonify({
-        'filters': {'year': year, 'years': years, 'final_only': final_only},
+        'filters': {'year': year, 'years': years, 'final_only': final_only,
+                    'quarter': quarter, 'quarters': quarters},
         'summary': summary,
+        'quarter_trend': quarter_trend,
         'grades': grades_payload,
         'attendance': attend_payload,
         'high_risk': overlap,
     })
 
 
-def _insights_grades(student_ids, year, final_only):
+def _insights_grades(student_ids, year, final_only, quarter=None):
     """Academic-risk aggregations: D/F by course, by period, by subject, and the
-    overall grade distribution."""
+    overall grade distribution.
+
+    `quarter` (1-4) narrows to a single grading period; None aggregates the
+    whole year. Student-based percentages dedupe across quarters, so the
+    whole-year view reads as "% of students who failed the class at any point".
+    """
     q = GradeRecord.query.filter(GradeRecord.student_id.in_(student_ids))
     if final_only:
         q = q.filter(GradeRecord.grade_type == 'final')
     if year:
         q = q.filter(GradeRecord.school_year == year)
+    if quarter:
+        q = q.filter(GradeRecord.quarter == quarter)
     grades = q.all()
 
     # Student-name lookup for the per-course D/F list column.
     name_by_id = {s.id: f'{s.first_name} {s.last_name}'
                   for s in Student.query.filter(Student.id.in_(student_ids)).all()}
 
-    # Per-course aggregates. `f` keeps the F+NP combined count so the existing
-    # chart stays unchanged; `f_only` and `np_only` are new for the "real F"
-    # column the counselor table now exposes. `df_list` is (sid, letter) tuples
-    # for the new "D/F List" expandable column.
-    by_course = defaultdict(lambda: {'f': 0, 'f_only': 0, 'np_only': 0,
-                                     'd': 0, 'total': 0,
-                                     'students': set(), 'df_list': []})
-    by_teacher = defaultdict(lambda: {'f': 0, 'd': 0, 'total': 0, 'students': set()})
+    # Per-course aggregates.
+    #   fail        = count of F+NP+NM grades issued (the user's "Fail" column)
+    #   d           = count of D-/D/D+ grades issued
+    #   total       = total grade records issued in this class
+    #   all_students    = unique students who got ANY grade here (class size denominator)
+    #   students_fail   = unique students with ≥1 F/NP/NM (% Fail numerator)
+    #   students_df     = unique students with ≥1 D/F/NP/NM (% D/F numerator)
+    #   df_list     = (sid, letter) tuples for the collapsible D/F List column
+    by_course = defaultdict(lambda: {'fail': 0, 'd': 0, 'total': 0,
+                                     'all_students': set(),
+                                     'students_fail': set(),
+                                     'students_df': set(),
+                                     'df_list': []})
+    by_teacher = defaultdict(lambda: {'fail': 0, 'd': 0, 'total': 0,
+                                     'all_students': set(),
+                                     'students_fail': set(),
+                                     'students_df': set()})
     by_period = defaultdict(lambda: {'df': 0, 'total': 0})
     by_subject = defaultdict(lambda: {'f': 0, 'd': 0})
     dist = Counter()
@@ -174,54 +214,59 @@ def _insights_grades(student_ids, year, final_only):
         elif lg in ('B+', 'B', 'B-'): dist['B'] += 1
         elif lg in ('C+', 'C', 'C-'): dist['C'] += 1
         elif lg in _NEAR_FAILING: dist['D'] += 1
-        elif lg == 'F': dist['F'] += 1
-        elif lg in ('P', 'NP'): dist['P/NP'] += 1
+        elif lg in _FAIL: dist['F'] += 1
+        elif lg == 'P': dist['P/NP'] += 1
         elif lg: dist['Other'] += 1
 
         course = (g.course_name or 'Unknown').strip()
         teacher = (g.teacher or '').strip()
         by_course[course]['total'] += 1
+        # Every student appearing in the class — denominator for the % columns.
+        by_course[course]['all_students'].add(g.student_id)
         if teacher:
             by_teacher[teacher]['total'] += 1
+            by_teacher[teacher]['all_students'].add(g.student_id)
         if g.period is not None:
             by_period[g.period]['total'] += 1
 
+        is_fail = lg in _FAIL
         is_df = lg in _DF
         if is_df:
             total_df += 1
             per_student_df[g.student_id] += 1
             failing_students.add(g.student_id)
-            by_course[course]['students'].add(g.student_id)
+            by_course[course]['students_df'].add(g.student_id)
             by_course[course]['df_list'].append((g.student_id, lg))
             if g.period is not None:
                 by_period[g.period]['df'] += 1
             subj = g.subject_area or course or 'Unknown'
-            is_f = lg in ('F', 'NP')
-            if is_f:
-                by_course[course]['f'] += 1
+            if is_fail:
+                by_course[course]['fail'] += 1
+                by_course[course]['students_fail'].add(g.student_id)
                 by_subject[subj]['f'] += 1
-                if lg == 'F':
-                    by_course[course]['f_only'] += 1
-                else:
-                    by_course[course]['np_only'] += 1
             else:
                 by_course[course]['d'] += 1
                 by_subject[subj]['d'] += 1
             if teacher:
-                by_teacher[teacher]['students'].add(g.student_id)
-                by_teacher[teacher]['f' if is_f else 'd'] += 1
+                by_teacher[teacher]['students_df'].add(g.student_id)
+                if is_fail:
+                    by_teacher[teacher]['fail'] += 1
+                    by_teacher[teacher]['students_fail'].add(g.student_id)
+                else:
+                    by_teacher[teacher]['d'] += 1
 
-    # D/F by course — rank by total D/F, then by rate
+    # D/F by course — rank by total D/F, then by % D/F (student-based)
     course_rows = []
     for name, c in by_course.items():
-        df = c['f'] + c['d']
-        if df == 0:
+        df_count = c['fail'] + c['d']
+        if df_count == 0:
             continue
+        class_size = len(c['all_students']) or 1
         # Per-student rosters for the "D/F List" column — one entry per student
         # showing their worst grade in the class (multiple D/F across quarters
-        # collapse to the lowest).
-        worst = {}   # sid -> worst letter so far
-        WORST_RANK = {'F': 0, 'NP': 1, 'D-': 2, 'D': 3, 'D+': 4}
+        # collapse to the lowest). NP and NM rank just after literal F.
+        worst = {}
+        WORST_RANK = {'F': 0, 'NP': 1, 'NM': 1, 'D-': 2, 'D': 3, 'D+': 4}
         for sid, letter in c['df_list']:
             if sid not in worst or WORST_RANK.get(letter, 9) < WORST_RANK.get(worst[sid], 9):
                 worst[sid] = letter
@@ -231,13 +276,18 @@ def _insights_grades(student_ids, year, final_only):
             key=lambda r: (WORST_RANK.get(r['letter'], 9), r['name'].lower()),
         )
         course_rows.append({
-            'course': name, 'df': df, 'f': c['f'], 'd': c['d'],
-            'f_only': c['f_only'], 'np_only': c['np_only'],
-            'students': len(c['students']), 'total': c['total'],
-            'rate': round(df / c['total'] * 100, 1) if c['total'] else 0,
+            'course': name,
+            'fail': c['fail'],
+            'd': c['d'],
+            'df': df_count,
+            'class_size': class_size,
+            'students_fail': len(c['students_fail']),
+            'students_df': len(c['students_df']),
+            'fail_pct': round(len(c['students_fail']) / class_size * 100, 1),
+            'df_pct': round(len(c['students_df']) / class_size * 100, 1),
             'df_students': df_students,
         })
-    course_rows.sort(key=lambda r: (-r['df'], -r['rate']))
+    course_rows.sort(key=lambda r: (-r['df'], -r['df_pct']))
     top_courses = course_rows[:15]
 
     # D/F by teacher — same shape as by course
@@ -246,19 +296,19 @@ def _insights_grades(student_ids, year, final_only):
     # by the teacher to avoid flagging on small samples (a teacher with 3
     # grades, 2 D/F = 67%, isn't a meaningful signal).
     total_teacher_grades = sum(c['total'] for c in by_teacher.values()) or 1
-    total_teacher_df = sum(c['f'] + c['d'] for c in by_teacher.values())
+    total_teacher_df = sum(c['fail'] + c['d'] for c in by_teacher.values())
     school_df_rate = round(total_teacher_df / total_teacher_grades * 100, 1)
     OUTLIER_MULT = 1.5      # rate must exceed school_avg × 1.5 to flag
     MIN_SAMPLE = 10         # AND teacher must have ≥10 grades issued
     teacher_rows = []
     for name, c in by_teacher.items():
-        df = c['f'] + c['d']
+        df = c['fail'] + c['d']
         if df == 0:
             continue
         rate = round(df / c['total'] * 100, 1) if c['total'] else 0
         teacher_rows.append({
-            'teacher': name, 'df': df, 'f': c['f'], 'd': c['d'],
-            'students': len(c['students']), 'total': c['total'],
+            'teacher': name, 'df': df, 'fail': c['fail'], 'd': c['d'],
+            'students': len(c['students_df']), 'total': c['total'],
             'rate': rate,
             'is_outlier': (
                 c['total'] >= MIN_SAMPLE and rate >= school_df_rate * OUTLIER_MULT
@@ -291,7 +341,7 @@ def _insights_grades(student_ids, year, final_only):
     return {
         'df_by_course': {
             'labels': [r['course'] for r in top_courses],
-            'f_values': [r['f'] for r in top_courses],
+            'f_values': [r['fail'] for r in top_courses],
             'd_values': [r['d'] for r in top_courses],
             'rows': course_rows,
         },
@@ -299,7 +349,7 @@ def _insights_grades(student_ids, year, final_only):
         'df_by_subject': subj_payload,
         'df_by_teacher': {
             'labels': [r['teacher'] for r in top_teachers],
-            'f_values': [r['f'] for r in top_teachers],
+            'f_values': [r['fail'] for r in top_teachers],
             'd_values': [r['d'] for r in top_teachers],
             'rows': teacher_rows,
             'has_data': bool(by_teacher),
@@ -315,6 +365,61 @@ def _insights_grades(student_ids, year, final_only):
         'failing_students': len(failing_students),
         '_per_student_df': per_student_df,
     }
+
+
+def _quarter_trend(student_ids, year, final_only):
+    """Per-quarter fail/D-F rates across the whole year — the arc that answers
+    'is the school getting better or worse over the year?'.
+
+    Always spans every quarter present for the year (independent of any quarter
+    filter on the rest of the page), so it stays a constant reference while the
+    counselor drills into a single quarter. Rates are student-based:
+      fail_pct = students with >=1 F/NP/NM that quarter / students graded that quarter
+      df_pct   = students with >=1 D/F/NP/NM that quarter / students graded that quarter
+    """
+    if not student_ids:
+        return []
+    q = GradeRecord.query.filter(
+        GradeRecord.student_id.in_(student_ids),
+        GradeRecord.quarter.isnot(None))
+    if final_only:
+        q = q.filter(GradeRecord.grade_type == 'final')
+    if year:
+        q = q.filter(GradeRecord.school_year == year)
+    grades = q.all()
+
+    by_q = defaultdict(lambda: {'graded': set(), 'fail': set(), 'df': set(),
+                                'fail_grades': 0, 'd_grades': 0, 'total': 0})
+    for g in grades:
+        lg = (g.letter_grade or '').strip()
+        cell = by_q[g.quarter]
+        cell['graded'].add(g.student_id)
+        cell['total'] += 1
+        if lg in _FAIL:
+            cell['fail'].add(g.student_id)
+            cell['df'].add(g.student_id)
+            cell['fail_grades'] += 1
+        elif lg in _NEAR_FAILING:
+            cell['df'].add(g.student_id)
+            cell['d_grades'] += 1
+
+    rows = []
+    for qn in sorted(by_q.keys()):
+        c = by_q[qn]
+        denom = len(c['graded']) or 1
+        rows.append({
+            'quarter': qn,
+            'label': f'Q{qn}',
+            'students': len(c['graded']),
+            'fail_students': len(c['fail']),
+            'df_students': len(c['df']),
+            'fail_pct': round(len(c['fail']) / denom * 100, 1),
+            'df_pct': round(len(c['df']) / denom * 100, 1),
+            'fail_grades': c['fail_grades'],
+            'd_grades': c['d_grades'],
+            'total_grades': c['total'],
+        })
+    return rows
 
 
 _WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']

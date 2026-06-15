@@ -48,6 +48,9 @@
     <label class="toolbar-toggle">School year:
         <select id="year-select" onchange="reload()"></select>
     </label>
+    <label class="toolbar-toggle">Period:
+        <select id="quarter-select" onchange="reload()"><option value="">Whole Year</option></select>
+    </label>
     <label class="toolbar-toggle">
         <input type="checkbox" id="final-only" checked onchange="reload()"> Final grades only
     </label>
@@ -74,16 +77,29 @@
 
     window.reload = function(){
         var year = document.getElementById('year-select').value;
+        var quarter = document.getElementById('quarter-select').value;
         var finalOnly = document.getElementById('final-only').checked ? '1' : '0';
         document.getElementById('insights-content').innerHTML =
             '<div class="loading-overlay">Loading insights…</div>';
         charts.forEach(function(c){ c.destroy(); }); charts = [];
-        fetch(API + '?year=' + encodeURIComponent(year) + '&final_only=' + finalOnly)
+        fetch(API + '?year=' + encodeURIComponent(year) + '&quarter=' + encodeURIComponent(quarter) + '&final_only=' + finalOnly)
             .then(function(r){ return r.json(); })
             .then(render)
             .catch(function(){ document.getElementById('insights-content').innerHTML =
                 '<div class="loading-overlay">Failed to load.</div>'; });
     };
+
+    function populateQuarters(data){
+        var sel = document.getElementById('quarter-select');
+        var current = data.filters.quarter ? String(data.filters.quarter) : '';
+        sel.innerHTML = '<option value="">Whole Year</option>';
+        (data.filters.quarters || []).forEach(function(q){
+            var o = document.createElement('option');
+            o.value = String(q); o.textContent = 'Quarter ' + q;
+            if (String(q) === current) o.selected = true;
+            sel.appendChild(o);
+        });
+    }
 
     function render(data){
         if (data.empty) {
@@ -105,9 +121,22 @@
             }
             yearsLoaded = true;
         }
+        populateQuarters(data);
 
         var g = data.grades, at = data.attendance, sm = data.summary;
+        var trend = data.quarter_trend || [];
+        var scopeLabel = data.filters.quarter ? ('Quarter ' + data.filters.quarter) : 'Whole Year';
         var html = '';
+
+        /* Scope banner */
+        html += '<div style="font-size:0.82rem;color:var(--gray);margin-bottom:10px;">'
+              + 'Showing: <strong style="color:var(--text);">' + scopeLabel + '</strong>'
+              + ' &middot; ' + (data.filters.final_only ? 'final grades' : 'all grades')
+              + ' &middot; ' + esc(data.filters.year || '')
+              + (data.filters.quarters && data.filters.quarters.length
+                  ? ' &middot; ' + data.filters.quarters.length + ' quarter' + (data.filters.quarters.length === 1 ? '' : 's') + ' of data imported'
+                  : '')
+              + '</div>';
 
         /* KPIs */
         html += '<div class="kpi-row">';
@@ -118,6 +147,19 @@
         html += kpi(sm.worst_period ? sm.worst_period.label.replace('Period ','P') : '--', 'Most-Missed Period');
         html += kpi(sm.at_risk_overlap, 'Compounding Risk', true);
         html += '</div>';
+
+        /* ── Across the Year: per-quarter trend (whole-year analysis) ── */
+        if (trend.length >= 2) {
+            html += '<div class="section-header">Across the Year'
+                  + '<span class="hint">% of graded students with a Fail / D-F, by quarter &mdash; the arc of the year</span></div>';
+            html += '<div class="chart-grid"><div class="chart-card full">'
+                  + '<h3>D/F Trend by Quarter</h3><div class="chart-subtitle">Lower is better. Each point is the share of students struggling that quarter.</div>'
+                  + '<canvas id="c-trend"></canvas></div></div>';
+            html += trendTable(trend);
+        } else if (trend.length === 1) {
+            html += '<div class="section-header">Across the Year'
+                  + '<span class="hint">Only Q' + trend[0].quarter + ' final grades imported so far &mdash; import more quarters to see the trend</span></div>';
+        }
 
         /* ── Classes with the most D/F ── */
         html += '<div class="section-header">Classes With the Most D/F Grades'
@@ -175,19 +217,21 @@
         document.getElementById('insights-content').innerHTML = html;
 
         /* Build charts */
+        if (trend.length >= 2)
+            charts.push(trendChart('c-trend', trend));
         if (g.df_by_course.labels.length)
             charts.push(stackedHBar('c-course', g.df_by_course.labels,
-                [{label:'F / NP', data:g.df_by_course.f_values, color:'#E74C3C'},
+                [{label:'Fail (F / NP / NM)', data:g.df_by_course.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_course.d_values, color:'#F39C12'}]));
         if (g.df_by_period.labels.length)
             charts.push(bar('c-gperiod', g.df_by_period.labels, g.df_by_period.df, 'D/F grades', '#E74C3C'));
         if (g.df_by_subject.labels.length)
             charts.push(stackedHBar('c-gsubject', g.df_by_subject.labels,
-                [{label:'F / NP', data:g.df_by_subject.f_values, color:'#E74C3C'},
+                [{label:'Fail (F / NP / NM)', data:g.df_by_subject.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_subject.d_values, color:'#F39C12'}]));
         if (g.df_by_teacher && g.df_by_teacher.has_data && g.df_by_teacher.labels.length)
             charts.push(stackedHBar('c-teacher', g.df_by_teacher.labels,
-                [{label:'F / NP', data:g.df_by_teacher.f_values, color:'#E74C3C'},
+                [{label:'Fail (F / NP / NM)', data:g.df_by_teacher.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_teacher.d_values, color:'#F39C12'}]));
         if (g.grade_distribution.values.some(function(v){return v;})) {
             charts.push(doughnut('c-dist', g.grade_distribution.labels, g.grade_distribution.values));
@@ -211,7 +255,7 @@
     function teacherTable(t){
         if (!t.rows || !t.rows.length) return '';
         var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
-            + '<th>Teacher</th><th>F / NP</th><th>D</th><th>Total D/F</th><th>Grades Issued</th><th>Fail Rate</th><th>Flag</th></tr></thead><tbody>';
+            + '<th>Teacher</th><th>Fail</th><th>D</th><th>Total D/F</th><th>Grades Issued</th><th>Fail Rate</th><th>Flag</th></tr></thead><tbody>';
         t.rows.slice(0, 30).forEach(function(r){
             var diff = (r.rate - t.school_avg_rate).toFixed(1);
             var diffPill = diff > 0 ? '<span style="color:var(--danger);font-weight:700;">+' + diff + 'pp</span>'
@@ -221,7 +265,7 @@
                 : '';
             h += '<tr' + (r.is_outlier ? ' style="background:#FFFBEC;"' : '') + '>'
               + '<td>' + esc(r.teacher) + '</td>'
-              + '<td><span class="pill f">' + r.f + '</span></td>'
+              + '<td><span class="pill f">' + r.fail + '</span></td>'
               + '<td><span class="pill d">' + r.d + '</span></td>'
               + '<td><strong>' + r.df + '</strong></td>'
               + '<td>' + r.total + '</td>'
@@ -235,12 +279,18 @@
     function courseTable(rows){
         if (!rows || !rows.length) return '<div class="empty-note">No D or F grades for the selected year. 🎉</div>';
         var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
-            + '<th>Class</th><th>F / NP</th><th title="Literal F only — excludes NP (No Pass) from pass/no-pass courses">Fail (F only)</th>'
-            + '<th>D</th><th>Total D/F</th><th>Students</th><th>Fail Rate</th><th>D/F List</th></tr></thead><tbody>';
+            + '<th>Class</th>'
+            + '<th title="Count of F, NP (No Pass), and NM (No Mark) grades">Fail</th>'
+            + '<th>D</th>'
+            + '<th>Total D/F</th>'
+            + '<th title="Total students in the class — denominator for the % columns">Students</th>'
+            + '<th title="% of students in the class with at least one F / NP / NM">% Fail</th>'
+            + '<th title="% of students in the class with at least one D, F, NP, or NM">% D/F</th>'
+            + '<th>D/F List</th></tr></thead><tbody>';
         rows.slice(0, 30).forEach(function(r){
             // Build the collapsible D/F List
             var namesHtml = (r.df_students || []).map(function(s){
-                var pillClass = (s.letter === 'F' || s.letter === 'NP') ? 'df' : 'rate';
+                var pillClass = (s.letter === 'F' || s.letter === 'NP' || s.letter === 'NM') ? 'df' : 'rate';
                 return '<a href="/caseload/' + s.id + '" style="text-decoration:none;color:var(--text);">'
                      + esc(s.name) + '</a> <span class="pill ' + pillClass + '" style="font-size:0.68rem;padding:1px 6px;">' + esc(s.letter) + '</span>';
             }).join(', ');
@@ -251,12 +301,12 @@
                   + '</details>'
                 : '<span style="color:var(--gray);">—</span>';
             h += '<tr><td>' + esc(r.course) + '</td>'
-              + '<td><span class="pill f">' + r.f + '</span></td>'
-              + '<td><span class="pill f">' + (r.f_only != null ? r.f_only : r.f) + '</span></td>'
+              + '<td><span class="pill f">' + r.fail + '</span></td>'
               + '<td><span class="pill d">' + r.d + '</span></td>'
               + '<td><strong>' + r.df + '</strong></td>'
-              + '<td>' + r.students + '</td>'
-              + '<td><span class="pill rate">' + r.rate + '%</span> <span style="color:var(--gray);font-size:0.74rem;">of ' + r.total + '</span></td>'
+              + '<td>' + r.class_size + '</td>'
+              + '<td><span class="pill f">' + r.fail_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + r.students_fail + ' of ' + r.class_size + '</span></td>'
+              + '<td><span class="pill rate">' + r.df_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + r.students_df + ' of ' + r.class_size + '</span></td>'
               + '<td>' + listHtml + '</td></tr>';
         });
         h += '</tbody></table></div>';
@@ -277,12 +327,53 @@
         return h;
     }
 
+    function trendTable(trend){
+        var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
+            + '<th>Quarter</th><th>Students Graded</th><th>Fail Grades</th><th>D Grades</th>'
+            + '<th title="% of graded students with at least one F / NP / NM">% Fail</th>'
+            + '<th title="% of graded students with at least one D / F / NP / NM">% D/F</th>'
+            + '<th>Change vs Prior</th></tr></thead><tbody>';
+        trend.forEach(function(t, i){
+            var delta = '';
+            if (i > 0) {
+                var d = (t.df_pct - trend[i-1].df_pct).toFixed(1);
+                if (d > 0) delta = '<span style="color:var(--danger);font-weight:700;">&#9650; +' + d + 'pp</span>';
+                else if (d < 0) delta = '<span style="color:var(--success);font-weight:700;">&#9660; ' + d + 'pp</span>';
+                else delta = '<span style="color:var(--gray);">no change</span>';
+            } else {
+                delta = '<span style="color:var(--gray);">&mdash;</span>';
+            }
+            h += '<tr><td><strong>' + esc(t.label) + '</strong></td>'
+              + '<td>' + t.students + '</td>'
+              + '<td><span class="pill f">' + t.fail_grades + '</span></td>'
+              + '<td><span class="pill d">' + t.d_grades + '</span></td>'
+              + '<td><span class="pill f">' + t.fail_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + t.fail_students + ' of ' + t.students + '</span></td>'
+              + '<td><span class="pill rate">' + t.df_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + t.df_students + ' of ' + t.students + '</span></td>'
+              + '<td>' + delta + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+
     /* ── Chart builders ── */
     function bar(id, labels, values, label, color){
         var el = document.getElementById(id); if(!el) return null;
         return new Chart(el, {type:'bar', data:{labels:labels, datasets:[{label:label, data:values,
             backgroundColor:(color||'#4A90D9')+'80', borderColor:color||'#4A90D9', borderWidth:1}]},
             options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
+    }
+    function trendChart(id, trend){
+        var el = document.getElementById(id); if(!el) return null;
+        var labels = trend.map(function(t){ return t.label; });
+        return new Chart(el, {type:'line', data:{labels:labels, datasets:[
+            {label:'% with a Fail', data:trend.map(function(t){return t.fail_pct;}),
+             borderColor:'#E74C3C', backgroundColor:'#E74C3C20', fill:true, tension:0.25, pointRadius:4},
+            {label:'% with a D/F', data:trend.map(function(t){return t.df_pct;}),
+             borderColor:'#F39C12', backgroundColor:'#F39C1218', fill:true, tension:0.25, pointRadius:4},
+        ]},
+        options:{responsive:true, plugins:{legend:{position:'bottom'},
+            tooltip:{callbacks:{label:function(ctx){ return ctx.dataset.label + ': ' + ctx.parsed.y + '%'; }}}},
+            scales:{y:{beginAtZero:true, ticks:{callback:function(v){return v+'%';}}}}}});
     }
     function hbar(id, labels, values, label){
         var el = document.getElementById(id); if(!el) return null;
