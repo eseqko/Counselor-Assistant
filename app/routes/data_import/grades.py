@@ -213,6 +213,7 @@ def grades_upload():
         updated = 0
         skipped = 0
         not_on_caseload = 0
+        shadow_added = 0  # students created for school-wide comparison data
         errors = []
         BATCH_SIZE = 200
         # course_number -> teacher name, collected to backfill Course.instructor
@@ -337,8 +338,36 @@ def grades_upload():
                     student_db_id = student_cache.get(fallback_sid)
 
             if not student_db_id:
-                not_on_caseload += 1
-                continue
+                # School-wide comparison data: create a "shadow" Student record so
+                # the grade row isn't lost. Shadow students are filtered out of
+                # every caseload UI (assigned_counselor_id=None + is_shadow=True),
+                # surfaced only in aggregate analytics for "vs school" comparisons.
+                # Requires a perm ID — name-only rows can't be deduped reliably.
+                if sid_clean:
+                    first_name = ''
+                    last_name = ''
+                    if student_name and ',' in student_name:
+                        # Synergy format: "Last, First"
+                        parts = [p.strip() for p in student_name.split(',', 1)]
+                        last_name, first_name = parts[0], parts[1]
+                    elif student_name:
+                        first_name = student_name.strip()
+                    shadow = Student(
+                        student_id_number=sid_clean,
+                        first_name=first_name or 'Unknown',
+                        last_name=last_name or 'Student',
+                        assigned_counselor_id=None,
+                        status='active',
+                        is_shadow=True,
+                    )
+                    db.session.add(shadow)
+                    db.session.flush()  # need shadow.id for the grade record
+                    student_db_id = shadow.id
+                    student_cache[sid_clean] = shadow.id  # reuse for future rows
+                    shadow_added += 1
+                else:
+                    not_on_caseload += 1
+                    continue
 
             # Detect honors/AP from course title
             course_title_clean = str(course_name).strip()
@@ -437,7 +466,8 @@ def grades_upload():
 
         log_action('import', 'grades',
                    details=f'Imported {form_grade_type} grades: {added} added, {updated} updated'
-                           + (f', {not_on_caseload} not on caseload' if not_on_caseload else '')
+                           + (f', {shadow_added} school-wide added' if shadow_added else '')
+                           + (f', {not_on_caseload} unidentifiable' if not_on_caseload else '')
                            + (f', {purged} progress grades replaced' if purged else '')
                            + (f', {backfilled} course instructors set' if backfilled else '')
                            + (f', {staff_added} staff records created' if staff_added else ''))
@@ -454,10 +484,11 @@ def grades_upload():
         grade_label = 'Progress report' if form_grade_type == 'progress' else 'Quarter'
         if purged:
             flash(f'{purged} progress report grades replaced with final grades.', 'info')
+        msg = f'{grade_label} grades: {added} added, {updated} updated.'
+        if shadow_added:
+            msg += f' {shadow_added} additional grades kept for school-wide comparison reports (students not on your caseload).'
         if not_on_caseload:
-            msg = f'{grade_label} grades: {added} added, {updated} updated. {not_on_caseload} not on caseload (skipped).'
-        else:
-            msg = f'{grade_label} grades: {added} added, {updated} updated.'
+            msg += f' {not_on_caseload} rows skipped (no student ID).'
 
         if errors:
             flash(f'Imported with issues: {msg} {len(errors)} errors.', 'warning')

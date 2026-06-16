@@ -30,6 +30,10 @@ class Student(db.Model):
 
     # Counselor assignment
     assigned_counselor_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    # "Shadow" students are imported from grade/attendance files for school-wide
+    # comparison reports but aren't on any counselor's caseload. Invisible to all
+    # caseload UI (filtered out everywhere), surfaced only in aggregate analytics.
+    is_shadow = db.Column(db.Boolean, default=False, index=True)
 
     # Status
     status = db.Column(db.String(20), default='active', index=True)
