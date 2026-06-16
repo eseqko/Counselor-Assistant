@@ -635,6 +635,9 @@ def upload_caseload():
                 existing.iep_status = iep_bool
                 existing.section_504 = plan_504_bool
                 existing.assigned_counselor_id = current_user.id
+                # Promote any shadow record to a full caseload student so it stops
+                # being filtered out of UI lists.
+                existing.is_shadow = False
                 updated += 1
             else:
                 student = Student(

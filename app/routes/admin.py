@@ -20,10 +20,12 @@ admin_bp = Blueprint('admin', __name__, template_folder='../templates/admin')
 @admin_required
 def index():
     counselors = User.query.order_by(User.display_name).all()
-    total_students = Student.query.filter_by(status='active').count()
+    # Exclude shadow students (school-wide comparison data, no counselor assigned).
+    total_students = Student.query.filter_by(status='active', is_shadow=False).count()
     unassigned = Student.query.filter(
         (Student.assigned_counselor_id == None) | (Student.assigned_counselor_id == 0),
-        Student.status == 'active'
+        Student.status == 'active',
+        Student.is_shadow == False,
     ).count()
 
     thirty_days = date.today() - timedelta(days=30)
@@ -172,7 +174,8 @@ def caseload_equity():
 
     unassigned = Student.query.filter(
         (Student.assigned_counselor_id == None) | (Student.assigned_counselor_id == 0),
-        Student.status == 'active'
+        Student.status == 'active',
+        Student.is_shadow == False,
     ).order_by(Student.last_name, Student.first_name).all()
 
     return render_template('admin/caseload_equity.html',

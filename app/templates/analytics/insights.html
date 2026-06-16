@@ -148,6 +148,27 @@
         html += kpi(sm.at_risk_overlap, 'Compounding Risk', true);
         html += '</div>';
 
+        /* ── Your Caseload vs. The School ── */
+        var vs = data.caseload_vs_school;
+        if (vs) {
+            html += '<div class="section-header">Your Caseload vs. The School'
+                  + '<span class="hint">School-wide data from grade rows for students not on your caseload (kept aggregate-only)</span></div>';
+            html += '<div class="kpi-row">'
+                  + comparisonKPI('% Fail (caseload)', vs.caseload_fail_pct, vs.caseload_graded)
+                  + comparisonKPI('% Fail (school)', vs.school_fail_pct, vs.school_graded)
+                  + deltaKPI('Δ % Fail', vs.fail_delta)
+                  + comparisonKPI('% D/F (caseload)', vs.caseload_df_pct, vs.caseload_graded)
+                  + comparisonKPI('% D/F (school)', vs.school_df_pct, vs.school_graded)
+                  + deltaKPI('Δ % D/F', vs.df_delta)
+                  + '</div>';
+            html += '<div style="font-size:0.78rem;color:var(--gray);margin:-6px 0 16px;">'
+                  + '<strong>How to read:</strong> Δ is your caseload minus the school. '
+                  + 'Negative (green) means your students are doing <em>better</em> than the school-wide average. '
+                  + 'Positive (red) means your students are struggling more. '
+                  + 'School-wide pool includes ' + vs.school_graded + ' students ('
+                  + vs.shadow_students_in_school + ' not on any caseload — names never shown).</div>';
+        }
+
         /* ── Across the Year: per-quarter trend (whole-year analysis) ── */
         if (trend.length >= 2) {
             html += '<div class="section-header">Across the Year'
@@ -278,6 +299,8 @@
 
     function courseTable(rows){
         if (!rows || !rows.length) return '<div class="empty-note">No D or F grades for the selected year. 🎉</div>';
+        // Show the "vs School" column only if at least one row has comparison data.
+        var hasSchool = rows.some(function(r){ return r.school_df_pct != null; });
         var h = '<div class="chart-card full" style="margin-bottom:20px;"><table class="data-table"><thead><tr>'
             + '<th>Class</th>'
             + '<th title="Count of F, NP (No Pass), and NM (No Mark) grades">Fail</th>'
@@ -286,6 +309,7 @@
             + '<th title="Total students in the class — denominator for the % columns">Students</th>'
             + '<th title="% of students in the class with at least one F / NP / NM">% Fail</th>'
             + '<th title="% of students in the class with at least one D, F, NP, or NM">% D/F</th>'
+            + (hasSchool ? '<th title="Your caseload’s % D/F minus the school-wide % D/F. Negative = your students are doing better than school average.">vs School</th>' : '')
             + '<th>D/F List</th></tr></thead><tbody>';
         rows.slice(0, 30).forEach(function(r){
             // Build the collapsible D/F List
@@ -300,6 +324,21 @@
                   + '<div style="margin-top:6px;font-size:0.82rem;line-height:1.7;max-width:480px;">' + namesHtml + '</div>'
                   + '</details>'
                 : '<span style="color:var(--gray);">—</span>';
+            // vs School delta cell
+            var deltaCell = '';
+            if (hasSchool) {
+                if (r.df_delta === null || r.df_delta === undefined) {
+                    deltaCell = '<td><span style="color:var(--gray);font-size:0.78rem;">no school data</span></td>';
+                } else {
+                    var dcolor = r.df_delta > 0 ? 'var(--danger)' : (r.df_delta < 0 ? 'var(--success)' : 'var(--gray)');
+                    var darrow = r.df_delta > 0 ? '&#9650;' : (r.df_delta < 0 ? '&#9660;' : '');
+                    var dsign = r.df_delta > 0 ? '+' : '';
+                    deltaCell = '<td><span style="color:' + dcolor + ';font-weight:700;">'
+                              + darrow + ' ' + dsign + r.df_delta + 'pp</span>'
+                              + ' <span style="color:var(--gray);font-size:0.74rem;">school: ' + r.school_df_pct + '%'
+                              + ' (' + r.school_class_size + ')</span></td>';
+                }
+            }
             h += '<tr><td>' + esc(r.course) + '</td>'
               + '<td><span class="pill f">' + r.fail + '</span></td>'
               + '<td><span class="pill d">' + r.d + '</span></td>'
@@ -307,6 +346,7 @@
               + '<td>' + r.class_size + '</td>'
               + '<td><span class="pill f">' + r.fail_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + r.students_fail + ' of ' + r.class_size + '</span></td>'
               + '<td><span class="pill rate">' + r.df_pct + '%</span> <span style="color:var(--gray);font-size:0.74rem;">' + r.students_df + ' of ' + r.class_size + '</span></td>'
+              + deltaCell
               + '<td>' + listHtml + '</td></tr>';
         });
         h += '</tbody></table></div>';
@@ -406,6 +446,25 @@
     }
     function kpi(value, label, danger){
         return '<div class="kpi-card"><div class="kpi-value'+(danger?' danger':'')+'">'+value+'</div><div class="kpi-label">'+label+'</div></div>';
+    }
+    function comparisonKPI(label, pct, n){
+        return '<div class="kpi-card"><div class="kpi-value">' + pct + '%</div>'
+             + '<div class="kpi-label">' + esc(label) + '</div>'
+             + '<div style="font-size:0.7rem;color:var(--gray);margin-top:2px;">' + n + ' students</div></div>';
+    }
+    function deltaKPI(label, delta){
+        // Δ > 0 = caseload doing WORSE; Δ < 0 = doing BETTER. Color/arrow accordingly.
+        if (delta === null || delta === undefined) {
+            return '<div class="kpi-card"><div class="kpi-value">&mdash;</div><div class="kpi-label">' + esc(label) + '</div></div>';
+        }
+        var color = delta > 0 ? 'var(--danger)' : (delta < 0 ? 'var(--success)' : 'var(--gray)');
+        var arrow = delta > 0 ? '&#9650;' : (delta < 0 ? '&#9660;' : '&mdash;');
+        var sign = delta > 0 ? '+' : '';
+        var verdict = delta > 0 ? 'worse vs school' : (delta < 0 ? 'better vs school' : 'matches school');
+        return '<div class="kpi-card"><div class="kpi-value" style="color:' + color + ';">'
+             + arrow + ' ' + sign + delta + 'pp</div>'
+             + '<div class="kpi-label">' + esc(label) + '</div>'
+             + '<div style="font-size:0.7rem;color:var(--gray);margin-top:2px;">' + verdict + '</div></div>';
     }
 
     /* The course chart needs a fixed height since it uses maintainAspectRatio:false */

@@ -126,6 +126,32 @@ def api_insights():
     overlap = _insights_overlap(grades_payload['_per_student_df'],
                                 attend_payload['_per_student_absent'], name_by_id)
 
+    # School-wide summary (across caseload + shadow students). None when no
+    # comparison data is available — the UI suppresses the vs-school sections.
+    school_wide = _school_wide_summary(year, quarter, final_only)
+    if school_wide:
+        # Only show the comparison when we actually have non-caseload data —
+        # otherwise "vs school" would just compare the caseload to itself.
+        if school_wide['overall']['shadow_students_in_set'] == 0:
+            school_wide = None
+    # Attach per-class delta to each course row so the table can render
+    # caseload-vs-school in line. Deltas are pp differences (caseload − school).
+    if school_wide:
+        for r in grades_payload['df_by_course']['rows']:
+            sc = school_wide['by_course'].get(r['course'])
+            if sc:
+                r['school_fail_pct'] = sc['fail_pct']
+                r['school_df_pct'] = sc['df_pct']
+                r['school_class_size'] = sc['class_size']
+                r['fail_delta'] = round(r['fail_pct'] - sc['fail_pct'], 1)
+                r['df_delta'] = round(r['df_pct'] - sc['df_pct'], 1)
+            else:
+                r['school_fail_pct'] = None
+                r['school_df_pct'] = None
+                r['school_class_size'] = None
+                r['fail_delta'] = None
+                r['df_delta'] = None
+
     # Headline summary cards
     course_rows = grades_payload['df_by_course']['rows']
     worst_course = course_rows[0] if course_rows else None
@@ -147,8 +173,48 @@ def api_insights():
         'at_risk_overlap': len(overlap),
     }
 
+    # "Your Caseload vs. The School" headline. Computes the caseload's own
+    # overall % Fail / % D/F from the per-course rows, then deltas against the
+    # school-wide overall. Caseload denominator = unique students with grade
+    # data this year/quarter (not total caseload size, since some students
+    # might not appear in the imported file).
+    caseload_vs_school = None
+    if school_wide:
+        caseload_graded = set()
+        caseload_fail = set()
+        caseload_df = set()
+        for r in grades_payload['df_by_course']['rows']:
+            # Reconstruct from raw payloads kept on the row
+            pass  # placeholder — we compute from grades_payload tallies instead
+        # Easier path: use per-student counters already in grades_payload
+        # (_per_student_df was popped above; recompute from rows).
+        # Actually grades_payload exposes failing_students (unique caseload
+        # student IDs with any D/F). For "fail" specifically we'd need a
+        # separate counter — but for headline KPIs the failing_students
+        # count is a good proxy for "any D/F". For "fail only" we use
+        # course-row aggregates.
+        caseload_total = grades_payload.get('caseload_graded_count', 0)
+        caseload_fail_count = grades_payload.get('caseload_fail_count', 0)
+        caseload_df_count = grades_payload['failing_students']
+        if caseload_total:
+            caseload_fail_pct = round(caseload_fail_count / caseload_total * 100, 1)
+            caseload_df_pct = round(caseload_df_count / caseload_total * 100, 1)
+            caseload_vs_school = {
+                'caseload_graded': caseload_total,
+                'caseload_fail_pct': caseload_fail_pct,
+                'caseload_df_pct': caseload_df_pct,
+                'school_graded': school_wide['overall']['students_graded'],
+                'school_fail_pct': school_wide['overall']['fail_pct'],
+                'school_df_pct': school_wide['overall']['df_pct'],
+                'fail_delta': round(caseload_fail_pct - school_wide['overall']['fail_pct'], 1),
+                'df_delta': round(caseload_df_pct - school_wide['overall']['df_pct'], 1),
+                'shadow_students_in_school': school_wide['overall']['shadow_students_in_set'],
+            }
+
     # Drop internal scratch keys before serializing.
     grades_payload.pop('_per_student_df', None)
+    grades_payload.pop('caseload_graded_count', None)
+    grades_payload.pop('caseload_fail_count', None)
     attend_payload.pop('_per_student_absent', None)
 
     return jsonify({
@@ -156,6 +222,7 @@ def api_insights():
                     'quarter': quarter, 'quarters': quarters},
         'summary': summary,
         'quarter_trend': quarter_trend,
+        'caseload_vs_school': caseload_vs_school,
         'grades': grades_payload,
         'attendance': attend_payload,
         'high_risk': overlap,
@@ -206,9 +273,16 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
     per_student_df = defaultdict(int)
     total_df = 0
     failing_students = set()
+    # Caseload-wide rollups for the vs-school headline KPIs.
+    caseload_graded = set()
+    caseload_fail_set = set()
 
     for g in grades:
         lg = (g.letter_grade or '').strip()
+        if lg:
+            caseload_graded.add(g.student_id)
+        if lg in _FAIL:
+            caseload_fail_set.add(g.student_id)
         # Overall grade distribution bucket
         if lg in ('A+', 'A', 'A-'): dist['A'] += 1
         elif lg in ('B+', 'B', 'B-'): dist['B'] += 1
@@ -364,6 +438,9 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
         'total_df': total_df,
         'failing_students': len(failing_students),
         '_per_student_df': per_student_df,
+        # Caseload-wide rollups for the vs-school headline KPIs (scratch).
+        'caseload_graded_count': len(caseload_graded),
+        'caseload_fail_count': len(caseload_fail_set),
     }
 
 
@@ -420,6 +497,80 @@ def _quarter_trend(student_ids, year, final_only):
             'total_grades': c['total'],
         })
     return rows
+
+
+def _school_wide_summary(year, quarter, final_only):
+    """Aggregate grade stats across the WHOLE school (caseload + shadow students).
+
+    Returns per-class % Fail / % D/F and an overall summary. Aggregate only —
+    never exposes individual non-caseload student names (FERPA guardrail).
+    Powers the "Your Caseload vs. The School" comparison KPIs and the per-row
+    delta column on the Insights 360 Classes table.
+
+    Returns None when there's no school-wide data (single-counselor install
+    that hasn't yet imported any non-caseload grade rows), so the UI can
+    suppress the comparison section instead of showing meaningless 0s.
+    """
+    q = GradeRecord.query.filter(GradeRecord.student_id.isnot(None))
+    if final_only:
+        q = q.filter(GradeRecord.grade_type == 'final')
+    if year:
+        q = q.filter(GradeRecord.school_year == year)
+    if quarter:
+        q = q.filter(GradeRecord.quarter == quarter)
+    grades = q.all()
+    if not grades:
+        return None
+
+    # Per-class student sets
+    by_course = defaultdict(lambda: {'all_students': set(),
+                                     'students_fail': set(),
+                                     'students_df': set()})
+    all_students_set = set()
+    fail_students_set = set()
+    df_students_set = set()
+    for g in grades:
+        lg = (g.letter_grade or '').strip()
+        course = (g.course_name or 'Unknown').strip()
+        by_course[course]['all_students'].add(g.student_id)
+        all_students_set.add(g.student_id)
+        if lg in _FAIL:
+            by_course[course]['students_fail'].add(g.student_id)
+            by_course[course]['students_df'].add(g.student_id)
+            fail_students_set.add(g.student_id)
+            df_students_set.add(g.student_id)
+        elif lg in _NEAR_FAILING:
+            by_course[course]['students_df'].add(g.student_id)
+            df_students_set.add(g.student_id)
+
+    by_course_payload = {}
+    for course, c in by_course.items():
+        size = len(c['all_students']) or 1
+        by_course_payload[course] = {
+            'class_size': size,
+            'fail_pct': round(len(c['students_fail']) / size * 100, 1),
+            'df_pct': round(len(c['students_df']) / size * 100, 1),
+        }
+
+    # How many shadow vs. caseload students contribute? Helps the UI label the
+    # school-wide population honestly (e.g., "School (n=487 students)").
+    shadow_count = Student.query.filter(
+        Student.id.in_(all_students_set), Student.is_shadow == True).count()
+    caseload_count = len(all_students_set) - shadow_count
+
+    total = len(all_students_set) or 1
+    return {
+        'overall': {
+            'students_graded': len(all_students_set),
+            'caseload_students_in_set': caseload_count,
+            'shadow_students_in_set': shadow_count,
+            'fail_students': len(fail_students_set),
+            'df_students': len(df_students_set),
+            'fail_pct': round(len(fail_students_set) / total * 100, 1),
+            'df_pct': round(len(df_students_set) / total * 100, 1),
+        },
+        'by_course': by_course_payload,
+    }
 
 
 _WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']

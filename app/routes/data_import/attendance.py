@@ -102,6 +102,7 @@ def attendance_upload():
         added = 0
         skipped = 0
         not_on_caseload = 0
+        shadow_added = 0  # students created for school-wide comparison data
         errors = []
 
         # Pre-load student lookup once: student_id_number → db id
@@ -161,14 +162,33 @@ def attendance_upload():
                     errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
                 continue
 
-            student_db_id = student_cache.get(str(student_id_str).strip())
+            sid_clean = str(student_id_str).strip()
+            student_db_id = student_cache.get(sid_clean)
             if not student_db_id:
-                # For Synergy whole-school reports, silently skip non-caseload students
-                if is_synergy:
+                # School-wide comparison data: auto-create a shadow Student for
+                # Synergy whole-school exports so attendance is retained for the
+                # "vs school" reports. Shadow students are invisible to all
+                # caseload UI (assigned_counselor_id=None + is_shadow=True).
+                if is_synergy and sid_clean:
+                    shadow = Student(
+                        student_id_number=sid_clean,
+                        first_name='Unknown',
+                        last_name='Student',
+                        assigned_counselor_id=None,
+                        status='active',
+                        is_shadow=True,
+                    )
+                    db.session.add(shadow)
+                    db.session.flush()
+                    student_db_id = shadow.id
+                    student_cache[sid_clean] = shadow.id
+                    shadow_added += 1
+                elif is_synergy:
                     not_on_caseload += 1
                     continue
-                errors.append(f'Row {row_idx}: Student ID {student_id_str} not found')
-                continue
+                else:
+                    errors.append(f'Row {row_idx}: Student ID {student_id_str} not found')
+                    continue
 
             # Skip duplicates (check in-memory set instead of DB query)
             att_key = (student_db_id, att_date, period_val)
@@ -192,7 +212,8 @@ def attendance_upload():
         db.session.commit()
         log_action('import', 'attendance',
                    details=f'Imported attendance: {added} added, {skipped} skipped'
-                           + (f', {not_on_caseload} not on caseload' if not_on_caseload else ''))
+                           + (f', {shadow_added} school-wide added' if shadow_added else '')
+                           + (f', {not_on_caseload} unidentifiable' if not_on_caseload else ''))
 
         # Log the import
         db.session.add(ImportLog(
@@ -202,8 +223,10 @@ def attendance_upload():
 
         if is_synergy:
             fmt_msg = f'Synergy import: {added} records added, {skipped} duplicates skipped.'
+            if shadow_added:
+                fmt_msg += f' {shadow_added} additional records kept for school-wide comparison reports (students not on your caseload).'
             if not_on_caseload:
-                fmt_msg += f' {not_on_caseload} records skipped (students not on your caseload).'
+                fmt_msg += f' {not_on_caseload} rows skipped (no student ID).'
             if errors:
                 fmt_msg += f' {len(errors)} errors.'
                 flash(fmt_msg, 'warning')
