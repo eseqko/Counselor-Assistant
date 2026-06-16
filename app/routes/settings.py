@@ -375,7 +375,11 @@ def export_data():
         yield from emit_array('tags', Tag.query.all(),
                               lambda t: {'name': t.name, 'color': t.color})
 
-        students = Student.query.options(selectinload(Student.tags)).all()
+        # Exclude shadow students — they're synthetic rows created from
+        # whole-school grade/attendance files for aggregate comparison only,
+        # and must not be serialized into a portable backup (FERPA).
+        students = Student.query.filter_by(is_shadow=False).options(
+            selectinload(Student.tags)).all()
         yield from emit_array('students', students, _student_to_dict)
 
         notes = Note.query.options(joinedload(Note.student)).all()

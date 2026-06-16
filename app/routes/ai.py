@@ -12,6 +12,7 @@ from app.utils import ollama_client
 from app.utils.stream_helpers import stream_sse
 from app.utils.context_budget import budget_prompt
 from app.utils.audit import log_action
+from app.utils.roles import owned_or_404
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -470,7 +471,7 @@ def student_insights():
     student_id = data.get('student_id')
     if not student_id:
         return jsonify({'error': 'Missing student_id'}), 400
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     prompt = _build_student_insights_prompt(student)
     try:
         bp, bs = budget_prompt(prompt, _student_insights_system())
@@ -488,7 +489,7 @@ def student_insights_stream():
     student_id = data.get('student_id')
     if not student_id:
         return jsonify({'error': 'Missing student_id'}), 400
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     prompt = _build_student_insights_prompt(student)
     log_action('ai_feedback', 'student', student.id, 'Generated AI insights for student')
     return stream_sse(prompt, system=_student_insights_system())
@@ -795,7 +796,7 @@ def course_recommendations():
     if not student_id:
         return jsonify({'error': 'Missing student_id'}), 400
 
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
 
     term1, term2, alternates, failed_course_names = build_recommended_schedule(student)
 

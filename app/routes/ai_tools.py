@@ -50,7 +50,11 @@ def tool_page(tool_id):
     if not tool:
         flash('Tool not found.', 'error')
         return redirect(url_for('ai_tools.index'))
-    students = Student.query.order_by(Student.last_name, Student.first_name).all()
+    # Scope to the counselor's own caseload — never list other counselors'
+    # students or shadow students (school-wide comparison rows) by name.
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active'
+    ).order_by(Student.last_name, Student.first_name).all()
     recent = AIToolHistory.query.filter_by(
         user_id=current_user.id, tool_id=tool_id
     ).order_by(AIToolHistory.created_at.desc()).limit(5).all()
@@ -257,7 +261,13 @@ def history_detail(entry_id):
 
 def _build_student_context(student_id):
     student = Student.query.get(student_id)
-    if not student:
+    # Ownership guard: never build PII context (name, grade, IEP/504, grades,
+    # attendance) for a student who isn't on this counselor's caseload. Blocks
+    # IDOR via a posted student_id and keeps shadow students out of AI prompts.
+    if not student or (
+        current_user.role != 'admin'
+        and student.assigned_counselor_id != current_user.id
+    ):
         return ''
 
     lines = [f'\n--- STUDENT CONTEXT ---']
@@ -405,7 +415,9 @@ def action_create_followup():
     student_name = ''
     if student_id:
         s = Student.query.get(int(student_id))
-        if s:
+        # Only resolve names for caseload students (never shadows/other caseloads).
+        if s and (current_user.role == 'admin'
+                  or s.assigned_counselor_id == current_user.id):
             student_name = s.display_name
 
     due_date = data.get('due_date')
