@@ -346,6 +346,7 @@ def export_data():
     # and we want stable values to use inside the generator.
     exported_by = current_user.display_name or current_user.username
     school_config_raw = current_user.school_config_json
+    owner_id = current_user.id  # scope the export to this counselor's own data
 
     def emit_array(name, rows, to_dict, leading_comma=True):
         """Yield a JSON array element 'name': [ ... ] with rows streamed in."""
@@ -375,21 +376,30 @@ def export_data():
         yield from emit_array('tags', Tag.query.all(),
                               lambda t: {'name': t.name, 'color': t.color})
 
-        # Exclude shadow students — they're synthetic rows created from
-        # whole-school grade/attendance files for aggregate comparison only,
-        # and must not be serialized into a portable backup (FERPA).
-        students = Student.query.filter_by(is_shadow=False).options(
+        # Scope the export to THIS counselor's own data — never serialize another
+        # counselor's students/notes/records, or shadow students (synthetic rows
+        # from whole-school grade/attendance files), into a portable file. The
+        # catalog blocks below (tags, departments, courses, grad requirements)
+        # are shared config, not student PII.
+        my_student_ids = [row[0] for row in Student.query.filter_by(
+            assigned_counselor_id=owner_id).with_entities(Student.id).all()]
+
+        students = Student.query.filter_by(
+            assigned_counselor_id=owner_id).options(
             selectinload(Student.tags)).all()
         yield from emit_array('students', students, _student_to_dict)
 
-        notes = Note.query.options(joinedload(Note.student)).all()
+        notes = Note.query.filter_by(author_id=owner_id).options(
+            joinedload(Note.student)).all()
         yield from emit_array('notes', notes, _note_to_dict)
 
-        services = ServiceRecord.query.options(joinedload(ServiceRecord.student)).all()
+        services = ServiceRecord.query.filter_by(counselor_id=owner_id).options(
+            joinedload(ServiceRecord.student)).all()
         yield from emit_array('service_records', services, _service_record_to_dict)
 
-        transcripts = TranscriptRecord.query.options(
-            joinedload(TranscriptRecord.student)).all()
+        transcripts = (TranscriptRecord.query.filter(
+            TranscriptRecord.student_id.in_(my_student_ids)).options(
+            joinedload(TranscriptRecord.student)).all() if my_student_ids else [])
         yield from emit_array('transcript_records', transcripts, _transcript_to_dict)
 
         yield from emit_array('departments', Department.query.all(),

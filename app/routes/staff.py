@@ -17,6 +17,7 @@ from app.models.grade import GradeRecord
 from app.models.communication import CommunicationLog
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import caseload_student_or_404
 
 staff_bp = Blueprint('staff', __name__)
 
@@ -298,11 +299,8 @@ def log_communication(staff_id):
         from datetime import timedelta
         follow_up_date = _date.today() + timedelta(days=7)
 
-    student_id = request.form.get('student_id')
-    try:
-        student_id = int(student_id) if student_id else None
-    except ValueError:
-        student_id = None
+    subject = caseload_student_or_404(request.form.get('student_id'), allow_none=True)
+    student_id = subject.id if subject else None
 
     log = CommunicationLog(
         staff_id=staff.id,

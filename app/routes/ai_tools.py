@@ -18,6 +18,7 @@ from app.utils.context_budget import budget_prompt
 from app.utils.audit import log_action
 from app.models.knowledge_base import KnowledgeDocument, KnowledgeChunk
 from app.utils.knowledge_base import build_knowledge_context
+from app.utils.roles import caseload_student_or_404
 
 ai_tools_bp = Blueprint('ai_tools', __name__, template_folder='../templates/ai_tools')
 
@@ -332,9 +333,10 @@ def action_save_note():
     student_id = data.get('student_id')
     if not student_id:
         return jsonify({'ok': False, 'error': 'A student must be linked to save a note'}), 400
+    subject = caseload_student_or_404(student_id)
 
     note = Note(
-        student_id=int(student_id),
+        student_id=subject.id,
         author_id=current_user.id,
         note_type=data.get('note_type', 'observation'),
         title=data.get('title', 'AI-Generated Note'),
@@ -359,9 +361,10 @@ def action_log_service():
     student_id = data.get('student_id')
     if not student_id:
         return jsonify({'ok': False, 'error': 'A student must be linked to log a service'}), 400
+    subject = caseload_student_or_404(student_id)
 
     note = Note(
-        student_id=int(student_id),
+        student_id=subject.id,
         author_id=current_user.id,
         session_date=date.today(),
         note_type=data.get('service_type', 'student_conference'),
@@ -391,6 +394,7 @@ def action_add_calendar():
         tomorrow = date.today() + timedelta(days=1)
         start = datetime.combine(tomorrow, datetime.min.time()).replace(hour=9, minute=0)
 
+    subject = caseload_student_or_404(data.get('student_id'), allow_none=True)
     event = CalendarEvent(
         owner_id=current_user.id,
         title=title,
@@ -398,7 +402,7 @@ def action_add_calendar():
         start_datetime=start,
         end_datetime=start + timedelta(hours=1),
         event_type=data.get('event_type', 'follow_up'),
-        student_id=int(data['student_id']) if data.get('student_id') else None,
+        student_id=subject.id if subject else None,
     )
     db.session.add(event)
     db.session.commit()

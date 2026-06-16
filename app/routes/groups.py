@@ -6,6 +6,7 @@ from app.models.group import (CounselingGroup, GroupMember, GroupSession, GroupA
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import owned_or_404, caseload_student_or_404
 
 groups_bp = Blueprint('groups', __name__)
 
@@ -99,8 +100,8 @@ def edit(id):
 @groups_bp.route('/<int:id>/add-member', methods=['POST'])
 @login_required
 def add_member(id):
-    group = CounselingGroup.query.get_or_404(id)
-    student_id = int(request.form['student_id'])
+    group = owned_or_404(CounselingGroup, id, owner_attr='counselor_id')
+    student_id = caseload_student_or_404(request.form.get('student_id')).id
     if not GroupMember.query.filter_by(group_id=group.id, student_id=student_id).first():
         member = GroupMember(group_id=group.id, student_id=student_id,
                              consent_status=request.form.get('consent_status', 'pending'))

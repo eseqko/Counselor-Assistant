@@ -6,7 +6,7 @@ from app.models.communication import CommunicationLog
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
-from app.utils.roles import owned_or_404
+from app.utils.roles import owned_or_404, caseload_student_or_404
 
 communications_bp = Blueprint('communications', __name__)
 
@@ -42,8 +42,9 @@ def index():
 @login_required
 def add():
     if request.method == 'POST':
+        subject = caseload_student_or_404(request.form.get('student_id'), allow_none=True)
         log = CommunicationLog(
-            student_id=int(request.form['student_id']) if request.form.get('student_id') else None,
+            student_id=subject.id if subject else None,
             counselor_id=current_user.id,
             contact_date=parse_date(request.form.get('contact_date')) or date.today(),
             contact_type=request.form['contact_type'],

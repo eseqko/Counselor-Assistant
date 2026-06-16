@@ -7,6 +7,7 @@ from app.models.document import StudentDocument
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import caseload_student_or_404
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -56,8 +57,9 @@ def add():
             flash(f'File type .{ext} not allowed.', 'danger')
             return redirect(url_for('documents.add'))
 
+        subject = caseload_student_or_404(request.form.get('student_id'))
         doc = StudentDocument(
-            student_id=int(request.form['student_id']),
+            student_id=subject.id,
             counselor_id=current_user.id,
             document_type=request.form['document_type'],
             title=request.form['title'].strip(),

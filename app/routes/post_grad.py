@@ -6,6 +6,7 @@ from app.models.post_grad import PostGradOutcome
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import caseload_student_or_404
 
 post_grad_bp = Blueprint('post_grad', __name__)
 
@@ -48,7 +49,7 @@ def index():
 @login_required
 def add():
     if request.method == 'POST':
-        student_id = int(request.form['student_id'])
+        student_id = caseload_student_or_404(request.form.get('student_id')).id
         existing = PostGradOutcome.query.filter_by(student_id=student_id).first()
         if existing:
             flash('That student already has a post-grad record. Edit instead.', 'warning')
