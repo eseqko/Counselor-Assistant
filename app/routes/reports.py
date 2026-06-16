@@ -11,6 +11,7 @@ from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from app.utils.security import csv_safe
+from app.utils.roles import owned_or_404
 from datetime import date, timedelta
 from collections import defaultdict
 from sqlalchemy import func
@@ -83,7 +84,11 @@ def student_services():
     records = []
     selected_student = None
     if student_id:
-        selected_student = Student.query.get(int(student_id))
+        # Ownership-scoped: the dropdown only lists caseload students, but the
+        # student_id arrives via query string — never resolve a foreign or shadow
+        # student's name/records from a tampered URL (404, no IDOR enumeration).
+        selected_student = owned_or_404(Student, int(student_id),
+                                        owner_attr='assigned_counselor_id')
         records = ServiceRecord.query.filter(
             ServiceRecord.student_id == int(student_id),
             ServiceRecord.date >= date_from,

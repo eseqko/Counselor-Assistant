@@ -6,6 +6,7 @@ from app.models.calendar_event import CalendarEvent
 from app.models.student import Student
 from app.models.user import User
 from app.utils.audit import log_action
+from app.utils.roles import owned_or_404
 from app.utils import google_client, google_calendar
 from app.utils.ics import build_ical_feed
 from datetime import datetime, date, timedelta, timezone
@@ -136,7 +137,9 @@ def add_event():
 @calendar_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_event(id):
-    event = CalendarEvent.query.get_or_404(id)
+    # Owner-scoped: never let a counselor edit another counselor's event (the
+    # title/description can contain student PII).
+    event = owned_or_404(CalendarEvent, id, owner_attr='owner_id')
 
     if request.method == 'POST':
         event.title = request.form['title']
@@ -170,7 +173,7 @@ def edit_event(id):
 @calendar_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_event(id):
-    event = CalendarEvent.query.get_or_404(id)
+    event = owned_or_404(CalendarEvent, id, owner_attr='owner_id')
     log_action('delete', 'calendar_event', event.id)
     db.session.delete(event)
     db.session.commit()
