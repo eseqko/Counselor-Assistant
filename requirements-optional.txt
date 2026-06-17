@@ -1,0 +1,18 @@
+# Optional features — install ONLY if you want them. The app runs fully without
+# these; each is loaded lazily and the related UI degrades gracefully when the
+# package is absent.
+#
+#   pip install -r requirements-optional.txt
+#
+# faster-whisper — on-device audio transcription for Meeting Notes. Pulls in
+#   CTranslate2 + PyTorch, which is a large download (hundreds of MB to a few
+#   GB). Skip it unless you record meetings; everything else works without it.
+faster-whisper==1.1.0
+#
+# google-* — Google Calendar / Forms / Classroom sync. Only useful if your
+#   school runs Google Workspace and you want calendar sync, screener delivery
+#   via Forms, or Classroom posts. Requires a credentials.json from Google
+#   Cloud (see app/utils/google_client.py). Skip for a purely local install.
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.127.0
