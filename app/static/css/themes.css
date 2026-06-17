@@ -540,72 +540,124 @@
 
 
 /* ══════════════════════════════════════════════
-   GLASS THEME — Dark glassmorphism over a warm
-   ambient backdrop. Translucent panels with
-   backdrop-filter blur catch the warm glow
-   underneath, edges lit by soft white borders.
-   Gracefully degrades to an opaque dark surface
-   in browsers without backdrop-filter support.
+   GLASS THEME — Dark glassmorphism on a warm,
+   high-contrast ambient backdrop. The body
+   layers several bright radial "lamp glows" so
+   the backdrop-filter blur has dramatic colour
+   variation to absorb — without that, translucent
+   panels read as flat dark rectangles (the
+   failure mode of v1). Panels are intentionally
+   low-opacity so the warmth bleeds through; the
+   brighter top inset highlight gives the "frosted
+   edge catching light" look from modern
+   glassmorphism UIs. Falls back to opaque dark
+   panels where backdrop-filter is missing.
    ══════════════════════════════════════════════ */
 [data-theme="glass"] {
-    --bg:            #1a1612;
-    --white:         rgba(255, 250, 245, 0.06);
-    --dark:          #f5efe7;
-    --light-gray:    rgba(255, 250, 245, 0.05);
-    --gray:          #b8aea0;
-    --surface:       rgba(40, 32, 28, 0.45);
-    --border:        rgba(255, 245, 230, 0.15);
-    --input-bg:      rgba(30, 25, 22, 0.50);
-    --input-border:  rgba(255, 245, 230, 0.18);
-    --topbar-bg:     rgba(40, 32, 28, 0.45);
-    --hover-bg:      rgba(255, 245, 230, 0.08);
-    --text:          #f5efe7;
-    --text-muted:    #b8aea0;
+    --bg:            #1a120c;
+    --white:         rgba(255, 245, 220, 0.10);
+    --dark:          #faf2e8;
+    --light-gray:    rgba(255, 245, 220, 0.06);
+    --gray:          #c4b8a8;
+    --surface:       rgba(60, 42, 30, 0.30);
+    --border:        rgba(255, 235, 200, 0.22);
+    --input-bg:      rgba(40, 28, 18, 0.45);
+    --input-border:  rgba(255, 235, 200, 0.22);
+    --topbar-bg:     rgba(50, 35, 25, 0.30);
+    --hover-bg:      rgba(255, 235, 200, 0.10);
+    --text:          #faf2e8;
+    --text-muted:    #c4b8a8;
 
-    --primary:       #e8a868;
-    --primary-light: #f0bd87;
+    --primary:       #f0b070;
+    --primary-light: #f7c993;
     --primary-dark:  #c98a4a;
 }
 
-/* Warm ambient background — soft glow spots simulating lamp light, so the
-   blurred panels have something interesting to bite into. Fixed attachment
-   keeps the glow stable while content scrolls. */
+/* Bright, layered warm light sources so the blur has dramatic material to
+   absorb. Positions chosen so the glow sits behind the dashboard's main
+   regions — the stat row across the top, the action items column, and the
+   lower content — so the glass effect actually has variation to reveal
+   wherever a panel sits. */
 [data-theme="glass"] body {
     background:
-        radial-gradient(ellipse at 12% 18%, rgba(232, 168, 104, 0.22), transparent 38%),
-        radial-gradient(ellipse at 88% 78%, rgba(180, 110, 70, 0.22), transparent 42%),
-        radial-gradient(ellipse at 50% 55%, rgba(70, 45, 30, 0.28), transparent 60%),
-        linear-gradient(135deg, #1a1612 0%, #261c16 50%, #1f1812 100%);
+        radial-gradient(circle at 10% 12%, rgba(255, 195, 120, 0.55), transparent 28%),
+        radial-gradient(circle at 88% 18%, rgba(255, 145, 85, 0.45), transparent 30%),
+        radial-gradient(circle at 78% 82%, rgba(220, 110, 70, 0.50), transparent 32%),
+        radial-gradient(circle at 22% 75%, rgba(255, 165, 95, 0.35), transparent 28%),
+        radial-gradient(circle at 50% 50%, rgba(160, 90, 55, 0.30), transparent 50%),
+        linear-gradient(135deg, #1a120c 0%, #2b1c12 25%, #1a120c 50%, #2b1c12 75%, #1a120c 100%);
     background-attachment: fixed;
     color: var(--text);
 }
 
 [data-theme="glass"] .sidebar {
-    background: rgba(28, 22, 18, 0.55);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-right: 1px solid rgba(255, 245, 230, 0.15);
+    background: rgba(30, 20, 14, 0.40);
+    backdrop-filter: blur(40px) saturate(180%) brightness(110%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(110%);
+    border-right: 1px solid rgba(255, 235, 200, 0.22);
+    box-shadow: inset -1px 0 0 rgba(255, 245, 220, 0.10);
 }
 
 [data-theme="glass"] .top-bar {
-    background: rgba(40, 32, 28, 0.45);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-bottom: 1px solid rgba(255, 245, 230, 0.12);
+    background: rgba(50, 35, 25, 0.30);
+    backdrop-filter: blur(40px) saturate(180%) brightness(110%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(110%);
+    border-bottom: 1px solid rgba(255, 235, 200, 0.18);
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
 
 [data-theme="glass"] .card,
 [data-theme="glass"] .stat-card,
 [data-theme="glass"] .kpi-card,
 [data-theme="glass"] .chart-card {
-    background: rgba(40, 32, 28, 0.45);
+    background: rgba(60, 42, 30, 0.28);
+    backdrop-filter: blur(28px) saturate(200%) brightness(115%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(115%);
+    border: 1px solid rgba(255, 235, 200, 0.22);
+    border-radius: 20px;
+    box-shadow:
+        0 14px 40px rgba(0, 0, 0, 0.45),
+        /* Bright top edge — "light catching the frosted glass" */
+        inset 0 1px 0 rgba(255, 245, 220, 0.28),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.20);
+}
+
+/* Stat tiles get a touch more breathing room and presence. */
+[data-theme="glass"] .stat-card {
+    padding: 16px 18px;
+    background: rgba(60, 42, 30, 0.32);
+}
+[data-theme="glass"] .stat-value { color: var(--text); }
+[data-theme="glass"] .stat-label { color: var(--text-muted); }
+
+/* Dashboard quick-action buttons — default uses var(--white) which is fully
+   translucent in this theme, so they need explicit glass styling or vanish. */
+[data-theme="glass"] .dash-action-btn {
+    background: rgba(255, 235, 200, 0.10);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(255, 245, 230, 0.15);
-    border-radius: 16px;
-    box-shadow:
-        0 8px 32px rgba(0, 0, 0, 0.30),
-        inset 0 1px 0 rgba(255, 245, 230, 0.10);
+    border: 1px solid rgba(255, 235, 200, 0.28);
+    color: var(--primary-light);
+    box-shadow: inset 0 1px 0 rgba(255, 245, 220, 0.20);
+}
+[data-theme="glass"] .dash-action-btn:hover {
+    background: rgba(255, 235, 200, 0.18);
+    color: var(--text);
+}
+
+/* Action Items badges (Dashboard) */
+[data-theme="glass"] .alert-badge {
+    background: rgba(60, 42, 30, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 235, 200, 0.22);
+    color: var(--text);
+}
+[data-theme="glass"] .alert-badge.critical {
+    background: rgba(220, 50, 50, 0.30); border-color: rgba(255, 130, 130, 0.40); color: #ffb0b0;
+}
+[data-theme="glass"] .alert-badge.high {
+    background: rgba(230, 130, 30, 0.30); border-color: rgba(255, 180, 100, 0.40); color: #ffd0a0;
 }
 
 [data-theme="glass"] .form-control,
@@ -618,60 +670,62 @@
 [data-theme="glass"] input[type="date"],
 [data-theme="glass"] input[type="search"],
 [data-theme="glass"] input[type="file"] {
-    background: rgba(30, 25, 22, 0.50);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 245, 230, 0.18);
+    background: rgba(40, 28, 18, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 235, 200, 0.22);
     color: var(--text);
 }
 
 [data-theme="glass"] .btn-outline {
-    background: rgba(255, 245, 230, 0.05);
-    border-color: rgba(255, 245, 230, 0.25);
+    background: rgba(255, 235, 200, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-color: rgba(255, 235, 200, 0.28);
     color: var(--text);
 }
-[data-theme="glass"] .btn-outline:hover { background: rgba(255, 245, 230, 0.12); }
+[data-theme="glass"] .btn-outline:hover { background: rgba(255, 235, 200, 0.18); }
 
 [data-theme="glass"] table th {
-    background: rgba(40, 32, 28, 0.55);
+    background: rgba(60, 42, 30, 0.45);
     color: var(--text);
-    border-color: rgba(255, 245, 230, 0.12);
+    border-color: rgba(255, 235, 200, 0.18);
 }
 [data-theme="glass"] table td {
-    background: rgba(40, 32, 28, 0.22);
+    background: rgba(60, 42, 30, 0.18);
     color: var(--text);
-    border-color: rgba(255, 245, 230, 0.10);
+    border-color: rgba(255, 235, 200, 0.12);
 }
 
 [data-theme="glass"] .ferpa-notice {
-    background: rgba(232, 168, 104, 0.14);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(232, 168, 104, 0.30);
-    color: #f0c878;
+    background: rgba(240, 176, 112, 0.16);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(240, 176, 112, 0.40);
+    color: #f7c993;
 }
 
 [data-theme="glass"] .alert-success {
-    background: rgba(34, 197, 94, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(34, 197, 94, 0.35); color: #8eecaa;
+    background: rgba(34, 197, 94, 0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(34, 197, 94, 0.40); color: #8eecaa;
 }
 [data-theme="glass"] .alert-danger {
-    background: rgba(239, 68, 68, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(239, 68, 68, 0.35); color: #f4a8a8;
+    background: rgba(239, 68, 68, 0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(239, 68, 68, 0.40); color: #f4a8a8;
 }
 [data-theme="glass"] .alert-warning {
-    background: rgba(245, 158, 11, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(245, 158, 11, 0.35); color: #f4d28a;
+    background: rgba(245, 158, 11, 0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(245, 158, 11, 0.40); color: #f4d28a;
 }
 [data-theme="glass"] .alert-info {
-    background: rgba(59, 130, 246, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(59, 130, 246, 0.35); color: #94c0f4;
+    background: rgba(59, 130, 246, 0.18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(59, 130, 246, 0.40); color: #94c0f4;
 }
 
 [data-theme="glass"] details summary { color: var(--text); }
 [data-theme="glass"] a { color: var(--primary-light); }
-[data-theme="glass"] .card-header { border-color: rgba(255, 245, 230, 0.15); }
-[data-theme="glass"] hr { border-color: rgba(255, 245, 230, 0.12); }
+[data-theme="glass"] .card-header { border-color: rgba(255, 235, 200, 0.18); }
+[data-theme="glass"] hr { border-color: rgba(255, 235, 200, 0.15); }
 
 /* Fallback: browsers without backdrop-filter get opaque dark panels so content
    stays readable rather than washing into the background. */
@@ -681,5 +735,6 @@
     [data-theme="glass"] .kpi-card,
     [data-theme="glass"] .chart-card,
     [data-theme="glass"] .sidebar,
-    [data-theme="glass"] .top-bar { background: rgba(28, 22, 18, 0.94); }
+    [data-theme="glass"] .top-bar,
+    [data-theme="glass"] .dash-action-btn { background: rgba(28, 18, 12, 0.94); }
 }
