@@ -129,7 +129,7 @@ source venv/bin/activate
 # On Windows:
 venv\Scripts\activate
 
-# 3. Install dependencies
+# 3. Install dependencies (small, fast, fully offline)
 pip install -r requirements.txt
 
 # 4. Launch
@@ -137,6 +137,11 @@ python run.py
 ```
 
 Open your browser to **http://127.0.0.1:5000** -- the setup wizard will guide you through initial configuration.
+
+> **Optional extras:** voice transcription for Meeting Notes and Google Calendar/Forms/Classroom sync are kept out of the base install (faster-whisper pulls in a large PyTorch download). The app is fully functional without them. To add them later:
+> ```bash
+> pip install -r requirements-optional.txt
+> ```
 
 > **Helper scripts:** `install.sh` (Mac/Linux) and `install.bat` (Windows) automate steps 2-3 if you'd rather not run them manually. `start.bat`, `backup.bat`, and `restore.bat` are also included for day-to-day use on Windows.
 
@@ -253,9 +258,10 @@ All data lives in the `data/` directory:
 Counselor-Assistant/
 ├── run.py                  # Entry point (auto-detects Tailscale, COUNSELOR_DEMO mode)
 ├── config.py               # Configuration
-├── requirements.txt        # Full dependencies (including faster-whisper, Google APIs)
-├── requirements-demo.txt   # Slim subset for the USB bundle
-├── requirements-dev.txt    # Adds pytest for the test suite
+├── requirements.txt          # Core dependencies — small, reliable, fully offline
+├── requirements-optional.txt # Voice transcription + Google APIs (large; opt-in)
+├── requirements-demo.txt     # Slim subset for the USB bundle
+├── requirements-dev.txt      # Adds pytest for the test suite
 ├── pytest.ini              # Test configuration
 ├── install.sh / install.bat / start.bat / backup.bat / restore.bat
 ├── TAILSCALE_SETUP.md      # iPhone-via-Tailscale walkthrough

@@ -20,18 +20,22 @@ admin_bp = Blueprint('admin', __name__, template_folder='../templates/admin')
 @admin_required
 def index():
     counselors = User.query.order_by(User.display_name).all()
-    # Exclude shadow students (school-wide comparison data, no counselor assigned).
-    total_students = Student.query.filter_by(status='active', is_shadow=False).count()
+    # Exclude shadow students (school-wide comparison data) and per-user Sample
+    # Students (screener test vehicles) from real caseload metrics.
+    total_students = Student.query.filter_by(
+        status='active', is_shadow=False, is_sample=False).count()
     unassigned = Student.query.filter(
         (Student.assigned_counselor_id == None) | (Student.assigned_counselor_id == 0),
         Student.status == 'active',
         Student.is_shadow == False,
+        Student.is_sample == False,
     ).count()
 
     thirty_days = date.today() - timedelta(days=30)
     stats = []
     for c in counselors:
-        caseload = Student.query.filter_by(assigned_counselor_id=c.id, status='active').count()
+        caseload = Student.query.filter_by(
+            assigned_counselor_id=c.id, status='active', is_sample=False).count()
         notes_30d = Note.query.filter(
             Note.author_id == c.id, Note.session_date >= thirty_days
         ).count()
@@ -154,11 +158,13 @@ def caseload_equity():
 
     equity_data = []
     for c in counselors:
-        students = Student.query.filter_by(assigned_counselor_id=c.id, status='active')
+        students = Student.query.filter_by(
+            assigned_counselor_id=c.id, status='active', is_sample=False)
         total = students.count()
         by_grade = db.session.query(
             Student.grade_level, func.count(Student.id)
-        ).filter_by(assigned_counselor_id=c.id, status='active').group_by(Student.grade_level).all()
+        ).filter_by(assigned_counselor_id=c.id, status='active', is_sample=False
+                    ).group_by(Student.grade_level).all()
         iep_count = students.filter(Student.iep_status == True).count()
         s504_count = students.filter(Student.section_504 == True).count()
         el_count = students.filter(Student.el_status.notin_(['', 'EO', None])).count()
@@ -176,6 +182,7 @@ def caseload_equity():
         (Student.assigned_counselor_id == None) | (Student.assigned_counselor_id == 0),
         Student.status == 'active',
         Student.is_shadow == False,
+        Student.is_sample == False,
     ).order_by(Student.last_name, Student.first_name).all()
 
     return render_template('admin/caseload_equity.html',

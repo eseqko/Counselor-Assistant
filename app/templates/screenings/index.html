@@ -29,6 +29,10 @@
     <div style="font-size:0.78rem;color:var(--gray);">{{ t.questions|length }} questions</div>
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
         <a href="{{ url_for('screenings.administer', tid=t.id) }}" class="btn btn-sm btn-primary">Administer</a>
+        {% if sample %}
+        <a href="{{ url_for('screenings.administer', tid=t.id, student_id=sample.id) }}" class="btn btn-sm btn-outline"
+           title="Try this screener on a Sample Student to preview the results page — never touches your real caseload">&#129514; Test (Sample)</a>
+        {% endif %}
         {% if t.google_form_id %}
         <a href="{{ url_for('screenings.manage_form', tid=t.id) }}" class="btn btn-sm btn-outline" title="Manage Google Form">
             Google Form
@@ -44,6 +48,11 @@
     </div>
 </div>
 {% endmacro %}
+
+<p style="font-size:0.86rem;color:var(--gray);margin:0 0 14px;">
+  &#129514; <strong>Want to try a screener?</strong> Click <strong>Test (Sample)</strong> on any tool to fill it
+  out as a <em>Sample Student</em> and preview the real results page &mdash; it never touches your caseload or analytics.
+</p>
 
 <div class="card">
     <div class="card-header">

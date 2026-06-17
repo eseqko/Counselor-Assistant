@@ -1,4 +1,5 @@
 """AI Assistant routes — powered by local Ollama LLM (FERPA safe)."""
+from __future__ import annotations  # PEP 604 'str | None' annotations on Python 3.9
 import json
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user

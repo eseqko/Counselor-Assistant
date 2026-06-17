@@ -1,3 +1,11 @@
+# Core runtime — everything the app needs to run, fully offline.
+# These are pure-Python or ship prebuilt wheels, so the install is small and
+# reliable on a fresh machine.
+#
+# Optional heavy features (on-device voice transcription, Google Workspace
+# sync) are NOT here — they live in requirements-optional.txt so the base
+# install stays fast and can't stall on a large PyTorch download. The app is
+# fully functional without them.
 Flask==3.1.0
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
@@ -10,7 +18,3 @@ openpyxl==3.1.5
 pytz==2024.1
 requests==2.32.3
 PyPDF2==3.0.1
-faster-whisper==1.1.0
-google-auth==2.29.0
-google-auth-oauthlib==1.2.0
-google-api-python-client==2.127.0

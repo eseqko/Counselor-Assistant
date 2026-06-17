@@ -6,24 +6,11 @@
 (function () {
   'use strict';
 
-  /* ── CDN URLs for lazy-loaded libs ── */
-  const MAMMOTH_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js';
-  const PDFJS_CDN   = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+  /* ── Vendored pdf.js (local copy — no network, works fully offline) ── */
+  const PDFJS_LOCAL        = '../vendor/pdfjs-4.9.155/pdf.min.mjs';
+  const PDFJS_WORKER_LOCAL = '../vendor/pdfjs-4.9.155/pdf.worker.min.mjs';
 
-  let mammothLoaded = false;
-  let pdfjsLoaded   = false;
-
-  /* ── Lazy-load helper ── */
-  function loadScript(url) {
-    return new Promise((resolve, reject) => {
-      if (document.querySelector(`script[src="${url}"]`)) { resolve(); return; }
-      const s = document.createElement('script');
-      s.src = url;
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Failed to load ' + url));
-      document.head.appendChild(s);
-    });
-  }
+  let pdfjsLoaded = false;
 
   async function loadESModule(url) {
     return await import(url);
@@ -37,10 +24,11 @@
     switch (ext) {
       case 'txt': case 'text': case 'md':
         return await readAsText(file);
-      case 'docx':
-        return await extractDocx(file);
       case 'pdf':
         return await extractPdf(file);
+      case 'docx':
+        throw new Error('.docx is not supported in the offline version — ' +
+          'save the catalog as a PDF or paste its text below.');
       default:
         throw new Error('Unsupported file type: .' + ext);
     }
@@ -55,38 +43,14 @@
     });
   }
 
-  async function extractDocx(file) {
-    if (!mammothLoaded) {
-      await loadScript(MAMMOTH_CDN);
-      mammothLoaded = true;
-    }
-    const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
-  }
-
   async function extractPdf(file) {
     if (!pdfjsLoaded) {
-      try {
-        const pdfjs = await loadESModule(PDFJS_CDN);
-        window.pdfjsLib = pdfjs;
-        // Set worker to use bundled worker
-        if (pdfjs.GlobalWorkerOptions) {
-          pdfjs.GlobalWorkerOptions.workerSrc =
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
-        }
-        pdfjsLoaded = true;
-      } catch {
-        // Fallback: try loading as regular script
-        await loadScript(
-          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-        );
-        if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        }
-        pdfjsLoaded = true;
+      const pdfjs = await loadESModule(PDFJS_LOCAL);
+      window.pdfjsLib = pdfjs;
+      if (pdfjs.GlobalWorkerOptions) {
+        pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_LOCAL;
       }
+      pdfjsLoaded = true;
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -326,220 +290,6 @@
     return s.toLowerCase().split(/\s+/).map((w, i) =>
       (i === 0 || !lowers.includes(w)) ? w.charAt(0).toUpperCase() + w.slice(1) : w
     ).join(' ');
-  }
-
-  /* ═══════════════════════════════════════
-     AI PARSER — Claude API integration
-  ═══════════════════════════════════════ */
-  const API_KEY_LS = 'catalog_ai_api_key';
-  const API_MODEL_LS = 'catalog_ai_model';
-
-  const COURSE_SCHEMA_PROMPT = `You are a course catalog parser. Extract structured course data from the provided text.
-
-Return ONLY a JSON array (no markdown fences, no explanation). Each object must have these fields:
-- "name": string — course title in Title Case
-- "dept": string — one of: social-science, english, mathematics, science, lote, vpa, cte, pe, electives, special-ed
-- "grade": string — grade levels (e.g. "9-12", "10", "11-12")
-- "credits": string — total credits (e.g. "10", "5")
-- "ag": string — UC/CSU a-g area letter (a-g) or "" if none
-- "type": string — one of: ap, cp, eld, sp
-- "code": string — course ID/code if found, or ""
-- "prereq": string — prerequisites text, or "None"
-- "desc": string — course description (2-4 sentences). IMPORTANT: extract the FULL description from the text, do not abbreviate or summarize.
-
-IMPORTANT extraction priorities:
-1. Look for detailed course description sections (often in tables or repeated columns). These contain Course IDs, grade levels, credits, a-g areas, prerequisites, AND full descriptions. ALWAYS prefer these detailed sections over brief course listings.
-2. Course codes/IDs are numeric identifiers like "20011", "21000/21001", "23100/23101". They are NOT optional — extract them when present.
-3. Descriptions are the paragraph-length text explaining what students learn in the course. They are usually the longest text block for each course entry. Extract the FULL description, not just the first sentence.
-4. If the same course appears in both a brief listing and a detailed description section, merge the data — use the code from the listing and the description from the detailed section.
-
-Department mapping guide:
-- social-science: history, government, economics, psychology, sociology
-- english: English, literature, writing, journalism, ELD/ESL
-- mathematics: math, algebra, geometry, calculus, statistics
-- science: biology, chemistry, physics, anatomy, environmental science
-- lote: Spanish, French, Filipino, Mandarin, other world languages
-- vpa: art, music, band, choir, drama, theater, dance, ceramics
-- cte: career/technical education, business, engineering, culinary, computer science
-- pe: physical education, health, fitness, sports
-- electives: interdisciplinary electives, film studies, robotics, data science
-- special-ed: special education, IEP-based courses, study skills, tutorials
-
-Type mapping: AP courses = "ap", ELD/ELA courses = "eld", Special Ed = "sp", everything else = "cp"
-
-Parse ALL courses you can find. If a field is unclear, use your best judgment.`;
-
-  function getApiKey() {
-    return localStorage.getItem(API_KEY_LS) || '';
-  }
-
-  function setApiKey(key) {
-    // Reject masked/non-ASCII values to prevent fetch header errors
-    if (key && /^[\x20-\x7E]+$/.test(key)) localStorage.setItem(API_KEY_LS, key);
-    else if (!key) localStorage.removeItem(API_KEY_LS);
-  }
-
-  function getApiModel() {
-    return localStorage.getItem(API_MODEL_LS) || 'claude-sonnet-4-6';
-  }
-
-  function setApiModel(model) {
-    localStorage.setItem(API_MODEL_LS, model);
-  }
-
-  async function aiParse(text, onProgress) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error('No API key configured. Add your Anthropic API key first.');
-
-    const model = getApiModel();
-
-    // Truncate very long texts to stay within token limits
-    const maxChars = 400000;
-    let inputText = text;
-    if (inputText.length > maxChars) {
-      inputText = inputText.substring(0, maxChars);
-      if (onProgress) onProgress('Text truncated to ' + maxChars.toLocaleString() + ' chars for API limits.');
-    }
-
-    if (onProgress) onProgress('Sending to Claude (' + model + ')... this may take 30-60 seconds for large catalogs.');
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: 64000,
-        messages: [{
-          role: 'user',
-          content: COURSE_SCHEMA_PROMPT + '\n\n--- BEGIN CATALOG TEXT ---\n' + inputText + '\n--- END CATALOG TEXT ---'
-        }]
-      })
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      if (response.status === 401) throw new Error('Invalid API key. Check your Anthropic API key.');
-      if (response.status === 429) throw new Error('Rate limited. Wait a moment and try again.');
-      throw new Error('API error (' + response.status + '): ' + (err.error?.message || 'Unknown error'));
-    }
-
-    const data = await response.json();
-
-    // Debug: log entire response structure
-    console.log('AI response structure:', {
-      stop_reason: data.stop_reason,
-      content_blocks: data.content?.length,
-      types: data.content?.map(b => b.type),
-      usage: data.usage
-    });
-
-    // Try all text content blocks, not just the first
-    let content = '';
-    if (Array.isArray(data.content)) {
-      content = data.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('\n');
-    }
-    const stopReason = data.stop_reason;
-
-    if (!content) {
-      console.error('AI response had no text content. Full response:', JSON.stringify(data).substring(0, 2000));
-      throw new Error('AI returned an empty response (stop_reason: ' + stopReason +
-        '). This may mean the input was too large or the model refused. Try a smaller file.');
-    }
-
-    if (onProgress) onProgress('Parsing ' + content.length + ' chars of response (stop: ' + stopReason + ')...');
-
-    // Extract JSON array from response
-    let jsonStr = content.trim();
-
-    // Strip markdown fences — try multiple patterns
-    // Pattern 1: standard ```json ... ``` block
-    let fenceMatch = jsonStr.match(/```(?:json)?\s*\n([\s\S]+)\n\s*```/);
-    if (fenceMatch) {
-      jsonStr = fenceMatch[1].trim();
-    } else {
-      // Pattern 2: fences without trailing newline (e.g. ```json[...]```)
-      fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]+?)```/);
-      if (fenceMatch) jsonStr = fenceMatch[1].trim();
-    }
-
-    // Find the JSON array
-    let arrStart = jsonStr.indexOf('[');
-    if (arrStart === -1) {
-      // Log full response for debugging
-      console.error('AI response (no JSON array found):', content);
-      throw new Error('AI response did not contain a JSON array (' + content.length +
-        ' chars received, stop_reason: ' + stopReason +
-        '). Check browser console for full response. Preview: "' +
-        content.substring(0, 300).replace(/\n/g, ' ') + '"');
-    }
-
-    let arrEnd = jsonStr.lastIndexOf(']');
-    let truncated = false;
-
-    // If response was truncated (hit max_tokens), the JSON is incomplete
-    if (arrEnd === -1 || (stopReason === 'max_tokens' && arrEnd < jsonStr.length - 5)) {
-      truncated = true;
-      // Try to recover: find the last complete object by finding the last "},"
-      const lastComplete = jsonStr.lastIndexOf('},');
-      if (lastComplete > arrStart) {
-        jsonStr = jsonStr.substring(arrStart, lastComplete + 1) + ']';
-      } else {
-        const lastObj = jsonStr.lastIndexOf('}');
-        if (lastObj > arrStart) {
-          jsonStr = jsonStr.substring(arrStart, lastObj + 1) + ']';
-        } else {
-          throw new Error('AI response was truncated and could not be recovered. Try a smaller catalog or use Heuristic parsing.');
-        }
-      }
-    } else {
-      jsonStr = jsonStr.substring(arrStart, arrEnd + 1);
-    }
-
-    let courses;
-    try {
-      courses = JSON.parse(jsonStr);
-    } catch (e) {
-      // One more attempt: try to fix common trailing issues
-      try {
-        // Remove trailing comma before ]
-        const fixed = jsonStr.replace(/,\s*\]$/, ']');
-        courses = JSON.parse(fixed);
-      } catch {
-        throw new Error('Failed to parse AI response as JSON. ' +
-          (truncated ? 'Response was truncated — try a smaller file or Heuristic parsing.' : e.message));
-      }
-    }
-
-    if (!Array.isArray(courses)) throw new Error('AI response was not an array.');
-
-    if (truncated && onProgress) {
-      onProgress('Note: Response was truncated. Recovered ' + courses.length + ' courses — some may be missing.');
-    }
-
-    // Validate and normalize each course
-    const validDepts = ['social-science','english','mathematics','science','lote','vpa','cte','pe','electives','special-ed'];
-    const validTypes = ['ap','cp','eld','sp'];
-
-    return courses.map((c, i) => ({
-      id: 'ai' + (i + 1),
-      name: String(c.name || '').trim(),
-      dept: validDepts.includes(c.dept) ? c.dept : guessDepartment(c.name || '', c.desc || ''),
-      grade: String(c.grade || '').trim(),
-      credits: String(c.credits || '10').trim(),
-      ag: String(c.ag || '').trim().toLowerCase(),
-      type: validTypes.includes(c.type) ? c.type : 'cp',
-      code: String(c.code || '').trim(),
-      prereq: String(c.prereq || 'None').trim(),
-      desc: String(c.desc || '').trim()
-    })).filter(c => c.name);
   }
 
   /* ═══════════════════════════════════════
@@ -832,11 +582,6 @@ Parse ALL courses you can find. If a field is unclear, use your best judgment.`;
     extractText,
     heuristicParse,
     parseInfoPages,
-    aiParse,
-    getApiKey,
-    setApiKey,
-    getApiModel,
-    setApiModel,
     // Expose sub-parsers for testing
     _parseTableMarkerFormat: parseTableMarkerFormat,
     _parseGenericFormat: parseGenericFormat
