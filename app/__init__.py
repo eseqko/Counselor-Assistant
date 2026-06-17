@@ -36,6 +36,25 @@ def _add_missing_indexes(app):
     db.session.commit()
 
 
+def _schema_cache_path(app):
+    """Path to the schema-hash sentinel, kept NEXT TO the database file.
+
+    Deliberately not in app.instance_path: that directory is shared across every
+    run, so a throwaway test/demo database (which gets every column via
+    create_all and therefore writes an "all current" hash) would otherwise
+    suppress the column migration of a real, older database on the next startup
+    — surfacing as "no such column" 500s. A per-database sentinel keeps each
+    database honest. Returns None for in-memory DBs (so we always introspect).
+    """
+    uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    prefix = 'sqlite:///'
+    if uri.startswith(prefix):
+        db_path = uri[len(prefix):]
+        if db_path and db_path != ':memory:':
+            return os.path.join(os.path.dirname(os.path.abspath(db_path)), '.schema_hash')
+    return None
+
+
 def _add_missing_columns(app):
     """Add any columns defined in models but missing from the SQLite database.
 
@@ -50,13 +69,13 @@ def _add_missing_columns(app):
         )).encode()
     ).hexdigest()
 
-    cache_file = os.path.join(app.instance_path, '.schema_hash')
-    os.makedirs(app.instance_path, exist_ok=True)
-    try:
-        if os.path.isfile(cache_file) and open(cache_file).read().strip() == schema_sig:
-            return
-    except OSError:
-        pass
+    cache_file = _schema_cache_path(app)
+    if cache_file:
+        try:
+            if os.path.isfile(cache_file) and open(cache_file).read().strip() == schema_sig:
+                return
+        except OSError:
+            pass
 
     inspector = sqlalchemy.inspect(db.engine)
     changed = False
@@ -86,8 +105,13 @@ def _add_missing_columns(app):
     if changed:
         db.session.commit()
 
-    with open(cache_file, 'w') as f:
-        f.write(schema_sig)
+    if cache_file:
+        try:
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            with open(cache_file, 'w') as f:
+                f.write(schema_sig)
+        except OSError:
+            pass
 
 
 def create_app(config_class=Config):
