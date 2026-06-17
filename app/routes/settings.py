@@ -65,7 +65,8 @@ def update_theme():
     """Save theme preference (called from JS)."""
     data = request.get_json(silent=True) or {}
     theme = data.get('theme', 'light')
-    if theme not in ('light', 'dark', 'school', 'focus', 'auto', 'fiesta', 'glass'):
+    if theme not in ('light', 'dark', 'school', 'focus', 'auto', 'fiesta',
+                     'glass', 'glass-blue', 'glass-navy'):
         theme = 'light'
     current_user.theme_preference = theme
     current_user.reduced_motion = bool(data.get('reduced_motion', False))

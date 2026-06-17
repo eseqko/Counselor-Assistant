@@ -8,7 +8,7 @@ var ThemeManager = (function() {
     // Keep in sync with the server-side whitelists (settings.py / setup.py) and
     // the theme pickers (base.html user menu + settings/index.html). A name not
     // listed here silently falls back to 'light' in setTheme().
-    var VALID = ['light', 'dark', 'school', 'focus', 'auto', 'fiesta', 'glass'];
+    var VALID = ['light', 'dark', 'school', 'focus', 'auto', 'fiesta', 'glass', 'glass-blue', 'glass-navy'];
     var root = document.documentElement;
 
     // ── Color math helpers (self-contained, no dependencies) ──
