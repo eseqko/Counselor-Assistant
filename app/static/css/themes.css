@@ -555,11 +555,19 @@
 [data-theme="glass"] {                  /* Amber (warm) */
     --bg: #1a120c;
     --text: #faf2e8;  --text-muted: #c4b8a8;
+    /* CRITICAL: these tokens are used as TEXT COLORS by style.css (e.g.
+       .btn-primary `color: var(--white)`, body `color: var(--dark)`,
+       sidebar `color: var(--white)`). They MUST stay solid bright values —
+       making them translucent makes button text + body text invisible. The
+       --glass-* tokens below are what handle the translucent surfaces. */
+    --white: #faf2e8;  --dark: #faf2e8;  --gray: #c4b8a8;  --light-gray: rgba(255,235,200,0.10);
     --primary: #f0b070;  --primary-light: #f7c993;  --primary-dark: #c98a4a;
+    --border: rgba(255,235,200,0.22);
     --glass-sidebar: rgba(30,20,14,0.40);
     --glass-topbar:  rgba(50,35,25,0.30);
-    --glass-panel:   rgba(60,42,30,0.28);
-    --glass-panel-2: rgba(60,42,30,0.32);
+    --glass-panel:   rgba(60,42,30,0.34);
+    --glass-panel-2: rgba(60,42,30,0.40);
+    --glass-header:  rgba(70,50,36,0.45);
     --glass-border:  rgba(255,235,200,0.22);
     --glass-highlight: rgba(255,245,220,0.28);
     --glass-input:   rgba(40,28,18,0.45);
@@ -587,11 +595,15 @@
 [data-theme="glass-blue"] {             /* Sky (bright cool blue) */
     --bg: #0c1828;
     --text: #eaf3ff;  --text-muted: #a8c0db;
+    /* See "CRITICAL" note in [data-theme="glass"] above — these are text colors. */
+    --white: #eaf3ff;  --dark: #eaf3ff;  --gray: #a8c0db;  --light-gray: rgba(200,225,255,0.10);
     --primary: #5aa8f0;  --primary-light: #8cc5f7;  --primary-dark: #3a7fc8;
+    --border: rgba(200,225,255,0.24);
     --glass-sidebar: rgba(14,26,44,0.40);
     --glass-topbar:  rgba(20,36,56,0.30);
-    --glass-panel:   rgba(40,70,110,0.28);
-    --glass-panel-2: rgba(40,70,110,0.32);
+    --glass-panel:   rgba(40,70,110,0.34);
+    --glass-panel-2: rgba(40,70,110,0.42);
+    --glass-header:  rgba(50,85,130,0.50);
     --glass-border:  rgba(200,225,255,0.24);
     --glass-highlight: rgba(220,240,255,0.30);
     --glass-input:   rgba(18,32,52,0.45);
@@ -619,31 +631,40 @@
 [data-theme="glass-navy"] {             /* Navy (deep, moody) */
     --bg: #070b18;
     --text: #e6ebf5;  --text-muted: #98a3c0;
+    /* See "CRITICAL" note in [data-theme="glass"] above — these are text colors. */
+    --white: #e6ebf5;  --dark: #e6ebf5;  --gray: #98a3c0;  --light-gray: rgba(180,200,255,0.10);
     --primary: #7da3e8;  --primary-light: #a3c0f5;  --primary-dark: #5577bb;
+    --border: rgba(180,200,255,0.22);
     --glass-sidebar: rgba(10,14,30,0.45);
     --glass-topbar:  rgba(14,20,40,0.35);
-    --glass-panel:   rgba(30,42,75,0.30);
-    --glass-panel-2: rgba(30,42,75,0.34);
-    --glass-border:  rgba(180,200,255,0.20);
-    --glass-highlight: rgba(200,215,255,0.24);
+    --glass-panel:   rgba(40,55,95,0.42);
+    --glass-panel-2: rgba(40,55,95,0.50);
+    --glass-header:  rgba(50,68,115,0.55);
+    --glass-border:  rgba(180,200,255,0.22);
+    --glass-highlight: rgba(200,215,255,0.26);
     --glass-input:   rgba(14,20,40,0.50);
     --glass-hover:   rgba(180,200,255,0.10);
-    --glass-th:      rgba(30,42,75,0.50);
-    --glass-td:      rgba(30,42,75,0.20);
+    --glass-th:      rgba(40,55,95,0.55);
+    --glass-td:      rgba(40,55,95,0.25);
     --glass-action:  rgba(180,200,255,0.10);
     --glass-action-hover: rgba(180,200,255,0.18);
     --glass-accent-bg: rgba(125,163,232,0.16);
     --glass-accent-border: rgba(125,163,232,0.40);
     --glass-fallback: rgba(7,11,24,0.95);
 }
+/* Navy needs MORE light sources than the warm/blue variants. The original gradient
+   left huge dead zones where the card-header would sit, making panels look like
+   solid black boxes. More + brighter + larger spots so every region has something
+   for the blur to absorb. */
 [data-theme="glass-navy"] body {
     background:
-        radial-gradient(circle at 12% 14%, rgba(70,110,210,0.42), transparent 30%),
-        radial-gradient(circle at 85% 20%, rgba(95,85,205,0.36), transparent 32%),
-        radial-gradient(circle at 80% 80%, rgba(50,90,190,0.40), transparent 34%),
-        radial-gradient(circle at 25% 78%, rgba(80,100,180,0.30), transparent 30%),
-        radial-gradient(circle at 50% 50%, rgba(40,55,120,0.32), transparent 55%),
-        linear-gradient(135deg, #070b18 0%, #111a38 30%, #070b18 60%, #111a38 85%, #070b18 100%);
+        radial-gradient(circle at 8% 10%, rgba(100,150,255,0.55), transparent 30%),
+        radial-gradient(circle at 92% 12%, rgba(140,110,230,0.45), transparent 32%),
+        radial-gradient(circle at 50% 30%, rgba(80,130,230,0.30), transparent 40%),
+        radial-gradient(circle at 15% 60%, rgba(120,140,230,0.40), transparent 35%),
+        radial-gradient(circle at 85% 70%, rgba(90,130,220,0.45), transparent 35%),
+        radial-gradient(circle at 50% 92%, rgba(70,110,200,0.40), transparent 40%),
+        linear-gradient(135deg, #0a1024 0%, #1a2856 30%, #0a1024 60%, #1a2856 85%, #0a1024 100%);
     background-attachment: fixed;
     color: var(--text);
 }
@@ -680,7 +701,24 @@
 [data-theme^="glass"] .stat-card { padding: 16px 18px; background: var(--glass-panel-2); }
 [data-theme^="glass"] .stat-value { color: var(--text); }
 [data-theme^="glass"] .stat-label { color: var(--text-muted); }
-[data-theme^="glass"] .card-header { color: var(--text); border-color: var(--glass-border); }
+/* Card header gets its own subtle glass tint — without this the header sits in
+   the "dead zone" near the top of the card (no body glow behind it) and reads
+   as a solid dark block. The slight bg + the .card's top inset highlight gives
+   it visible presence. Drops the slate-on-warm-glass clash that v3 had. */
+[data-theme^="glass"] .card-header {
+    background: var(--glass-header);
+    color: var(--text);
+    border-bottom: 1px solid var(--glass-border);
+    border-radius: 20px 20px 0 0;
+}
+/* Make any inline-styled card-header (some templates set a hard color: #1e40af
+   for the "Get Started" onboarding card) get a glass-friendly tint instead. */
+[data-theme^="glass"] .card-header[style*="color:"] { color: var(--primary-light) !important; }
+/* Catch-all for elements that hardcode slate via base CSS or inline styles.
+   These show up as dim slate text on dark glass. */
+[data-theme^="glass"] .text-muted,
+[data-theme^="glass"] .muted,
+[data-theme^="glass"] small { color: var(--text-muted); }
 
 [data-theme^="glass"] .dash-action-btn {
     background: var(--glass-action);
