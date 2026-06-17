@@ -537,3 +537,149 @@
         animation-duration: 0s !important;
     }
 }
+
+
+/* ══════════════════════════════════════════════
+   GLASS THEME — Dark glassmorphism over a warm
+   ambient backdrop. Translucent panels with
+   backdrop-filter blur catch the warm glow
+   underneath, edges lit by soft white borders.
+   Gracefully degrades to an opaque dark surface
+   in browsers without backdrop-filter support.
+   ══════════════════════════════════════════════ */
+[data-theme="glass"] {
+    --bg:            #1a1612;
+    --white:         rgba(255, 250, 245, 0.06);
+    --dark:          #f5efe7;
+    --light-gray:    rgba(255, 250, 245, 0.05);
+    --gray:          #b8aea0;
+    --surface:       rgba(40, 32, 28, 0.45);
+    --border:        rgba(255, 245, 230, 0.15);
+    --input-bg:      rgba(30, 25, 22, 0.50);
+    --input-border:  rgba(255, 245, 230, 0.18);
+    --topbar-bg:     rgba(40, 32, 28, 0.45);
+    --hover-bg:      rgba(255, 245, 230, 0.08);
+    --text:          #f5efe7;
+    --text-muted:    #b8aea0;
+
+    --primary:       #e8a868;
+    --primary-light: #f0bd87;
+    --primary-dark:  #c98a4a;
+}
+
+/* Warm ambient background — soft glow spots simulating lamp light, so the
+   blurred panels have something interesting to bite into. Fixed attachment
+   keeps the glow stable while content scrolls. */
+[data-theme="glass"] body {
+    background:
+        radial-gradient(ellipse at 12% 18%, rgba(232, 168, 104, 0.22), transparent 38%),
+        radial-gradient(ellipse at 88% 78%, rgba(180, 110, 70, 0.22), transparent 42%),
+        radial-gradient(ellipse at 50% 55%, rgba(70, 45, 30, 0.28), transparent 60%),
+        linear-gradient(135deg, #1a1612 0%, #261c16 50%, #1f1812 100%);
+    background-attachment: fixed;
+    color: var(--text);
+}
+
+[data-theme="glass"] .sidebar {
+    background: rgba(28, 22, 18, 0.55);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-right: 1px solid rgba(255, 245, 230, 0.15);
+}
+
+[data-theme="glass"] .top-bar {
+    background: rgba(40, 32, 28, 0.45);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 245, 230, 0.12);
+}
+
+[data-theme="glass"] .card,
+[data-theme="glass"] .stat-card,
+[data-theme="glass"] .kpi-card,
+[data-theme="glass"] .chart-card {
+    background: rgba(40, 32, 28, 0.45);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 245, 230, 0.15);
+    border-radius: 16px;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.30),
+        inset 0 1px 0 rgba(255, 245, 230, 0.10);
+}
+
+[data-theme="glass"] .form-control,
+[data-theme="glass"] select,
+[data-theme="glass"] textarea,
+[data-theme="glass"] input[type="text"],
+[data-theme="glass"] input[type="email"],
+[data-theme="glass"] input[type="password"],
+[data-theme="glass"] input[type="number"],
+[data-theme="glass"] input[type="date"],
+[data-theme="glass"] input[type="search"],
+[data-theme="glass"] input[type="file"] {
+    background: rgba(30, 25, 22, 0.50);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 245, 230, 0.18);
+    color: var(--text);
+}
+
+[data-theme="glass"] .btn-outline {
+    background: rgba(255, 245, 230, 0.05);
+    border-color: rgba(255, 245, 230, 0.25);
+    color: var(--text);
+}
+[data-theme="glass"] .btn-outline:hover { background: rgba(255, 245, 230, 0.12); }
+
+[data-theme="glass"] table th {
+    background: rgba(40, 32, 28, 0.55);
+    color: var(--text);
+    border-color: rgba(255, 245, 230, 0.12);
+}
+[data-theme="glass"] table td {
+    background: rgba(40, 32, 28, 0.22);
+    color: var(--text);
+    border-color: rgba(255, 245, 230, 0.10);
+}
+
+[data-theme="glass"] .ferpa-notice {
+    background: rgba(232, 168, 104, 0.14);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(232, 168, 104, 0.30);
+    color: #f0c878;
+}
+
+[data-theme="glass"] .alert-success {
+    background: rgba(34, 197, 94, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(34, 197, 94, 0.35); color: #8eecaa;
+}
+[data-theme="glass"] .alert-danger {
+    background: rgba(239, 68, 68, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(239, 68, 68, 0.35); color: #f4a8a8;
+}
+[data-theme="glass"] .alert-warning {
+    background: rgba(245, 158, 11, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(245, 158, 11, 0.35); color: #f4d28a;
+}
+[data-theme="glass"] .alert-info {
+    background: rgba(59, 130, 246, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(59, 130, 246, 0.35); color: #94c0f4;
+}
+
+[data-theme="glass"] details summary { color: var(--text); }
+[data-theme="glass"] a { color: var(--primary-light); }
+[data-theme="glass"] .card-header { border-color: rgba(255, 245, 230, 0.15); }
+[data-theme="glass"] hr { border-color: rgba(255, 245, 230, 0.12); }
+
+/* Fallback: browsers without backdrop-filter get opaque dark panels so content
+   stays readable rather than washing into the background. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    [data-theme="glass"] .card,
+    [data-theme="glass"] .stat-card,
+    [data-theme="glass"] .kpi-card,
+    [data-theme="glass"] .chart-card,
+    [data-theme="glass"] .sidebar,
+    [data-theme="glass"] .top-bar { background: rgba(28, 22, 18, 0.94); }
+}
