@@ -5,6 +5,7 @@ from flask import Blueprint, render_template
 from flask_login import login_required, current_user
 from app.models.student import Student
 from app.models.grade import GradeRecord
+from app.utils.roles import owned_or_404
 
 graduation_bp = Blueprint('graduation', __name__)
 
@@ -398,7 +399,9 @@ def index():
 @login_required
 def student_detail(student_id):
     """Detailed credit audit for a single student."""
-    student = Student.query.get_or_404(student_id)
+    # Caseload-scoped: never render another counselor's (or a shadow student's)
+    # name, transcript, and credit audit from a guessed URL id.
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     data = _build_student_grad_data(student)
 
     # Get grade records for the detailed view

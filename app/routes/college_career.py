@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student
 from app.models.college_career import CollegeCareerPlan, CollegeApplication, TestScore
+from app.utils.roles import owned_or_404
 
 college_career_bp = Blueprint('college_career', __name__)
 
@@ -112,7 +113,7 @@ def index():
 @college_career_bp.route('/student/<int:student_id>')
 @login_required
 def student_plan(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     plan = student.college_career_plan
     if not plan:
         return render_template('college_career/student_plan.html',
@@ -131,7 +132,7 @@ def student_plan(student_id):
 @college_career_bp.route('/student/<int:student_id>/create', methods=['POST'])
 @login_required
 def create_plan(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     if student.college_career_plan:
         flash('Plan already exists for this student.', 'warning')
         return redirect(url_for('college_career.student_plan', student_id=student_id))
@@ -150,7 +151,7 @@ def create_plan(student_id):
 @college_career_bp.route('/student/<int:student_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_plan(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     plan = student.college_career_plan
     if not plan:
         flash('No plan exists yet. Create one first.', 'warning')
@@ -190,7 +191,7 @@ def edit_plan(student_id):
 @college_career_bp.route('/student/<int:student_id>/application/add', methods=['GET', 'POST'])
 @login_required
 def add_application(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     plan = student.college_career_plan
     if not plan:
         flash('Create a college plan first.', 'warning')
@@ -265,7 +266,7 @@ def delete_application(app_id):
 @college_career_bp.route('/student/<int:student_id>/test/add', methods=['GET', 'POST'])
 @login_required
 def add_test(student_id):
-    student = Student.query.get_or_404(student_id)
+    student = owned_or_404(Student, student_id, owner_attr='assigned_counselor_id')
     plan = student.college_career_plan
     if not plan:
         flash('Create a college plan first.', 'warning')

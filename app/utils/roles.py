@@ -31,3 +31,24 @@ def owned_or_404(model, obj_id, owner_attr='counselor_id'):
         abort(404)
     return obj
 
+
+def caseload_student_or_404(student_id, allow_none=False):
+    """Validate a request-supplied student_id belongs to the current caseload.
+
+    Use on every create/update path that persists a student_id from form/JSON
+    input, so a counselor can't attach a note/goal/referral/etc. to (and then
+    view the name of) another counselor's student or a shadow student. Admins
+    bypass. Returns the Student, or None when allow_none and no id was given;
+    otherwise aborts 404 (no IDOR enumeration).
+    """
+    from app.models.student import Student
+    if student_id in (None, '', 0, '0'):
+        if allow_none:
+            return None
+        abort(404)
+    try:
+        sid = int(student_id)
+    except (TypeError, ValueError):
+        abort(404)
+    return owned_or_404(Student, sid, owner_attr='assigned_counselor_id')
+

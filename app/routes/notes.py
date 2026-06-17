@@ -6,6 +6,7 @@ from app.models.student import Student
 from app.models.calendar_event import CalendarEvent
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
+from app.utils.roles import caseload_student_or_404
 from datetime import date, datetime, timedelta
 
 notes_bp = Blueprint('notes', __name__)
@@ -85,8 +86,9 @@ def index():
 @login_required
 def add_note():
     if request.method == 'POST':
+        subject = caseload_student_or_404(request.form.get('student_id'))
         note = Note(
-            student_id=int(request.form['student_id']),
+            student_id=subject.id,
             author_id=current_user.id,
             note_type=request.form['note_type'],
             title=request.form.get('title', ''),

@@ -6,7 +6,7 @@ from app.models.intervention import InterventionPlan, InterventionProgress
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
-from app.utils.roles import owned_or_404
+from app.utils.roles import owned_or_404, caseload_student_or_404
 
 interventions_bp = Blueprint('interventions', __name__)
 
@@ -51,8 +51,9 @@ def index():
 @login_required
 def add():
     if request.method == 'POST':
+        subject = caseload_student_or_404(request.form.get('student_id'))
         plan = InterventionPlan(
-            student_id=int(request.form['student_id']),
+            student_id=subject.id,
             counselor_id=current_user.id,
             tier=int(request.form.get('tier', 1)),
             concern_area=request.form['concern_area'],

@@ -126,10 +126,15 @@ def add():
             is_confidential='is_confidential' in request.form,
         )
 
-        # Link mentioned students
+        # Link mentioned students — restricted to the author's own caseload so a
+        # hand-crafted @[name](id) marker can't surface a foreign or shadow
+        # student's DB name/grade/ID on the rendered note.
         student_ids = _extract_student_ids(raw_content)
         if student_ids:
-            students = Student.query.filter(Student.id.in_(student_ids)).all()
+            students = Student.query.filter(
+                Student.id.in_(student_ids),
+                Student.assigned_counselor_id == current_user.id,
+            ).all()
             note.students = students
 
         db.session.add(note)
@@ -187,9 +192,12 @@ def edit(note_id):
         note.note_format = request.form.get('note_format', note.note_format or 'flow')
         note.is_confidential = 'is_confidential' in request.form
 
-        # Re-link students from content
+        # Re-link students from content — caseload-scoped (see add()).
         student_ids = _extract_student_ids(raw_content)
-        note.students = Student.query.filter(Student.id.in_(student_ids)).all() if student_ids else []
+        note.students = Student.query.filter(
+            Student.id.in_(student_ids),
+            Student.assigned_counselor_id == current_user.id,
+        ).all() if student_ids else []
 
         db.session.commit()
         log_action('update', 'meeting_note', note.id)

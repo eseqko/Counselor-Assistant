@@ -6,6 +6,7 @@ from app.models.calendar_event import CalendarEvent
 from app.models.student import Student
 from app.models.user import User
 from app.utils.audit import log_action
+from app.utils.roles import owned_or_404, caseload_student_or_404
 from app.utils import google_client, google_calendar
 from app.utils.ics import build_ical_feed
 from datetime import datetime, date, timedelta, timezone
@@ -105,6 +106,7 @@ def add_event():
             return redirect(url_for('calendar.index'))
 
         event_type = request.form.get('event_type', 'appointment')
+        subject = caseload_student_or_404(request.form.get('student_id'), allow_none=True)
         event = CalendarEvent(
             owner_id=current_user.id,
             title=request.form['title'],
@@ -115,7 +117,7 @@ def add_event():
             all_day=all_day,
             event_type=event_type,
             color=CalendarEvent.EVENT_COLORS.get(event_type, '#4A90D9'),
-            student_id=int(request.form['student_id']) if request.form.get('student_id') else None,
+            student_id=subject.id if subject else None,
             reminder_minutes=int(request.form.get('reminder_minutes', 15)),
         )
         db.session.add(event)
@@ -136,7 +138,9 @@ def add_event():
 @calendar_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_event(id):
-    event = CalendarEvent.query.get_or_404(id)
+    # Owner-scoped: never let a counselor edit another counselor's event (the
+    # title/description can contain student PII).
+    event = owned_or_404(CalendarEvent, id, owner_attr='owner_id')
 
     if request.method == 'POST':
         event.title = request.form['title']
@@ -145,7 +149,8 @@ def edit_event(id):
         event.event_type = request.form.get('event_type', 'appointment')
         event.color = CalendarEvent.EVENT_COLORS.get(event.event_type, '#4A90D9')
         event.all_day = 'all_day' in request.form
-        event.student_id = int(request.form['student_id']) if request.form.get('student_id') else None
+        subject = caseload_student_or_404(request.form.get('student_id'), allow_none=True)
+        event.student_id = subject.id if subject else None
         event.status = request.form.get('status', 'scheduled')
 
         try:
@@ -170,7 +175,7 @@ def edit_event(id):
 @calendar_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_event(id):
-    event = CalendarEvent.query.get_or_404(id)
+    event = owned_or_404(CalendarEvent, id, owner_attr='owner_id')
     log_action('delete', 'calendar_event', event.id)
     db.session.delete(event)
     db.session.commit()

@@ -8,6 +8,8 @@ from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from app.utils.google_client import is_connected
+from app.utils.roles import owned_or_404
+from app.utils.caseload import caseload_student_ids
 
 screenings_bp = Blueprint('screenings', __name__)
 
@@ -192,9 +194,15 @@ def administer(tid):
 
         total, severity, interp = _calc_score(template, responses)
 
+        # Validate the posted student_id is on this counselor's caseload before
+        # binding a result to it — blocks administering (and later viewing) a
+        # screening against a foreign or shadow student id.
+        subject = owned_or_404(Student, int(request.form['student_id']),
+                               owner_attr='assigned_counselor_id')
+
         result = ScreeningResult(
             template_id=template.id,
-            student_id=int(request.form['student_id']),
+            student_id=subject.id,
             counselor_id=current_user.id,
             administered_date=parse_date(request.form.get('administered_date')) or date.today(),
             responses_json=json.dumps(responses),
@@ -218,7 +226,7 @@ def administer(tid):
 @screenings_bp.route('/result/<int:id>')
 @login_required
 def view_result(id):
-    result = ScreeningResult.query.get_or_404(id)
+    result = owned_or_404(ScreeningResult, id, owner_attr='counselor_id')
     log_action('view', 'screening_result', result.id)
     return render_template('screenings/view_result.html', result=result,
         questions=result.template.questions, responses=result.responses)
@@ -227,7 +235,7 @@ def view_result(id):
 @screenings_bp.route('/result/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_result(id):
-    result = ScreeningResult.query.get_or_404(id)
+    result = owned_or_404(ScreeningResult, id, owner_attr='counselor_id')
     if request.method == 'POST':
         result.notes = request.form.get('notes', '').strip()
         result.action_taken = request.form.get('action_taken', '').strip()
@@ -241,7 +249,7 @@ def edit_result(id):
 @screenings_bp.route('/result/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_result(id):
-    result = ScreeningResult.query.get_or_404(id)
+    result = owned_or_404(ScreeningResult, id, owner_attr='counselor_id')
     log_action('delete', 'screening_result', result.id)
     db.session.delete(result)
     db.session.commit()
@@ -445,10 +453,18 @@ def save_imported_responses(tid):
 
     response_ids = request.form.getlist('response_id')
     imported = 0
+    # Only allow binding imported responses to caseload students — skip any
+    # foreign or shadow student id posted in the form.
+    caseload_ids = set(caseload_student_ids(current_user))
 
     for resp_id in response_ids:
         student_id = request.form.get(f'student_{resp_id}')
         if not student_id:
+            continue
+        try:
+            if int(student_id) not in caseload_ids:
+                continue
+        except (TypeError, ValueError):
             continue
 
         marker = f'gform_resp_{resp_id}'
