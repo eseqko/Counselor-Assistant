@@ -9,7 +9,7 @@ from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from app.utils.google_client import is_connected
 from app.utils.roles import owned_or_404
-from app.utils.caseload import caseload_student_ids
+from app.utils.caseload import caseload_student_ids, get_or_create_sample_student
 
 screenings_bp = Blueprint('screenings', __name__)
 
@@ -171,10 +171,14 @@ def index():
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
 
+    # A per-counselor "Sample Student" lets you try any screener and see the real
+    # result page without using a real student (excluded from caseload/analytics).
+    sample = get_or_create_sample_student(current_user)
+
     google_connected = is_connected(current_user)
     return render_template('screenings/index.html',
         templates=templates, results=results, students=students,
-        student_id=student_id, google_connected=google_connected)
+        sample=sample, student_id=student_id, google_connected=google_connected)
 
 
 @screenings_bp.route('/template/<int:tid>/administer', methods=['GET', 'POST'])

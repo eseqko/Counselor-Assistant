@@ -34,6 +34,10 @@ class Student(db.Model):
     # comparison reports but aren't on any counselor's caseload. Invisible to all
     # caseload UI (filtered out everywhere), surfaced only in aggregate analytics.
     is_shadow = db.Column(db.Boolean, default=False, index=True)
+    # A per-counselor "Sample Student" for trying out screeners (and other tools)
+    # without using a real student. Usable in tool dropdowns, but excluded from
+    # caseload rosters, counts, and analytics so it never skews real data.
+    is_sample = db.Column(db.Boolean, default=False, index=True)
 
     # Status
     status = db.Column(db.String(20), default='active', index=True)

@@ -55,7 +55,9 @@ def index():
     tag_filter = request.args.get('tag', '')
     el_filter = request.args.get('el_status', '')
 
-    query = Student.query.filter_by(assigned_counselor_id=current_user.id)
+    # Exclude the per-user Sample Student (screener test vehicle) from the roster.
+    query = Student.query.filter_by(assigned_counselor_id=current_user.id).filter(
+        Student.is_sample == False)
 
     if status:
         query = query.filter_by(status=status)
