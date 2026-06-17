@@ -413,13 +413,20 @@
             var subtitle = document.getElementById('sidebar-subtitle');
             var emoji = document.getElementById('sidebar-mascot-emoji');
 
-            /* Apply school colors to sidebar */
-            if (cfg.colors && cfg.colors.primary) {
+            /* Apply school colors to the sidebar — ONLY in the school theme, so
+               dark / glass / fiesta keep their own themed sidebar instead of the
+               (often bright) school gradient overriding them via inline style. */
+            if (cfg.colors && cfg.colors.primary
+                    && document.documentElement.dataset.theme === 'school') {
                 var p = cfg.colors.primary;
                 var s = cfg.colors.secondary || p;
                 sidebar.style.background = 'linear-gradient(180deg, ' + darkenHex(p, 15) + ', ' + p + ')';
                 /* Accent line using secondary color */
                 header.style.borderBottom = '2px solid ' + s;
+            } else if (sidebar) {
+                /* Non-school theme: clear any previously-applied inline override. */
+                sidebar.style.background = '';
+                if (header) header.style.borderBottom = '';
             }
 
             /* School name */
