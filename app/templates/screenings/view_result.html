@@ -29,7 +29,13 @@
             </table>
             <table>
                 {% if scoring_type == 'sum' %}
-                <tr><td style="font-weight:600;width:40%;">Total Score</td><td><strong style="font-size:1.4rem;">{{ result.total_score }}</strong></td></tr>
+                {# Compute max possible total once for "X out of MAX" context. #}
+                {% set sum_ranges = scoring.get('ranges', []) if scoring else [] %}
+                {% set sum_max = sum_ranges[-1]['max'] if sum_ranges else 0 %}
+                <tr><td style="font-weight:600;width:40%;">Total Score</td><td>
+                    <strong style="font-size:1.4rem;">{{ result.total_score }}</strong>
+                    {% if sum_max %}<span style="color:var(--gray);font-size:0.9rem;"> out of {{ sum_max }}</span>{% endif %}
+                </td></tr>
                 <tr><td style="font-weight:600;">Severity</td><td>
                     {% set sev_lower = (result.severity or '')|lower %}
                     {% if sev_lower in ('severe', 'high', 'moderately severe') %}<span class="badge badge-danger">{{ result.severity }}</span>
@@ -48,6 +54,170 @@
         {% if scoring_type == 'sum' and result.interpretation %}
         <div style="margin-top:14px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
             <strong>Interpretation:</strong> {{ result.interpretation }}
+        </div>
+        {% endif %}
+
+        {# ── Understanding this score (sum-scored screeners only) ───────────
+           Opens a modal that puts the raw score in context: a visual band
+           scale, every band's meaning, the items most contributing to the
+           current band, and what the next-better band looks like. Works for
+           both directions (higher=better like Connectedness, lower=better
+           like PHQ-9) by ranking severities. #}
+        {% if scoring_type == 'sum' and sum_ranges %}
+        {% set current_score = result.total_score or 0 %}
+        {% set sev_rank = {'none': 0, 'minimal': 1, 'low': 2, 'mild': 3,
+                           'moderate': 4, 'moderately_severe': 5,
+                           'high': 6, 'severe': 7} %}
+        {% set first_sev = (sum_ranges[0].get('severity', '')|lower)|replace(' ', '_') %}
+        {% set last_sev = (sum_ranges[-1].get('severity', '')|lower)|replace(' ', '_') %}
+        {# higher_is_better = severities IMPROVE as score climbs (e.g. School Connectedness).
+           Otherwise lower-is-better (clinical screeners like PHQ-9/GAD-7/ACEs). #}
+        {% set higher_is_better = sev_rank.get(first_sev, 0) > sev_rank.get(last_sev, 0) %}
+        {% set ns = namespace(cur_idx=0) %}
+        {% for r in sum_ranges %}
+            {% if r['min'] <= current_score <= r['max'] %}{% set ns.cur_idx = loop.index0 %}{% endif %}
+        {% endfor %}
+        {% set cur_band = sum_ranges[ns.cur_idx] %}
+        {% if higher_is_better %}
+            {% set next_band = sum_ranges[ns.cur_idx + 1] if ns.cur_idx + 1 < sum_ranges|length else None %}
+        {% else %}
+            {% set next_band = sum_ranges[ns.cur_idx - 1] if ns.cur_idx > 0 else None %}
+        {% endif %}
+
+        {# Focus-area items: the questions whose responses are pulling the score
+           AWAY from a better band. If higher=better, pick lowest-rated items
+           (room to grow). If lower=better, pick highest-rated items (the
+           symptoms or concerns contributing most). Show the bottom/top 3. #}
+        {% set scored_items = [] %}
+        {% for q in questions %}
+            {% set v = responses.get(q.id, '0') %}
+            {% set vi = v|int(default=0) %}
+            {% if scored_items.append((vi, q)) %}{% endif %}
+        {% endfor %}
+        {% if higher_is_better %}
+            {% set focus = (scored_items|sort(attribute=0))[:3] %}
+            {% set focus_heading = 'Strengthen these areas to lift your score' %}
+        {% else %}
+            {% set focus = (scored_items|sort(attribute=0, reverse=True))[:3] %}
+            {% set focus_heading = 'The items contributing most to this score' %}
+        {% endif %}
+
+        <button type="button" onclick="document.getElementById('explainScoreModal').style.display='flex'"
+                style="margin-top:12px;background:transparent;border:1px solid var(--primary);color:var(--primary);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:0.86rem;font-weight:600;">
+            &#9432; Understanding this score
+        </button>
+
+        <div id="explainScoreModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center;padding:20px;"
+             onclick="if(event.target===this)this.style.display='none';">
+            <div style="background:var(--surface,#fff);max-width:720px;width:100%;max-height:90vh;overflow-y:auto;border-radius:10px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,0.25);">
+                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;gap:12px;">
+                    <h2 style="margin:0;font-size:1.25rem;">Understanding This Score</h2>
+                    <button type="button" onclick="document.getElementById('explainScoreModal').style.display='none'"
+                            style="background:transparent;border:none;font-size:1.5rem;cursor:pointer;line-height:1;color:var(--gray);" aria-label="Close">&times;</button>
+                </div>
+                <p style="color:var(--gray);font-size:0.88rem;margin:0 0 18px;">
+                    {{ result.template.name }} &mdash; {{ result.student.display_name }}
+                </p>
+
+                <p style="font-size:1.05rem;margin:0 0 6px;">
+                    Score: <strong>{{ current_score }} out of {{ sum_max }}</strong>
+                    &nbsp;&middot;&nbsp;
+                    Band: <strong>{{ cur_band['label'] }}</strong> ({{ cur_band['min'] }}&ndash;{{ cur_band['max'] }})
+                </p>
+                <p style="color:var(--gray);font-size:0.82rem;margin:0 0 14px;">
+                    {% if higher_is_better %}On this screener, <strong>higher scores are stronger</strong>.{% else %}On this screener, <strong>lower scores indicate fewer concerns</strong>.{% endif %}
+                </p>
+
+                {# Visual band scale #}
+                <div style="margin:14px 0 26px;">
+                    <div style="display:flex;height:30px;border-radius:6px;overflow:hidden;border:1px solid var(--border);">
+                        {% for r in sum_ranges %}
+                            {% set band_size = (r['max'] - r['min'] + 1) %}
+                            {% set sev = (r.get('severity', '')|lower)|replace(' ', '_') %}
+                            {% if sev in ('severe', 'high', 'moderately_severe') %}{% set color = '#dc2626' %}
+                            {% elif sev == 'moderate' %}{% set color = '#f59e0b' %}
+                            {% elif sev == 'mild' or sev == 'low' %}{% set color = '#3b82f6' %}
+                            {% else %}{% set color = '#10b981' %}{% endif %}
+                            <div style="flex:{{ band_size }};background:{{ color }};display:flex;align-items:center;justify-content:center;color:white;font-size:0.74rem;font-weight:600;padding:0 4px;text-align:center;overflow:hidden;"
+                                 title="{{ r['label'] }}: {{ r['min'] }}&ndash;{{ r['max'] }}">{{ r['label'] }}</div>
+                        {% endfor %}
+                    </div>
+                    {# Score marker — positioned across the full range. #}
+                    {% set marker_pct = (current_score / sum_max * 100) if sum_max else 0 %}
+                    <div style="position:relative;height:36px;margin-top:2px;">
+                        <div style="position:absolute;left:{{ marker_pct }}%;transform:translateX(-50%);text-align:center;">
+                            <div style="font-size:0.9rem;line-height:1;color:var(--primary);">&#9650;</div>
+                            <div style="font-size:0.74rem;color:var(--gray);margin-top:2px;white-space:nowrap;">You: {{ current_score }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {# All bands explained #}
+                <h3 style="margin:18px 0 8px;font-size:1.0rem;">What each band means</h3>
+                <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+                    <thead>
+                        <tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--gray);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.4px;">
+                            <th style="padding:6px 8px;">Range</th>
+                            <th style="padding:6px 8px;">Band</th>
+                            <th style="padding:6px 8px;">What it means</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in sum_ranges %}
+                        <tr style="{% if loop.index0 == ns.cur_idx %}background:#fef3c7;{% endif %}border-bottom:1px solid var(--border);">
+                            <td style="padding:8px;font-family:monospace;white-space:nowrap;vertical-align:top;">{{ r['min'] }}&ndash;{{ r['max'] }}</td>
+                            <td style="padding:8px;vertical-align:top;">
+                                <strong>{{ r['label'] }}</strong>
+                                {% if loop.index0 == ns.cur_idx %}<div style="font-size:0.72rem;color:var(--primary);font-weight:600;">&larr; Current</div>{% endif %}
+                            </td>
+                            <td style="padding:8px;color:var(--gray);">{{ r.get('action', '') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {# Focus areas — items most pulling the score toward / from a better band #}
+                {% if focus %}
+                <h3 style="margin:22px 0 8px;font-size:1.0rem;">{{ focus_heading }}</h3>
+                <p style="color:var(--gray);font-size:0.82rem;margin:0 0 8px;">
+                    {% if higher_is_better %}
+                        These items were rated lowest. Each one is a concrete lever &mdash; conversations, supports, and goals that move these will lift the overall score.
+                    {% else %}
+                        These items were rated highest. They're driving the current band the most and are the natural focus of follow-up.
+                    {% endif %}
+                </p>
+                <ul style="margin:0;padding-left:18px;">
+                    {% for vi, q in focus %}
+                        {% set option = (q.options|selectattr('value', 'equalto', vi)|list|first) if q.options else None %}
+                        <li style="margin-bottom:6px;">
+                            {{ q.text }}
+                            <span style="color:var(--gray);font-size:0.84rem;">&mdash; rated &ldquo;{{ option.label if option else vi }}&rdquo;</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {# Toward the next band — direction-aware (only when a better band exists) #}
+                {% if next_band %}
+                <h3 style="margin:22px 0 8px;font-size:1.0rem;">
+                    Toward &ldquo;{{ next_band['label'] }}&rdquo; ({{ next_band['min'] }}&ndash;{{ next_band['max'] }})
+                </h3>
+                <p style="margin:0;color:var(--text,#333);">{{ next_band.get('action', '') }}</p>
+                {% elif higher_is_better %}
+                <p style="margin-top:18px;color:var(--gray);font-style:italic;">You're already in the strongest band &mdash; keep doing what's working and watch for changes over time.</p>
+                {% else %}
+                <p style="margin-top:18px;color:var(--gray);font-style:italic;">You're already in the lowest-concern band on this screener.</p>
+                {% endif %}
+
+                <div style="margin-top:24px;padding-top:14px;border-top:1px solid var(--border);font-size:0.78rem;color:var(--gray);">
+                    Screening tools support clinical judgment &mdash; they don't replace it. Use this with what you know about the student.
+                </div>
+
+                <div style="text-align:right;margin-top:14px;">
+                    <button type="button" onclick="document.getElementById('explainScoreModal').style.display='none'"
+                            style="background:var(--primary);color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:600;">Close</button>
+                </div>
+            </div>
         </div>
         {% endif %}
 
