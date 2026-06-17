@@ -114,6 +114,49 @@ def _add_missing_columns(app):
             pass
 
 
+def _run_data_migrations(app):
+    """Apply one-time DATA migrations not yet recorded for THIS database.
+
+    Complements _add_missing_columns (schema drift) with versioned data
+    backfills/transforms from app/migrations.py. Each migration runs once, in
+    registry order, inside its own transaction, and is recorded in the
+    schema_migrations table. A failing migration is rolled back and logged, then
+    halts the run (it stays unrecorded and retries next start) — it never bricks
+    startup and never applies a later migration out of order.
+    """
+    import sqlalchemy
+    from datetime import datetime, timezone
+    from app.migrations import MIGRATIONS
+
+    engine = db.engine
+    # Track applied versions in-database (intrinsically per-DB). Raw DDL keeps
+    # this infra table out of the ORM metadata and the schema-hash signature.
+    with engine.begin() as conn:
+        conn.execute(sqlalchemy.text(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"))
+        applied = {row[0] for row in conn.execute(
+            sqlalchemy.text("SELECT version FROM schema_migrations"))}
+
+    for version, description, fn in sorted(MIGRATIONS, key=lambda m: m[0]):
+        if version in applied:
+            continue
+        try:
+            with engine.begin() as conn:          # atomic: fn + version record
+                fn(conn)
+                conn.execute(
+                    sqlalchemy.text(
+                        "INSERT INTO schema_migrations (version, applied_at) "
+                        "VALUES (:v, :t)"),
+                    {'v': version, 't': datetime.now(timezone.utc).isoformat()})
+            app.logger.info(f"Applied data migration {version}: {description}")
+        except Exception as e:
+            app.logger.error(
+                f"Data migration {version} FAILED ({e}); rolled back, will retry "
+                f"next start. Halting remaining migrations.")
+            break
+
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -385,8 +428,11 @@ def create_app(config_class=Config):
         db.create_all()
 
         # Auto-migrate: add any missing columns/indexes to existing tables
+        # (schema drift), then run one-time data backfills/transforms (data
+        # drift). Schema must come first so migrations can rely on the columns.
         _add_missing_columns(app)
         _add_missing_indexes(app)
+        _run_data_migrations(app)
 
         # Seed district school calendars (idempotent, non-destructive)
         try:
