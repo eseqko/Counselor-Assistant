@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transcript Reviewer — Graduation, a-g &amp; CTE Analysis</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs" type="module"></script>
+    <script src="../vendor/pdfjs-4.9.155/pdf.min.mjs" type="module"></script>
     <style>
         :root {
             --primary: #1a365d;
@@ -357,8 +357,8 @@
 // ============================================================
 // PDF.js Setup
 // ============================================================
-const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs');
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs';
+const pdfjsLib = await import('../vendor/pdfjs-4.9.155/pdf.min.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = '../vendor/pdfjs-4.9.155/pdf.worker.min.mjs';
 
 // ============================================================
 // Graduation Requirements
