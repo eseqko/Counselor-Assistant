@@ -179,13 +179,80 @@
 
 /* ══════════════════════════════════════════════
    SCHOOL THEME
-   Variables are set dynamically via JS from
-   school_config_json — no static overrides needed.
-   This selector just adjusts structural elements.
+   Variables (--primary, --primary-light/-dark,
+   --bg, --border, --hover-bg) are set dynamically
+   by theme-manager.js applySchoolColors() from
+   school_config_json. The rules here add structural
+   polish that uses those tokens — no static colours
+   so the theme stays true to the school's identity
+   whatever palette it has. None of the selectors
+   here overlap with the [data-theme^="glass"] rules
+   added in this branch (different prefix).
    ══════════════════════════════════════════════ */
 [data-theme="school"] .card,
 [data-theme="school"] .stat-card {
     border-top: 2px solid var(--primary);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+/* Filter bar (Caseload, Activity Log, Reports) — defaults to
+   `background: var(--bg)` which on School is a very washed-out lightened
+   primary. Lift it to a true white card with a school-primary top accent
+   and a soft shadow — same visual weight as a .card without the side
+   border. Reads as "page filter" rather than "tinted strip". */
+[data-theme="school"] .filter-bar {
+    background: #ffffff;
+    border-top: 3px solid var(--primary);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+    margin-bottom: 18px;
+}
+[data-theme="school"] .filter-bar label {
+    color: var(--primary-dark);
+    font-weight: 600;
+}
+
+/* Card header — gentle school-primary tint background using color-mix so
+   every school's palette gets a subtle, on-brand wash without me hardcoding
+   percentages of someone else's colour. (color-mix has been baseline in
+   Chrome/Edge/Firefox/Safari since late 2022.) The bottom border picks up
+   the same tint at higher opacity. */
+[data-theme="school"] .card-header {
+    background: color-mix(in srgb, var(--primary) 6%, white);
+    border-bottom: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+    color: var(--primary-dark);
+}
+
+/* Table headers + row hover use the same school-primary tint family so the
+   whole page reads as one coherent palette instead of slate-grey thead with
+   slate row hover. */
+[data-theme="school"] table thead th {
+    background: color-mix(in srgb, var(--primary) 8%, white);
+    color: var(--primary-dark);
+    border-bottom: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+}
+[data-theme="school"] table tbody tr:hover {
+    background: color-mix(in srgb, var(--primary) 5%, white);
+}
+
+/* Top bar gets a hairline of the school primary so the header strip and the
+   card below it visually connect (replaces the abrupt white-to-pale-bg
+   transition you can see when scrolling the Caseload). */
+[data-theme="school"] .top-bar {
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Dashboard quick-action buttons match the school-primary accent. */
+[data-theme="school"] .dash-action-btn {
+    border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+    color: var(--primary-dark);
+}
+[data-theme="school"] .dash-action-btn:hover {
+    background: color-mix(in srgb, var(--primary) 6%, white);
+    border-color: var(--primary);
+    color: var(--primary-dark);
 }
 
 
