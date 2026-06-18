@@ -31,10 +31,14 @@ def _is_empty(v):
 def get_school_config(user):
     """Return ``user``'s complete school-config dict.
 
-    Parses ``school_config_json`` (tolerating bad/missing JSON) and backfills
+    Parses ``school_config_json`` (tolerating bad/missing JSON), backfills
     ``schoolName`` from the ``school_name`` column when the blob doesn't carry
-    it — so a caller always sees the authoritative name even if some save path
-    wrote the blob without it.
+    it, and DERIVES ``setupComplete`` from presence of meaningful identity (a
+    school name plus a primary colour) — so a user who set things up through
+    any surface (main-app wizard, profile form, settings import) is treated as
+    "configured" by the Catalog Wiki view, which gates on that flag. Without
+    this derivation the in-app catalog iframe sent users back to setup even
+    though they'd already provided everything it needs.
     """
     cfg = {}
     raw = getattr(user, 'school_config_json', None)
@@ -47,6 +51,13 @@ def get_school_config(user):
             cfg = {}
     if not cfg.get('schoolName') and getattr(user, 'school_name', None):
         cfg['schoolName'] = user.school_name
+    # Only DERIVE the flag — never overwrite an explicit False (e.g. a user
+    # who deliberately reset setup in the catalog form).
+    if 'setupComplete' not in cfg:
+        has_name = bool(cfg.get('schoolName'))
+        has_colour = bool((cfg.get('colors') or {}).get('primary'))
+        if has_name and has_colour:
+            cfg['setupComplete'] = True
     return cfg
 
 

@@ -77,3 +77,31 @@ def test_present_empty_clears_owned_field():
     u = _user(school_config_json=json.dumps({'logoUrl': 'http://x/logo.png'}))
     merge_school_config(u, {'logoUrl': ''}, commit=False)
     assert get_school_config(u).get('logoUrl') == ''
+
+
+def test_setup_complete_derived_from_name_and_colour():
+    """The in-app Course Catalog iframe gates on setupComplete: a user who set
+    school identity via the main-app wizard / profile (which never write the
+    flag) must still be treated as 'configured' so the iframe renders the
+    catalog instead of bouncing back to setup."""
+    u = _user(school_name='Lincoln',
+              school_config_json=json.dumps({
+                  'schoolName': 'Lincoln', 'colors': {'primary': '#111'}}))
+    assert get_school_config(u).get('setupComplete') is True
+
+
+def test_setup_complete_not_derived_without_colour():
+    u = _user(school_name='Lincoln',
+              school_config_json=json.dumps({'schoolName': 'Lincoln'}))
+    assert 'setupComplete' not in get_school_config(u)
+
+
+def test_explicit_setup_complete_false_is_preserved():
+    """A user who intentionally reset setup (setupComplete: False) must NOT be
+    auto-promoted by the derivation."""
+    u = _user(school_name='Lincoln',
+              school_config_json=json.dumps({
+                  'schoolName': 'Lincoln',
+                  'colors': {'primary': '#111'},
+                  'setupComplete': False}))
+    assert get_school_config(u).get('setupComplete') is False
