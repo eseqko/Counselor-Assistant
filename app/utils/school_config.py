@@ -52,12 +52,12 @@ def get_school_config(user):
     if not cfg.get('schoolName') and getattr(user, 'school_name', None):
         cfg['schoolName'] = user.school_name
     # Only DERIVE the flag — never overwrite an explicit False (e.g. a user
-    # who deliberately reset setup in the catalog form).
-    if 'setupComplete' not in cfg:
-        has_name = bool(cfg.get('schoolName'))
-        has_colour = bool((cfg.get('colors') or {}).get('primary'))
-        if has_name and has_colour:
-            cfg['setupComplete'] = True
+    # who deliberately reset setup in the catalog form). A school NAME is the
+    # only required field of the catalog's setup form, so its presence means the
+    # user is configured enough for the catalog to render rather than bounce
+    # back to setup.
+    if 'setupComplete' not in cfg and cfg.get('schoolName'):
+        cfg['setupComplete'] = True
     return cfg
 
 

@@ -132,10 +132,9 @@
 
 <div class="catalog-frame-wrap">
     <iframe id="catalogFrame"
-            src="{{ url_for('static', filename='course_catalog/index.html') }}"
+            src="about:blank"
             title="Virtual Course Catalog"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            loading="lazy"></iframe>
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
 </div>
 
 <!-- Embed Code Modal -->
@@ -159,13 +158,45 @@
 {% endblock %}
 {% block scripts %}
 <script>
-function switchCatalogView(page, btn) {
+/* The catalog iframe is a standalone static page that gates on
+   school_config.setupComplete. Rather than depend on it reading the right
+   localStorage (timing/sharing across a sandboxed iframe is unreliable), we
+   hand it the authoritative SERVER config — plus the browser's courses/info —
+   directly through its URL #config= hash, the same mechanism the working
+   "Standalone" button uses. This guarantees a configured user lands on the
+   catalog instead of flashing to setup. */
+var SERVER_SCHOOL_CONFIG = {{ school_config|tojson|safe if school_config else '{}' }};
+
+function buildCatalogSrc(page) {
     var base = '{{ url_for("static", filename="course_catalog/") }}';
-    document.getElementById('catalogFrame').src = base + page;
+    var payload = { school_config: {} };
+    try {
+        var sc = localStorage.getItem('school_config');
+        var local = sc ? JSON.parse(sc) : {};
+        // Server is authoritative for identity + setupComplete; keep any extra
+        // browser-only fields (e.g. unsynced edits) underneath.
+        payload.school_config = Object.assign({}, local, SERVER_SCHOOL_CONFIG || {});
+        var courses = localStorage.getItem('jhs_catalog_courses');
+        if (courses) payload.courses = JSON.parse(courses);
+        var info = localStorage.getItem('jhs_catalog_info');
+        if (info) payload.info = JSON.parse(info);
+    } catch (e) { payload.school_config = SERVER_SCHOOL_CONFIG || {}; }
+    var url = base + page;
+    if (payload.school_config && Object.keys(payload.school_config).length) {
+        url += '#config=' + encodeURIComponent(JSON.stringify(payload));
+    }
+    return url;
+}
+
+function switchCatalogView(page, btn) {
+    document.getElementById('catalogFrame').src = buildCatalogSrc(page);
     var btns = document.querySelectorAll('.catalog-toolbar .tab-btn:not(#btnSync)');
     for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
     btn.classList.add('active');
 }
+
+/* Load the initial Catalog view with the config baked into the hash. */
+document.getElementById('catalogFrame').src = buildCatalogSrc('index.html');
 
 function syncCoursesToDB() {
     var btn = document.getElementById('btnSync');
@@ -220,12 +251,15 @@ function syncCoursesToDB() {
 }
 
 function injectConfigToPublic(e) {
-    // Append config hash so the standalone page gets school identity + courses
+    // Append config hash so the standalone page gets school identity + courses.
+    // Merge the authoritative SERVER config on top so the shared page reflects
+    // the same identity/setup state as the in-app view.
     e.preventDefault();
     var payload = {};
     try {
         var sc = localStorage.getItem('school_config');
-        if (sc) payload.school_config = JSON.parse(sc);
+        var local = sc ? JSON.parse(sc) : {};
+        payload.school_config = Object.assign({}, local, SERVER_SCHOOL_CONFIG || {});
         var courses = localStorage.getItem('jhs_catalog_courses');
         if (courses) payload.courses = JSON.parse(courses);
         var info = localStorage.getItem('jhs_catalog_info');
@@ -233,7 +267,7 @@ function injectConfigToPublic(e) {
     } catch (ex) {}
 
     var url = '{{ url_for("course_catalog.public_catalog") }}';
-    if (payload.school_config || payload.courses) {
+    if ((payload.school_config && Object.keys(payload.school_config).length) || payload.courses) {
         url += '#config=' + encodeURIComponent(JSON.stringify(payload));
     }
     window.open(url, '_blank');

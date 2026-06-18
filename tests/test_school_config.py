@@ -36,7 +36,10 @@ def test_get_backfills_name_from_column():
 
 
 def test_get_tolerates_bad_or_missing_json():
-    assert get_school_config(_user(school_name='X', school_config_json='not json{')) == {'schoolName': 'X'}
+    # Bad JSON falls back to the column name (+ derived setupComplete).
+    assert get_school_config(_user(school_name='X', school_config_json='not json{')) == \
+        {'schoolName': 'X', 'setupComplete': True}
+    # No name anywhere -> empty (and no setup derivation).
     assert get_school_config(_user(school_name='', school_config_json=None)) == {}
 
 
@@ -79,20 +82,21 @@ def test_present_empty_clears_owned_field():
     assert get_school_config(u).get('logoUrl') == ''
 
 
-def test_setup_complete_derived_from_name_and_colour():
-    """The in-app Course Catalog iframe gates on setupComplete: a user who set
-    school identity via the main-app wizard / profile (which never write the
-    flag) must still be treated as 'configured' so the iframe renders the
-    catalog instead of bouncing back to setup."""
-    u = _user(school_name='Lincoln',
-              school_config_json=json.dumps({
-                  'schoolName': 'Lincoln', 'colors': {'primary': '#111'}}))
-    assert get_school_config(u).get('setupComplete') is True
+def test_setup_complete_derived_from_name_alone():
+    """The in-app Course Catalog iframe gates on setupComplete; a school name is
+    the only required setup field, so its presence (even without colours) means
+    a user configured via any surface is treated as set up and the iframe
+    renders the catalog instead of bouncing back to setup."""
+    assert get_school_config(_user(
+        school_name='Lincoln',
+        school_config_json=json.dumps({'schoolName': 'Lincoln'}))).get('setupComplete') is True
+    # Backfilled name (column only, empty JSON) also counts.
+    assert get_school_config(_user(school_name='Lincoln', school_config_json=None)
+                             ).get('setupComplete') is True
 
 
-def test_setup_complete_not_derived_without_colour():
-    u = _user(school_name='Lincoln',
-              school_config_json=json.dumps({'schoolName': 'Lincoln'}))
+def test_setup_complete_not_derived_without_name():
+    u = _user(school_name='', school_config_json=json.dumps({'colors': {'primary': '#111'}}))
     assert 'setupComplete' not in get_school_config(u)
 
 
