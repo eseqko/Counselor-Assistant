@@ -307,6 +307,21 @@ def create_app(config_class=Config):
             }
         return {'user_theme': 'light', 'user_reduced_motion': False}
 
+    # School-config context processor — injects the SERVER copy of
+    # User.school_config_json into every template so base.html can hydrate the
+    # browser's localStorage from the source of truth. Without this, the School
+    # theme + sidebar identity (school name, mascot, colours, logo) were
+    # populated ONLY from whatever localStorage happened to hold in this
+    # browser — so saving in the first-run setup wizard (which persists to the
+    # server but not to localStorage) and then opening the app in a different
+    # browser would silently fall back to default colours.
+    @app.context_processor
+    def inject_school_config():
+        from flask_login import current_user
+        if current_user.is_authenticated and current_user.school_config_json:
+            return {'school_config_json': current_user.school_config_json}
+        return {'school_config_json': ''}
+
     # Cache-bust static assets by file mtime so browsers refetch on change.
     @app.context_processor
     def inject_static_version():

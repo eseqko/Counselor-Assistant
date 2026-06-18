@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
     (function(){
+        /* Hydrate school_config from the SERVER (User.school_config_json) into
+           localStorage before theme-manager.js / the sidebar identity script /
+           any other consumer reads it. Server is the source of truth — the
+           browser cache is just a fast-path. Setting this early prevents a
+           flash of default School-theme colours when the user opens the app
+           in a new browser that hasn't seen the config yet. */
+        {% if school_config_json %}
+        try { localStorage.setItem('school_config', {{ school_config_json|tojson|safe }}); } catch(e){}
+        {% endif %}
         var t = localStorage.getItem('theme_preference');
         if (t === 'auto') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         if (t) document.documentElement.dataset.theme = t;
