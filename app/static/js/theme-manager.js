@@ -85,8 +85,12 @@ var ThemeManager = (function() {
         try {
             var cfg = JSON.parse(raw);
             var colors = cfg.colors || {};
-            var p = colors.primary || '#2C5F8A';
-            var s = colors.secondary || '#E8A838';
+            /* Fallbacks match the Course Catalog Wiki defaults (see
+               app/static/course_catalog/school-config.js DEFAULTS) so a user
+               who hasn't customised colours sees the same palette on the main
+               app's School theme and the Catalog Wiki — they used to drift. */
+            var p = colors.primary || '#1a3a5c';
+            var s = colors.secondary || '#c8a227';
 
             // Contrast safety: if primary is too light, darken it
             var pHSL = hexToHSL(p);
