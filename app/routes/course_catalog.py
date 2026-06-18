@@ -317,24 +317,24 @@ def _do_sync_courses(courses_data, info_data):
 @course_catalog_bp.route('/api/school-config', methods=['GET'])
 @login_required
 def get_school_config():
-    """Return the server-stored school config for the current user."""
-    raw = current_user.school_config_json
-    if raw:
-        try:
-            return jsonify(json.loads(raw))
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return jsonify({})
+    """Return the complete server-stored school config for the current user
+    (name backfilled from the User.school_name column when missing)."""
+    from app.utils.school_config import get_school_config as _get_cfg
+    return jsonify(_get_cfg(current_user))
 
 
 @course_catalog_bp.route('/api/school-config', methods=['POST'])
 @csrf.exempt
 @login_required
 def save_school_config():
-    """Persist the school config to the database so it survives device transfers."""
+    """Persist the school config to the database so it survives device transfers.
+
+    Merges rather than overwrites so this save never drops fields owned by other
+    surfaces (e.g. the main-app wizard's grade_levels) and keeps the
+    User.school_name column in sync with schoolName."""
+    from app.utils.school_config import merge_school_config
     data = request.get_json(silent=True) or {}
-    current_user.school_config_json = json.dumps(data, ensure_ascii=False)
-    db.session.commit()
+    merge_school_config(current_user, data)
     return jsonify({'ok': True})
 
 

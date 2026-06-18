@@ -89,7 +89,12 @@ def get_theme():
 def profile():
     if request.method == 'POST':
         current_user.display_name = request.form.get('display_name', current_user.display_name)
-        current_user.school_name = request.form.get('school_name', '')
+        new_school_name = request.form.get('school_name', '')
+        current_user.school_name = new_school_name
+        # Keep the catalog/theme config's schoolName in sync with the column so
+        # editing the name here also updates the School theme + Catalog Wiki.
+        from app.utils.school_config import merge_school_config
+        merge_school_config(current_user, {'schoolName': new_school_name}, commit=False)
         synergy_url = request.form.get('synergy_base_url', '').strip()
         if synergy_url and not synergy_url.startswith(('http://', 'https://')):
             synergy_url = 'https://' + synergy_url
@@ -346,7 +351,8 @@ def export_data():
     # Capture user fields up front; current_user proxies the request context
     # and we want stable values to use inside the generator.
     exported_by = current_user.display_name or current_user.username
-    school_config_raw = current_user.school_config_json
+    from app.utils.school_config import get_school_config
+    school_config_dict = get_school_config(current_user)  # complete, name backfilled
     owner_id = current_user.id  # scope the export to this counselor's own data
 
     def emit_array(name, rows, to_dict, leading_comma=True):
@@ -366,13 +372,9 @@ def export_data():
         yield f'  "exported_at": {json.dumps(datetime.now(timezone.utc).isoformat())},\n'
         yield f'  "exported_by": {json.dumps(exported_by)}'
 
-        # Optional school config block
-        if school_config_raw:
-            try:
-                cfg = json.loads(school_config_raw)
-                yield ',\n  "school_config": ' + json.dumps(cfg, ensure_ascii=False)
-            except (json.JSONDecodeError, TypeError):
-                pass
+        # Optional school config block (complete; schoolName backfilled).
+        if school_config_dict:
+            yield ',\n  "school_config": ' + json.dumps(school_config_dict, ensure_ascii=False)
 
         yield from emit_array('tags', Tag.query.all(),
                               lambda t: {'name': t.name, 'color': t.color})
@@ -448,7 +450,10 @@ def import_data():
     try:
         # --- School Config ---
         if 'school_config' in data:
-            current_user.school_config_json = json.dumps(data['school_config'], ensure_ascii=False)
+            # Merge (don't overwrite) so a restore never drops fields the export
+            # didn't carry, and keep the school_name column synced.
+            from app.utils.school_config import merge_school_config
+            merge_school_config(current_user, data['school_config'] or {}, commit=False)
 
         # --- Tags ---
         tag_map = {}

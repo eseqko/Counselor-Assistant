@@ -318,20 +318,11 @@ def create_app(config_class=Config):
     # server still knows it.
     @app.context_processor
     def inject_school_config():
-        import json as _json
         from flask_login import current_user
         if not current_user.is_authenticated:
             return {'school_config': None}
-        cfg = {}
-        if current_user.school_config_json:
-            try:
-                loaded = _json.loads(current_user.school_config_json)
-                if isinstance(loaded, dict):
-                    cfg = loaded
-            except (ValueError, TypeError):
-                cfg = {}
-        if not cfg.get('schoolName') and current_user.school_name:
-            cfg['schoolName'] = current_user.school_name
+        from app.utils.school_config import get_school_config
+        cfg = get_school_config(current_user)
         return {'school_config': cfg or None}
 
     # Cache-bust static assets by file mtime so browsers refetch on change.

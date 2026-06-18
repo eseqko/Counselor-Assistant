@@ -60,13 +60,10 @@ def _handle_complete(form):
     if password and len(password) >= 8:
         user.set_password(password)
 
-    # School config — merge all fields into JSON
-    school_config = {}
-    if user.school_config_json:
-        try:
-            school_config = json.loads(user.school_config_json)
-        except (json.JSONDecodeError, TypeError):
-            pass
+    # School config — start from the complete stored config (name backfilled),
+    # layer on the wizard's fields, then persist through the shared merge helper.
+    from app.utils.school_config import get_school_config, merge_school_config
+    school_config = get_school_config(user)
 
     for key in ('counselor_title', 'school_year_start', 'school_year_end',
                 'mascotEmoji', 'motto', 'shortName'):
@@ -132,7 +129,7 @@ def _handle_complete(form):
         flash('Please choose a password of at least 8 characters to finish setup.', 'danger')
         return render_template('setup/wizard.html')
 
-    user.school_config_json = json.dumps(school_config)
+    merge_school_config(user, school_config, commit=False)
     user.setup_completed = True
     db.session.commit()
 
