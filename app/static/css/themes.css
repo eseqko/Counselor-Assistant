@@ -14,7 +14,46 @@
     --input-border: #CED4DA;
     --topbar-bg:    var(--white);
     --hover-bg:     #F0F4F8;
+    /* Themed scrollbar — see "Scrollbars" section below. Each theme overrides
+       --scrollbar-thumb / --scrollbar-thumb-hover to integrate with its palette. */
+    --scrollbar-thumb:       rgba(44, 62, 80, 0.30);
+    --scrollbar-thumb-hover: rgba(44, 62, 80, 0.50);
 }
+
+
+/* ══════════════════════════════════════════════
+   SCROLLBARS — themed across every theme using
+   --scrollbar-thumb / --scrollbar-thumb-hover.
+   Transparent track integrates with the surface
+   underneath (panel, sidebar, body) instead of
+   the OS grey box. Webkit + Firefox covered.
+   ══════════════════════════════════════════════ */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    min-height: 32px;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: padding-box;
+}
+
+/* Per-theme scrollbar thumbs */
+[data-theme="dark"]       { --scrollbar-thumb: rgba(224, 226, 236, 0.20); --scrollbar-thumb-hover: rgba(224, 226, 236, 0.35); }
+[data-theme="focus"]      { --scrollbar-thumb: rgba(58, 58, 56, 0.25);    --scrollbar-thumb-hover: rgba(58, 58, 56, 0.45); }
+[data-theme="fiesta"]     { --scrollbar-thumb: rgba(228, 0, 124, 0.30);   --scrollbar-thumb-hover: rgba(228, 0, 124, 0.55); }
+[data-theme="glass"]      { --scrollbar-thumb: rgba(255, 235, 200, 0.20); --scrollbar-thumb-hover: rgba(255, 235, 200, 0.40); }
+[data-theme="glass-blue"] { --scrollbar-thumb: rgba(200, 225, 255, 0.20); --scrollbar-thumb-hover: rgba(200, 225, 255, 0.40); }
+[data-theme="glass-navy"] { --scrollbar-thumb: rgba(180, 200, 255, 0.20); --scrollbar-thumb-hover: rgba(180, 200, 255, 0.40); }
 
 
 /* ══════════════════════════════════════════════
@@ -759,6 +798,50 @@
 }
 [data-theme^="glass"] .btn-outline:hover { background: var(--glass-action-hover); }
 
+/* Filter bar — by default this uses `background: var(--bg)` (a hard solid dark
+   colour on Glass). Style it as its own glass panel so it integrates instead of
+   sitting on top as a black bar. */
+[data-theme^="glass"] .filter-bar {
+    background: var(--glass-panel-2);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow:
+        0 8px 24px rgba(0,0,0,0.35),
+        inset 0 1px 0 var(--glass-highlight);
+}
+[data-theme^="glass"] .filter-bar label { color: var(--text-muted); }
+
+/* Coloured buttons — defaults render bright pastel-on-white-text (Amber
+   primary 1.88:1, Navy primary 2.54:1, Success 2.86:1 against white) which is
+   well below WCAG AA. Use darker per-variant hues for the button background so
+   white text has real contrast. Per-theme overrides for .btn-primary below
+   handle the variant differences; .btn-success/.btn-danger are consistent
+   semantic hues so they're set once here. */
+[data-theme^="glass"] .btn-primary {
+    color: #fff;
+    border: 1px solid var(--primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+}
+[data-theme="glass"]      .btn-primary { background: #8a5520; }  /* 6.4:1 vs #fff */
+[data-theme="glass"]      .btn-primary:hover { background: #a5662a; }
+[data-theme="glass-blue"] .btn-primary { background: #2864b0; }  /* 5.7:1 vs #fff */
+[data-theme="glass-blue"] .btn-primary:hover { background: #357fcc; }
+[data-theme="glass-navy"] .btn-primary { background: #3f5fa8; }  /* 5.3:1 vs #fff */
+[data-theme="glass-navy"] .btn-primary:hover { background: #5577bb; }
+
+[data-theme^="glass"] .btn-success {
+    background: #218238; color: #fff;                            /* 4.87:1 vs #fff */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+}
+[data-theme^="glass"] .btn-success:hover { background: #2d9c45; }
+[data-theme^="glass"] .btn-danger {
+    background: #b53a3a; color: #fff;                            /* 5.4:1 vs #fff */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+}
+[data-theme^="glass"] .btn-danger:hover { background: #c84a4a; }
+
 [data-theme^="glass"] table th { background: var(--glass-th); color: var(--text); border-color: var(--glass-border); }
 [data-theme^="glass"] table td { background: var(--glass-td); color: var(--text); border-color: var(--glass-border); }
 
@@ -785,5 +868,6 @@
     [data-theme^="glass"] .chart-card,
     [data-theme^="glass"] .sidebar,
     [data-theme^="glass"] .top-bar,
-    [data-theme^="glass"] .dash-action-btn { background: var(--glass-fallback); }
+    [data-theme^="glass"] .dash-action-btn,
+    [data-theme^="glass"] .filter-bar { background: var(--glass-fallback); }
 }
