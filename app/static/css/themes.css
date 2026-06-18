@@ -860,6 +860,57 @@
 [data-theme^="glass"] a { color: var(--primary-light); }
 [data-theme^="glass"] hr { border-color: var(--glass-border); }
 
+/* ── Staff Directory (its own inline <style>) ──────────────────────
+   templates/staff/index.html declares .staff-card / .staff-head /
+   .class-table directly using the base CSS tokens (--white background,
+   --bg hover, --light-gray border, --gray text). On glass that produces
+   a near-white card with a near-black hover and washed-out grey text.
+   Override here so it picks up the glass treatment everywhere else does. */
+[data-theme^="glass"] .staff-card {
+    background: var(--glass-panel);
+    backdrop-filter: blur(28px) saturate(200%) brightness(115%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(115%);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow:
+        0 14px 40px rgba(0,0,0,0.45),
+        inset 0 1px 0 var(--glass-highlight),
+        inset 0 -1px 0 rgba(0,0,0,0.20);
+}
+/* Subtle glass-toned hover instead of the near-black --bg hover. */
+[data-theme^="glass"] .staff-head:hover { background: var(--glass-hover); }
+/* When expanded, give the head a tinted background + a separator so the open
+   state is visually clear and the table area below sits on a tinted surface. */
+[data-theme^="glass"] .staff-card.open .staff-head {
+    background: var(--glass-header);
+    border-bottom: 1px solid var(--glass-border);
+}
+[data-theme^="glass"] .staff-toolbar select {
+    background: var(--glass-input);
+    border-color: var(--glass-border);
+    color: var(--text);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+[data-theme^="glass"] .staff-name { color: var(--text); }
+[data-theme^="glass"] a.staff-name { color: var(--primary-light); }
+[data-theme^="glass"] .staff-meta,
+[data-theme^="glass"] .staff-meta a,
+[data-theme^="glass"] .staff-stat .l { color: var(--text-muted); }
+[data-theme^="glass"] .staff-stat .v { color: var(--primary-light); }
+/* class-table headers/cells: light text on glass, glass-toned borders. */
+[data-theme^="glass"] .class-table th { color: var(--text-muted); border-bottom-color: var(--glass-border); }
+[data-theme^="glass"] .class-table td { color: var(--text);       border-bottom-color: var(--glass-border); }
+/* Pills: keep semantic hues but darken so they're not washed-out pastels. */
+[data-theme^="glass"] .pill.df { background: rgba(220,50,50,0.22);  color: #ffb0b0; border: 1px solid rgba(255,130,130,0.30); }
+[data-theme^="glass"] .pill.ok { background: rgba(34,197,94,0.22);  color: #8eecaa; border: 1px solid rgba(34,197,94,0.40); }
+[data-theme^="glass"] .empty-note {
+    background: var(--glass-panel);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    color: var(--text-muted);
+}
+
 /* Fallback: no backdrop-filter support -> opaque panels stay readable. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     [data-theme^="glass"] .card,
