@@ -8,6 +8,19 @@
     padding:6px 12px; border:1px solid var(--light-gray); border-radius:6px;
     background:var(--white); font-size:0.84rem; font-weight:600; color:var(--text);
 }
+/* Glass variants: --white is a solid bright (used for button text contrast),
+   so var(--white) renders this select as a bright box on dark glass. Re-bind
+   at higher specificity than the rule above (also wins source order). */
+[data-theme^="glass"] .analytics-toolbar select {
+    background: var(--glass-input);
+    border-color: var(--glass-border);
+    color: var(--text);
+}
+[data-theme^="glass"] .analytics-toolbar select option,
+[data-theme^="glass"] .analytics-toolbar select optgroup {
+    background-color: var(--glass-menu);
+    color: var(--text);
+}
 .toolbar-toggle { display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--gray); }
 .chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
 @media (max-width:900px) { .chart-grid { grid-template-columns:1fr; } }

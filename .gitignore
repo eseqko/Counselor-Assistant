@@ -36,3 +36,4 @@ Thumbs.db
 .env
 *.key
 .secret_key
+scripts/.theme_clash_audit.json
