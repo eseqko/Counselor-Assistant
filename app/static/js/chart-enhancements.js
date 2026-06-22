@@ -79,4 +79,60 @@
     if (Chart.defaults.font) {
         Chart.defaults.font.family = "'Segoe UI', system-ui, -apple-system, sans-serif";
     }
+
+    /* ── 4. Theme-aware text + grid colours ───────────────────────────────
+       Chart.js renders tick labels, legend text, axis titles and grid lines
+       on the canvas. It can't read CSS variables — it uses its hardcoded
+       grey defaults (#666 text on #fff bg) unless told otherwise. On dark
+       themes (dark, focus, glass*) those grey ticks/labels become unreadable.
+
+       Read the current --text and --border tokens from <html> at load time
+       and seed Chart.defaults with them. Every chart created after this
+       script runs inherits the right colours automatically — no per-chart
+       options changes needed across the app. Theme switches take effect on
+       next page load (the same model the rest of the theming uses). */
+    var rootStyle = getComputedStyle(document.documentElement);
+    function tok(name, fallback) {
+        var v = (rootStyle.getPropertyValue(name) || '').trim();
+        return v || fallback;
+    }
+    var textColor   = tok('--text',        '#333333');
+    var mutedColor  = tok('--text-muted',  textColor);
+    var borderColor = tok('--glass-border', tok('--border', 'rgba(127,140,141,0.20)'));
+
+    Chart.defaults.color = textColor;
+    Chart.defaults.borderColor = borderColor;
+    if (Chart.defaults.plugins) {
+        if (Chart.defaults.plugins.legend && Chart.defaults.plugins.legend.labels) {
+            Chart.defaults.plugins.legend.labels.color = textColor;
+        }
+        if (Chart.defaults.plugins.title) {
+            Chart.defaults.plugins.title.color = textColor;
+        }
+        if (Chart.defaults.plugins.tooltip) {
+            /* Chart.js's tooltip already uses a dark bubble that reads on every
+               theme — leave it alone, just make sure body text is light enough.
+               (Default is rgba(255,255,255,0.85) which is fine.) */
+        }
+    }
+    /* Scale-level defaults so every axis picks up the same palette. */
+    if (Chart.defaults.scale) {
+        if (Chart.defaults.scale.ticks) Chart.defaults.scale.ticks.color = mutedColor;
+        if (Chart.defaults.scale.title) Chart.defaults.scale.title.color = textColor;
+        if (Chart.defaults.scale.grid) {
+            Chart.defaults.scale.grid.color = borderColor;
+            Chart.defaults.scale.grid.borderColor = borderColor;
+        }
+    }
+    /* Chart.js 4.x splits scale defaults by type (linear/category/etc.).
+       Apply the same colours to each so cartesian and radial axes match. */
+    ['linear', 'category', 'time', 'logarithmic', 'radialLinear'].forEach(function(t){
+        var s = Chart.defaults.scales && Chart.defaults.scales[t];
+        if (!s) return;
+        if (s.ticks) s.ticks.color = mutedColor;
+        if (s.title) s.title.color = textColor;
+        if (s.grid)  { s.grid.color = borderColor; s.grid.borderColor = borderColor; }
+        if (s.angleLines) s.angleLines.color = borderColor;
+        if (s.pointLabels) s.pointLabels.color = textColor;
+    });
 })();

@@ -856,7 +856,21 @@
 [data-theme^="glass"] input[type="number"],
 [data-theme^="glass"] input[type="date"],
 [data-theme^="glass"] input[type="search"],
-[data-theme^="glass"] input[type="file"] {
+[data-theme^="glass"] input[type="file"],
+/* Compound-selector inline rules (.filter-bar select, .analytics-toolbar
+   select, .toolbar select, .form-row textarea, etc.) tie with the bare-element
+   rule above at specificity (0,1,1) and win by source order. Add a (0,2,1)
+   variant that descends through any class-bearing element to deterministically
+   beat those without listing every collision site individually. */
+[data-theme^="glass"] [class] select,
+[data-theme^="glass"] [class] textarea,
+[data-theme^="glass"] [class] input[type="text"],
+[data-theme^="glass"] [class] input[type="email"],
+[data-theme^="glass"] [class] input[type="password"],
+[data-theme^="glass"] [class] input[type="number"],
+[data-theme^="glass"] [class] input[type="date"],
+[data-theme^="glass"] [class] input[type="search"],
+[data-theme^="glass"] [class] input[type="file"] {
     background: var(--glass-input);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border); color: var(--text);
@@ -1111,6 +1125,182 @@
 [data-theme^="glass"] .note-view,
 [data-theme^="glass"] .note-view h2,
 [data-theme^="glass"] .note-view h3 { color: var(--text); }
+
+/* ── Audit-driven coverage of remaining inline class patterns ─────────
+   Categories surfaced by scripts/audit_theme_clashes.py that aren't covered
+   by the earlier per-template blocks. Grouped by semantic role so future
+   classes following the same pattern (cards / hovers / status pills /
+   progress tracks / table chrome) pick up the right token automatically. */
+
+/* Card-style surfaces (light bg meant to read as a panel): glass panel. */
+[data-theme^="glass"] .iep-stat,
+[data-theme^="glass"] .iep-card,
+[data-theme^="glass"] .iep-modal,
+[data-theme^="glass"] .tmpl-panel,
+[data-theme^="glass"] .composer,
+[data-theme^="glass"] .save-modal,
+[data-theme^="glass"] .comm-tabs,
+[data-theme^="glass"] .prep-intro,
+[data-theme^="glass"] .prep-form,
+[data-theme^="glass"] .ag-card,
+[data-theme^="glass"] .preview-pane,
+[data-theme^="glass"] .embed-modal,
+[data-theme^="glass"] .catalog-frame-wrap {
+    background: var(--glass-panel);
+    border-color: var(--glass-border);
+    color: var(--text);
+}
+[data-theme^="glass"] .iep-stat,
+[data-theme^="glass"] .iep-card,
+[data-theme^="glass"] .iep-modal,
+[data-theme^="glass"] .tmpl-panel,
+[data-theme^="glass"] .composer,
+[data-theme^="glass"] .save-modal,
+[data-theme^="glass"] .prep-intro,
+[data-theme^="glass"] .prep-form,
+[data-theme^="glass"] .ag-card,
+[data-theme^="glass"] .preview-pane {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.30), inset 0 1px 0 var(--glass-highlight);
+}
+/* Course-catalog toolbar buttons — hardcoded #fff backgrounds. Treat like
+   .btn-outline on glass: subtle translucent surface with a visible border. */
+[data-theme^="glass"] .catalog-toolbar .tab-btn,
+[data-theme^="glass"] .btn-standalone,
+[data-theme^="glass"] .btn-export {
+    background: var(--glass-action);
+    border-color: var(--glass-border);
+    color: var(--text);
+}
+[data-theme^="glass"] .catalog-toolbar .tab-btn.active {
+    background: var(--primary-dark);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+/* Hover/highlight rows + label chips → glass-hover (the soft tint). */
+[data-theme^="glass"] .grad-table tr:hover,
+[data-theme^="glass"] .cc-table tr:hover,
+[data-theme^="glass"] .mini-table tr:hover,
+[data-theme^="glass"] .student-table tr:hover td,
+[data-theme^="glass"] .iep-lane-header,
+[data-theme^="glass"] .pdf-section,
+[data-theme^="glass"] .merge-chip,
+[data-theme^="glass"] .counts-row span,
+[data-theme^="glass"] .meeting-types label,
+[data-theme^="glass"] .plan-pills label {
+    background: var(--glass-hover);
+    color: var(--text);
+    border-color: var(--glass-border);
+}
+
+/* Status / severity pills + banners — muted on glass: keep their hue intent
+   via low-alpha tints rather than the hardcoded light pastels. */
+[data-theme^="glass"] .risk-unknown,
+[data-theme^="glass"] .ag-unknown,
+[data-theme^="glass"] .ab-exempt-declined,
+[data-theme^="glass"] .grade-badge,
+[data-theme^="glass"] .pathway-undecided,
+[data-theme^="glass"] .fafsa-not_started,
+[data-theme^="glass"] .stmt-not_started,
+[data-theme^="glass"] .app-planned {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    border: 1px solid var(--glass-border);
+}
+[data-theme^="glass"] .risk-at-risk,
+[data-theme^="glass"] .risk-warning,
+[data-theme^="glass"] .status-draft,
+[data-theme^="glass"] .unscheduled {
+    background: rgba(245, 158, 11, 0.20);
+    color: #f4d28a;
+    border: 1px solid rgba(245, 158, 11, 0.40);
+}
+[data-theme^="glass"] .risk-on-track,
+[data-theme^="glass"] .status-locked,
+[data-theme^="glass"] .undo-banner,
+[data-theme^="glass"] .share-box,
+[data-theme^="glass"] .success-msg {
+    background: rgba(34, 197, 94, 0.20);
+    color: #8eecaa;
+    border: 1px solid rgba(34, 197, 94, 0.40);
+}
+
+/* Progress-bar tracks — translucent neutral so the filled span pops. */
+[data-theme^="glass"] .progress-bar-wrap,
+[data-theme^="glass"] .credit-bar-wrap,
+[data-theme^="glass"] .prog-wrap {
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid var(--glass-border);
+}
+
+/* Table chrome that templates set inline: header + cell tints. */
+[data-theme^="glass"] .student-table th { background: var(--glass-th); color: var(--text); }
+
+/* Card-style classes from the audit (Tier 2 pages: mail merge, follow-ups,
+   academic plan, analytics range buttons, dashboard alert tags). */
+[data-theme^="glass"] .mm-card,
+[data-theme^="glass"] .plan-stat,
+[data-theme^="glass"] .year-col,
+[data-theme^="glass"] .picker-panel,
+[data-theme^="glass"] .ap-card,
+[data-theme^="glass"] .fu-stat,
+[data-theme^="glass"] .fu-card,
+[data-theme^="glass"] .fu-modal,
+[data-theme^="glass"] .ac-list {
+    background: var(--glass-panel);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.30), inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Translucent button-style elements (mail merge action buttons, analytics
+   range filter, etc.). */
+[data-theme^="glass"] .select-actions button,
+[data-theme^="glass"] .letter-nav button,
+[data-theme^="glass"] .range-btn {
+    background: var(--glass-action);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+}
+[data-theme^="glass"] .select-actions button:hover,
+[data-theme^="glass"] .letter-nav button:hover {
+    background: var(--glass-action-hover);
+}
+
+/* Hover/highlight rows + minor tinted strips. */
+[data-theme^="glass"] .merge-field,
+[data-theme^="glass"] .term-label,
+[data-theme^="glass"] .year-header.empty,
+[data-theme^="glass"] .alert-category-tag,
+[data-theme^="glass"] .item .kind,
+[data-theme^="glass"] .fu-lane-header,
+[data-theme^="glass"] .type-pills label,
+[data-theme^="glass"] .slot-card,
+[data-theme^="glass"] .booking-card,
+[data-theme^="glass"] .data-table th,
+[data-theme^="glass"] .status-none {
+    background: var(--glass-hover);
+    color: var(--text);
+    border-color: var(--glass-border);
+}
+[data-theme^="glass"] .data-table tr:hover td { background: var(--glass-hover); }
+
+/* Academic Plan slot/grade/tag pastels — keep semantic but glass-toned. */
+[data-theme^="glass"] .slot.historical { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+[data-theme^="glass"] .slot.current    { background: rgba(91,127,224,0.18); color: var(--text); border: 1px solid var(--glass-border); }
+[data-theme^="glass"] .slot.ai         { background: rgba(139, 92, 246, 0.18); color: #d4bfff; border: 1px solid rgba(139,92,246,0.35); }
+[data-theme^="glass"] .slot-grade.passing  { background: rgba(34,197,94,0.20);  color: #8eecaa; }
+[data-theme^="glass"] .slot-grade.failing  { background: rgba(220,50,50,0.22);  color: #ffb0b0; }
+[data-theme^="glass"] .slot-grade.progress { background: rgba(91,127,224,0.18); color: var(--text); }
+[data-theme^="glass"] .slot-tag.ai-tag  { background: rgba(139, 92, 246, 0.18); color: #d4bfff; }
+[data-theme^="glass"] .slot-tag.ag-tag  { background: rgba(91,127,224,0.18);    color: var(--text); }
+[data-theme^="glass"] .risk-banner.at-risk  { background: rgba(245,158,11,0.18); color: #f4d28a;  border-color: rgba(245,158,11,0.40); }
+[data-theme^="glass"] .risk-banner.warning  { background: rgba(245,158,11,0.14); color: #f4d28a;  border-color: rgba(245,158,11,0.30); }
+[data-theme^="glass"] .risk-banner.on-track { background: rgba(34,197,94,0.18);  color: #8eecaa;  border-color: rgba(34,197,94,0.40); }
 
 /* Fallback: no backdrop-filter support -> opaque panels stay readable. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
