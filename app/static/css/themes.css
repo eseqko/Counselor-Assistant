@@ -684,6 +684,7 @@
     --glass-action-hover: rgba(255,235,200,0.18);
     --glass-accent-bg: rgba(240,176,112,0.16);
     --glass-accent-border: rgba(240,176,112,0.40);
+    --glass-menu:     #3a2a1e;
     --glass-fallback: rgba(28,18,12,0.94);
 }
 [data-theme="glass"] body {
@@ -720,6 +721,7 @@
     --glass-action-hover: rgba(200,225,255,0.18);
     --glass-accent-bg: rgba(90,168,240,0.16);
     --glass-accent-border: rgba(90,168,240,0.40);
+    --glass-menu:     #173251;
     --glass-fallback: rgba(12,24,40,0.94);
 }
 [data-theme="glass-blue"] body {
@@ -756,6 +758,7 @@
     --glass-action-hover: rgba(180,200,255,0.18);
     --glass-accent-bg: rgba(125,163,232,0.16);
     --glass-accent-border: rgba(125,163,232,0.40);
+    --glass-menu:     #141d3e;
     --glass-fallback: rgba(7,11,24,0.95);
 }
 /* Navy needs MORE light sources than the warm/blue variants. The original gradient
@@ -857,6 +860,21 @@
     background: var(--glass-input);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border); color: var(--text);
+}
+/* Native <select> dropdown list: the browser paints the option popup OPAQUE and
+   ignores the translucent --glass-input, falling back to the OS light-grey
+   (the clashing box on dark glass). Give options/optgroups a solid on-theme
+   colour so the open menu matches the rest of the theme. */
+[data-theme^="glass"] select option,
+[data-theme^="glass"] select optgroup {
+    background-color: var(--glass-menu);
+    color: var(--text);
+}
+/* Dark theme: same — make the dropdown list match the dark surface. */
+[data-theme="dark"] select option,
+[data-theme="dark"] select optgroup {
+    background-color: var(--input-bg);
+    color: var(--text);
 }
 [data-theme^="glass"] .btn-outline {
     background: var(--glass-action);

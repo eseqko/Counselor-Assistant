@@ -307,20 +307,23 @@ def create_app(config_class=Config):
             }
         return {'user_theme': 'light', 'user_reduced_motion': False}
 
-    # School-config context processor — injects the SERVER copy of
-    # User.school_config_json into every template so base.html can hydrate the
-    # browser's localStorage from the source of truth. Without this, the School
-    # theme + sidebar identity (school name, mascot, colours, logo) were
-    # populated ONLY from whatever localStorage happened to hold in this
-    # browser — so saving in the first-run setup wizard (which persists to the
-    # server but not to localStorage) and then opening the app in a different
-    # browser would silently fall back to default colours.
+    # School-config context processor — injects the SERVER copy of the school
+    # identity into every template so base.html can MERGE it into the browser's
+    # localStorage (the source the School theme + sidebar identity read from).
+    #
+    # Returns a dict (not the raw string) with the authoritative school name
+    # backfilled from the User.school_name COLUMN. That column is the canonical
+    # name; school_config_json can be written without it by some save paths, so
+    # without the backfill the browser could lose the name even though the
+    # server still knows it.
     @app.context_processor
     def inject_school_config():
         from flask_login import current_user
-        if current_user.is_authenticated and current_user.school_config_json:
-            return {'school_config_json': current_user.school_config_json}
-        return {'school_config_json': ''}
+        if not current_user.is_authenticated:
+            return {'school_config': None}
+        from app.utils.school_config import get_school_config
+        cfg = get_school_config(current_user)
+        return {'school_config': cfg or None}
 
     # Cache-bust static assets by file mtime so browsers refetch on change.
     @app.context_processor

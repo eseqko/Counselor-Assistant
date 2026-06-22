@@ -5,14 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
     (function(){
-        /* Hydrate school_config from the SERVER (User.school_config_json) into
-           localStorage before theme-manager.js / the sidebar identity script /
-           any other consumer reads it. Server is the source of truth — the
-           browser cache is just a fast-path. Setting this early prevents a
-           flash of default School-theme colours when the user opens the app
-           in a new browser that hasn't seen the config yet. */
-        {% if school_config_json %}
-        try { localStorage.setItem('school_config', {{ school_config_json|tojson|safe }}); } catch(e){}
+        /* MERGE the server's school identity into localStorage['school_config']
+           — never overwrite it wholesale. The Course Catalog Wiki stores a
+           richer config in localStorage (mascot, motto, logo, contact, etc.)
+           than some server save-paths persist; a blind overwrite would wipe
+           those. So we overlay only the server's NON-EMPTY fields on top of
+           whatever the browser already has, and leave the rest untouched.
+           Server is authoritative for the fields it actually holds (name,
+           colours); the browser keeps everything else. */
+        {% if school_config %}
+        try {
+            var _srv = {{ school_config|tojson|safe }};
+            var _cur = {};
+            try { _cur = JSON.parse(localStorage.getItem('school_config') || '{}') || {}; } catch(e) { _cur = {}; }
+            for (var k in _srv) {
+                if (!Object.prototype.hasOwnProperty.call(_srv, k)) continue;
+                var v = _srv[k];
+                var empty = (v === null || v === undefined || v === '' ||
+                             (typeof v === 'object' && Object.keys(v).length === 0));
+                if (!empty) _cur[k] = v;
+            }
+            localStorage.setItem('school_config', JSON.stringify(_cur));
+        } catch(e){}
         {% endif %}
         var t = localStorage.getItem('theme_preference');
         if (t === 'auto') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
