@@ -89,13 +89,12 @@ if __name__ == '__main__':
 
     if mode == 'tailscale':
         from flask import request as flask_request, abort
+        from app.utils.networking import is_tailnet_or_localhost
 
         @app.before_request
         def _tailscale_guard():
-            remote = flask_request.remote_addr or ''
-            if remote.startswith('127.') or remote.startswith('100.') or remote == '::1':
-                return  # localhost or Tailscale CGNAT — allowed
-            abort(403)
+            if not is_tailnet_or_localhost(flask_request.remote_addr or ''):
+                abort(403)
 
     # Demo USB bundle: open the browser straight to /demo-login so the
     # non-technical user lands on the dashboard with zero clicks.

@@ -95,10 +95,28 @@ Tap it any time. It launches full-screen, like a real app.
 **"I can reach it from the PC but not the phone"**
 - Open the Tailscale app on your iPhone. If it says "Not Connected", tap the
   toggle to connect.
-- On the PC: Windows Firewall may be blocking port 5000 on the Tailscale
-  network adapter. Open **Windows Defender Firewall → Advanced Settings →
-  Inbound Rules → New Rule → Port → TCP 5000**. Choose **Private** networks
-  only (not Public, not Domain). Name it "Counselor Assistant — Tailscale".
+- On the PC: Windows Firewall is almost always the culprit — it treats the
+  Tailscale virtual adapter as a separate network and blocks unsolicited
+  inbound by default. **Fastest fix**: open PowerShell *as Administrator* and
+  run:
+  ```powershell
+  New-NetFirewallRule -DisplayName "Counselor Assistant (Tailscale)" `
+      -Direction Inbound -LocalPort 5000 -Protocol TCP -Action Allow `
+      -InterfaceAlias "Tailscale"
+  ```
+  If that errors with "interface not found", list your adapters with
+  `Get-NetAdapter | Where-Object Name -like "*Tailscale*"` and substitute the
+  exact `Name` it prints. This rule only opens 5000 on the Tailscale adapter
+  — the school LAN still can't see it (and the app's request guard also blocks
+  anything that isn't a tailnet source IP, so this is defence in depth).
+- **GUI alternative**: Windows Defender Firewall → Advanced Settings → Inbound
+  Rules → New Rule → Port → TCP 5000. Choose **Private** networks only (not
+  Public, not Domain). Name it "Counselor Assistant — Tailscale".
+- **If you get a 403 on the phone:** your phone reached the server but came in
+  on the LAN instead of through Tailscale (the app refuses non-tailnet sources
+  by design — that's the FERPA promise). Confirm the iPhone's Tailscale toggle
+  is on, then use the `100.x.x.x` URL, not the LAN `10.x.x.x` / `192.168.x.x`
+  one.
 
 **"Add to Home Screen doesn't show my icon"**
 - You must use **Safari** on iOS. Chrome and Firefox on iPhone don't support
