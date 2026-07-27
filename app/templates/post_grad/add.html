@@ -3,6 +3,27 @@
 {% block page_title %}Record Post-Grad Outcome{% endblock %}
 {% block content %}
 
+<div class="card" style="border-left:3px solid var(--primary);" data-counselor-name="{{ current_user.display_name }}">
+    <div class="card-body">
+        <strong style="font-size:0.9rem;">Prefer the student self-report?</strong>
+        <div style="font-size:0.8rem;color:var(--gray);margin-bottom:10px;">
+            Pick a student below, then generate a link they can fill out themselves —
+            no need to enter anything on this form.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="btn btn-sm btn-outline" onclick="generateSurveyLink(this)">Generate Link</button>
+            <span id="survey-link-status" style="font-size:0.82rem;color:var(--gray);"></span>
+        </div>
+        <div id="survey-link-result" style="display:none;margin-top:10px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <input type="text" id="survey-link-url" class="form-control" readonly style="flex:1;min-width:220px;">
+                <button type="button" class="btn btn-sm btn-outline" onclick="copyLink(this, document.getElementById('survey-link-url').value)">Copy Link</button>
+                <a id="survey-link-email" class="btn btn-sm btn-outline" style="display:none;" href="#">Email It</a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body">
         <form method="POST">
@@ -86,4 +107,42 @@
         </form>
     </div>
 </div>
+
+<script>
+function generateSurveyLink(btn) {
+    var sel = document.querySelector('select[name="student_id"]');
+    var studentId = sel && sel.value;
+    var status = document.getElementById('survey-link-status');
+    var resultBox = document.getElementById('survey-link-result');
+    if (!studentId) {
+        status.textContent = 'Pick a student first.';
+        resultBox.style.display = 'none';
+        return;
+    }
+    status.textContent = 'Generating…';
+    resultBox.style.display = 'none';
+    fetch('/post-grad/survey-link/' + studentId, {method: 'POST'})
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.ok) { status.textContent = 'Could not generate a link.'; return; }
+            status.textContent = '';
+            document.getElementById('survey-link-url').value = data.url;
+
+            var emailLink = document.getElementById('survey-link-email');
+            if (data.student_email) {
+                var studentName = sel.options[sel.selectedIndex].textContent.trim().split(' ')[0];
+                var counselorName = btn.closest('.card').dataset.counselorName || '';
+                var subject = encodeURIComponent('Quick update for your school records');
+                var body = encodeURIComponent('Hi ' + studentName + ',\n\nCould you take a minute to update us on ' +
+                    "what you're up to? " + data.url + '\n\nThanks,\n' + counselorName);
+                emailLink.href = 'mailto:' + data.student_email + '?subject=' + subject + '&body=' + body;
+                emailLink.style.display = '';
+            } else {
+                emailLink.style.display = 'none';
+            }
+            resultBox.style.display = 'block';
+        })
+        .catch(function () { status.textContent = 'Something went wrong — try again.'; });
+}
+</script>
 {% endblock %}

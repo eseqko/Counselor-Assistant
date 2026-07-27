@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Where Are You Now? — {{ student.first_name }}</title>
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+               background:#f5f7fa; color:#333; line-height:1.5; }
+
+        .container { max-width:600px; margin:40px auto; padding:0 20px; }
+
+        .header { text-align:center; margin-bottom:28px; }
+        .header .emoji { font-size:2.2rem; margin-bottom:6px; }
+        .header h1 { font-size:1.4rem; color:#2c3e50; }
+        .header .subtitle { color:#7f8c8d; font-size:0.92rem; margin-top:6px; }
+
+        .card { background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);
+                padding:24px; margin-bottom:20px; }
+
+        label { display:block; font-size:0.88rem; font-weight:600; margin-bottom:4px; color:#2c3e50; }
+        .hint { font-size:0.78rem; color:#95a5a6; font-weight:400; margin-left:4px; }
+        input, select, textarea {
+            width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:6px;
+            font-size:0.92rem; margin-bottom:14px; font-family:inherit;
+        }
+        input:focus, select:focus, textarea:focus { outline:none; border-color:#4A90D9; }
+        textarea { resize:vertical; }
+
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        @media (max-width:480px) { .form-row { grid-template-columns:1fr; } }
+        .form-row > div input, .form-row > div select { margin-bottom:0; }
+        .form-row { margin-bottom:14px; }
+
+        .btn { padding:13px 24px; border:none; border-radius:8px; font-size:0.98rem;
+               font-weight:700; cursor:pointer; width:100%; background:#4A90D9; color:#fff; }
+        .btn:hover { background:#357ABD; }
+
+        .error-box {
+            background:#fdecea; border:1px solid #f5c6cb; color:#c0392b;
+            border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:0.88rem;
+        }
+
+        .success-card {
+            text-align:center; padding:40px 24px; background:#e8f5e9;
+        }
+        .success-card .emoji { font-size:2.6rem; margin-bottom:8px; }
+        .success-card h2 { color:#2e7d32; margin-bottom:8px; }
+        .success-card p { color:#4caf50; font-size:0.94rem; }
+
+        .footer-note {
+            text-align:center; font-size:0.78rem; color:#95a5a6; margin-top:16px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="emoji">&#127891;</div>
+        <h1>Hi {{ student.first_name }}!</h1>
+        <div class="subtitle">
+            {% if existing %}Your school counselor would love an update on how things are going.
+            {% else %}Your school counselor wants to know what you're up to after graduation.{% endif %}
+        </div>
+    </div>
+
+    {% if submitted %}
+    <div class="card success-card">
+        <div class="emoji">&#9989;</div>
+        <h2>Thanks — you're all set!</h2>
+        <p>Your counselor has been updated. Bookmark this page if you'd like to update
+           your info again later — it's the same link every time.</p>
+    </div>
+    {% else %}
+    <div class="card">
+        {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+        <form method="POST">
+            <label>What are you doing now? <span style="color:#c0392b;">*</span></label>
+            <select name="primary_pathway" required>
+                <option value="">-- Select one --</option>
+                {% for v, l in pathways %}
+                <option value="{{ v }}" {{ 'selected' if existing and existing.primary_pathway == v }}>{{ l }}</option>
+                {% endfor %}
+            </select>
+
+            <div class="form-row">
+                <div>
+                    <label>Graduation Year</label>
+                    <input type="number" name="graduation_year" min="2000" max="2100"
+                           value="{{ existing.graduation_year if existing and existing.graduation_year else (student.graduation_year or '') }}">
+                </div>
+                <div>
+                    <label>School / Institution <span class="hint">if applicable</span></label>
+                    <input type="text" name="institution_name" placeholder="e.g. Cal State Long Beach"
+                           value="{{ existing.institution_name if existing else '' }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Major / Program</label>
+                    <input type="text" name="program_major"
+                           value="{{ existing.program_major if existing else '' }}">
+                </div>
+                <div>
+                    <label>Military Branch <span class="hint">if applicable</span></label>
+                    <input type="text" name="military_branch" placeholder="e.g. Army, Navy"
+                           value="{{ existing.military_branch if existing else '' }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Job Title <span class="hint">if working</span></label>
+                    <input type="text" name="job_title"
+                           value="{{ existing.job_title if existing else '' }}">
+                </div>
+                <div>
+                    <label>Employer</label>
+                    <input type="text" name="employer"
+                           value="{{ existing.employer if existing else '' }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Best Email for You</label>
+                    <input type="email" name="contact_email" placeholder="you@example.com"
+                           value="{{ existing.contact_email if existing else '' }}">
+                </div>
+                <div>
+                    <label>Best Phone</label>
+                    <input type="tel" name="contact_phone" placeholder="(555) 123-4567"
+                           value="{{ existing.contact_phone if existing else '' }}">
+                </div>
+            </div>
+
+            <label>Anything else you'd like your counselor to know?</label>
+            <textarea name="notes" rows="3">{{ existing.notes if existing else '' }}</textarea>
+
+            <button type="submit" class="btn">Submit</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="footer-note">
+        &#128274; This goes directly to your school counselor and isn't shared publicly.
+    </div>
+</div>
+</body>
+</html>

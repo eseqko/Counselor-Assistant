@@ -3,6 +3,22 @@
 {% block page_title %}Edit Post-Grad Outcome{% endblock %}
 {% block content %}
 
+<div class="card" style="border-left:3px solid var(--primary);">
+    <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div>
+            <strong style="font-size:0.9rem;">Send {{ outcome.student.first_name }} a self-report link</strong>
+            <div style="font-size:0.8rem;color:var(--gray);">Same link every time — great for a 6-month or 1-year check-in.</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-sm btn-outline" onclick="copyLink(this, '{{ survey_url }}')">Copy Link</button>
+            {% if outcome.student.email %}
+            <a class="btn btn-sm btn-outline"
+               href="mailto:{{ outcome.student.email }}?subject={{ 'Quick update for your school records' | urlencode }}&body={{ ('Hi ' + outcome.student.first_name + ',\n\nCould you take a minute to update us on what you\'re up to? ' + survey_url + '\n\nThanks,\n' + current_user.display_name) | urlencode }}">Email It</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body">
         <p><strong>{{ outcome.student.display_name }}</strong></p>

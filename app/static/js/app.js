@@ -123,3 +123,18 @@ function showSynergyToast(msg) {
     requestAnimationFrame(function(){ toast.style.opacity = '1'; });
     setTimeout(function(){ toast.style.opacity = '0'; setTimeout(function(){ toast.remove(); }, 250); }, 4500);
 }
+
+/* Copy a shareable link (e.g. a post-grad self-report link) to the clipboard,
+   with a textarea fallback for browsers/contexts without Clipboard API access. */
+window.copyLink = function(btn, url) {
+    var orig = btn.textContent;
+    var done = function() {
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = orig; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, function() { prompt('Copy this link:', url); });
+    } else {
+        prompt('Copy this link:', url);
+    }
+};

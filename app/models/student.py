@@ -1,3 +1,4 @@
+import secrets
 from app import db
 from datetime import datetime, timezone
 
@@ -38,6 +39,12 @@ class Student(db.Model):
     # without using a real student. Usable in tool dropdowns, but excluded from
     # caseload rosters, counts, and analytics so it never skews real data.
     is_sample = db.Column(db.Boolean, default=False, index=True)
+
+    # Opaque per-student secret for the public post-grad self-report link
+    # (app/routes/post_grad.py). Generated lazily via get_or_create_postgrad_token()
+    # — most students never get one. NEVER derive student identity from anything
+    # else on that public route; the token is the only valid lookup key.
+    postgrad_survey_token = db.Column(db.String(64), unique=True, index=True)
 
     # Status
     status = db.Column(db.String(20), default='active', index=True)
@@ -134,6 +141,18 @@ class Student(db.Model):
     @property
     def display_name(self):
         return f"{self.first_name} {self.last_name}"
+
+    def get_or_create_postgrad_token(self):
+        """Lazily create this student's public post-grad survey token.
+
+        Mirrors User.get_or_create_feed_token — idempotent, 256-bit random,
+        never regenerated once set (so a link a counselor already sent stays
+        valid for a returning alumnus to update at the 6mo/1yr checkpoint).
+        """
+        if not self.postgrad_survey_token:
+            self.postgrad_survey_token = secrets.token_urlsafe(32)
+            db.session.commit()
+        return self.postgrad_survey_token
 
     @property
     def is_el(self):

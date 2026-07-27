@@ -73,12 +73,36 @@
 <div class="card">
     <div class="card-header">Graduates Without Outcomes ({{ grads_without|length }})</div>
     <div class="card-body">
-        <p style="font-size:0.86rem;color:var(--gray);">These students have graduated but don't have outcomes recorded yet.</p>
-        <ul style="margin:0;padding-left:20px;">
-            {% for s in grads_without %}
-            <li><a href="{{ url_for('post_grad.add', student_id=s.id) }}">{{ s.display_name }}</a> ({{ s.exit_date.strftime('%m/%d/%Y') if s.exit_date else 'no date' }})</li>
-            {% endfor %}
-        </ul>
+        <p style="font-size:0.86rem;color:var(--gray);margin-bottom:10px;">
+            These students have graduated but don't have outcomes recorded yet. Enter it
+            yourself, or send the student a link to self-report — the same link works
+            again later if they want to update it (e.g. at the 6-month or 1-year mark).
+        </p>
+        <div class="table-responsive">
+            <table>
+                <thead><tr><th>Student</th><th>Exited</th><th style="width:1%;"></th><th style="width:1%;"></th></tr></thead>
+                <tbody>
+                {% for s, link in grads_without_links %}
+                <tr>
+                    <td><a href="{{ url_for('post_grad.add', student_id=s.id) }}">{{ s.display_name }}</a></td>
+                    <td style="font-size:0.84rem;color:var(--gray);">{{ s.exit_date.strftime('%m/%d/%Y') if s.exit_date else 'no date' }}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline"
+                                onclick="copyLink(this, '{{ link }}')">Copy Link</button>
+                    </td>
+                    <td>
+                        {% if s.email %}
+                        <a class="btn btn-sm btn-outline"
+                           href="mailto:{{ s.email }}?subject={{ 'Quick update for your school records' | urlencode }}&body={{ ('Hi ' + s.first_name + ',\n\nCongrats again on graduating! Could you take a minute to let us know what you\'re up to now? ' + link + '\n\nThanks,\n' + current_user.display_name) | urlencode }}">Email It</a>
+                        {% else %}
+                        <span style="font-size:0.78rem;color:var(--gray);">no email on file</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endif %}
