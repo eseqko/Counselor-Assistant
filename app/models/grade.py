@@ -5,6 +5,15 @@ from datetime import datetime, timezone
 class GradeRecord(db.Model):
     """Imported grade data for trend analysis, early warning, and course recommendations."""
     __tablename__ = 'grade_records'
+    # Composite indexes for the analytics hot paths. Fresh installs get these
+    # via create_all; existing databases via _add_missing_indexes in
+    # app/__init__.py (keep both lists in sync).
+    __table_args__ = (
+        db.Index('ix_grade_records_year_type_quarter',
+                 'school_year', 'grade_type', 'quarter'),
+        db.Index('ix_grade_records_student_year_quarter',
+                 'student_id', 'school_year', 'quarter'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
@@ -67,11 +76,15 @@ class GradeRecord(db.Model):
     @property
     def gpa_points(self):
         """Standard 4.0 scale."""
-        grade_map = {
-            'A+': 4.0, 'A': 4.0, 'A-': 3.7,
-            'B+': 3.3, 'B': 3.0, 'B-': 2.7,
-            'C+': 2.3, 'C': 2.0, 'C-': 1.7,
-            'D+': 1.3, 'D': 1.0, 'D-': 0.7,
-            'F': 0.0,
-        }
-        return grade_map.get(self.letter_grade)
+        return GPA_POINTS.get(self.letter_grade)
+
+
+# Standard 4.0 scale — module-level so tuple queries (which skip ORM
+# hydration and therefore can't use the property) share the same map.
+GPA_POINTS = {
+    'A+': 4.0, 'A': 4.0, 'A-': 3.7,
+    'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+    'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+    'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+    'F': 0.0,
+}

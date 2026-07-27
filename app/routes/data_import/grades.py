@@ -215,7 +215,6 @@ def grades_upload():
         not_on_caseload = 0
         shadow_added = 0  # students created for school-wide comparison data
         errors = []
-        BATCH_SIZE = 200
         # course_number -> teacher name, collected to backfill Course.instructor
         course_teacher = {}
 
@@ -249,6 +248,29 @@ def grades_upload():
             ).delete(synchronize_session=False)
             if purged:
                 db.session.commit()
+
+        # ── Pre-load the upsert map ──────────────────────────────────────
+        # The old code ran GradeRecord.query.filter_by(...).first() per CSV row:
+        # 20k rows = 20k SELECTs + 20k autoflushes ≈ 25s of a 40s import in
+        # profiling. Load every existing key for this grade_type ONCE as cheap
+        # tuples, then upsert against in-memory dicts and write back with bulk
+        # mappings at the end.
+        #   key: (student_id, school_year, quarter, course_name)
+        #   val: dict of the fields the conditional update logic needs
+        db_map = {}
+        for (gid, g_sid, g_year, g_quarter, g_course, g_letter, g_cnum,
+             g_teacher) in db.session.query(
+                GradeRecord.id, GradeRecord.student_id, GradeRecord.school_year,
+                GradeRecord.quarter, GradeRecord.course_name,
+                GradeRecord.letter_grade, GradeRecord.course_number,
+                GradeRecord.teacher,
+        ).filter(GradeRecord.grade_type == form_grade_type).all():
+            db_map[(g_sid, g_year, g_quarter, g_course)] = {
+                'id': gid, 'letter_grade': g_letter,
+                'course_number': g_cnum, 'teacher': g_teacher,
+            }
+        pending_inserts = {}   # key -> insert dict (duplicate rows mutate in place)
+        pending_updates = {}   # id  -> update dict
 
         for row_idx, row in enumerate(rows, start=2):
             # Pad short rows
@@ -374,31 +396,49 @@ def grades_upload():
             title_upper = course_title_clean.upper()
             is_honors_ap = 'AP ' in title_upper or title_upper.startswith('AP ') or ' HONORS' in title_upper
 
-            # Upsert: update if same student+year+quarter+course
+            # Upsert: update if same student+year+quarter+course (in-memory
+            # maps — see preload above — written back in bulk after the loop)
             school_year_clean = str(school_year or '').strip()
-            existing = GradeRecord.query.filter_by(
-                student_id=student_db_id,
-                school_year=school_year_clean,
-                quarter=quarter_val,
-                course_name=course_title_clean,
-                grade_type=form_grade_type,
-            ).first()
+            key = (student_db_id, school_year_clean, quarter_val, course_title_clean)
+            cnum_clean = str(course_number or '').strip()
 
-            if existing:
-                existing.letter_grade = letter_clean or existing.letter_grade
-                existing.course_number = str(course_number or '').strip() or existing.course_number
-                existing.is_honors_ap = is_honors_ap
-                existing.credits_earned = credits_val
+            existing = db_map.get(key)
+            if existing is not None:
+                upd = pending_updates.setdefault(existing['id'], {'id': existing['id']})
+                # Same conditional semantics as the old per-row ORM update:
+                # blank values never wipe existing data.
+                upd['letter_grade'] = letter_clean or existing['letter_grade']
+                upd['course_number'] = cnum_clean or existing['course_number']
+                upd['is_honors_ap'] = is_honors_ap
+                upd['credits_earned'] = credits_val
                 if teacher_clean:
-                    existing.teacher = teacher_clean
+                    upd['teacher'] = teacher_clean
+                # Keep the cache current so a later duplicate row in this same
+                # file conditions against the freshest values.
+                existing['letter_grade'] = upd['letter_grade']
+                existing['course_number'] = upd['course_number']
+                if teacher_clean:
+                    existing['teacher'] = teacher_clean
+                updated += 1
+            elif key in pending_inserts:
+                # Duplicate row in the same file: mutate the pending insert,
+                # matching the old behavior where autoflush made the first
+                # row's record visible to the second row's query.
+                rec = pending_inserts[key]
+                rec['letter_grade'] = letter_clean or rec['letter_grade']
+                rec['course_number'] = cnum_clean or rec['course_number']
+                rec['is_honors_ap'] = is_honors_ap
+                rec['credits_earned'] = credits_val
+                if teacher_clean:
+                    rec['teacher'] = teacher_clean
                 updated += 1
             else:
-                record = GradeRecord(
+                pending_inserts[key] = dict(
                     student_id=student_db_id,
                     school_year=school_year_clean,
                     quarter=quarter_val,
                     course_name=course_title_clean,
-                    course_number=str(course_number or '').strip(),
+                    course_number=cnum_clean,
                     period=period_val,
                     teacher=teacher_clean or None,
                     letter_grade=letter_clean,
@@ -409,7 +449,6 @@ def grades_upload():
                     is_honors_ap=is_honors_ap,
                     imported_by_id=current_user.id,
                 )
-                db.session.add(record)
                 added += 1
 
             # Remember the teacher for each catalog course number (backfill below).
@@ -419,10 +458,14 @@ def grades_upload():
             if cnum and teacher_clean:
                 course_teacher.setdefault(cnum, teacher_clean)
 
-            # Batch commit to avoid holding SQLite lock too long
-            if (added + updated) % BATCH_SIZE == 0:
-                db.session.commit()
-
+        # Persist any shadow students created in the loop, then write all grade
+        # rows in two bulk statements — orders of magnitude fewer round-trips
+        # than per-row adds with periodic commits.
+        db.session.commit()
+        if pending_inserts:
+            db.session.bulk_insert_mappings(GradeRecord, list(pending_inserts.values()))
+        if pending_updates:
+            db.session.bulk_update_mappings(GradeRecord, list(pending_updates.values()))
         db.session.commit()
 
         # Backfill Course.instructor from the staff names in this import, but only

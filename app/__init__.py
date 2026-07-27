@@ -16,23 +16,44 @@ csrf = CSRFProtect()
 
 
 def _add_missing_indexes(app):
-    """Create indexes on frequently-filtered foreign key columns."""
+    """Create indexes on frequently-filtered columns for EXISTING databases.
+
+    db.create_all() only builds tables (and their model-declared indexes) that
+    don't exist yet, so databases created before an index was added to a model
+    never get it from create_all alone — this backfill is the migration path.
+    Names match the model-declared indexes so IF NOT EXISTS no-ops on fresh DBs.
+    The column slot may be a comma-joined list for composite indexes.
+    """
     import sqlalchemy
     indexes = [
         ('ix_notes_author_id', 'notes', 'author_id'),
         ('ix_service_records_counselor_id', 'service_records', 'counselor_id'),
         ('ix_calendar_events_owner_id', 'calendar_events', 'owner_id'),
         ('ix_meeting_notes_author_id', 'meeting_notes', 'author_id'),
-        ('ix_grades_student_id', 'grades', 'student_id'),
+        # NOTE: table is 'grade_records' — a prior version targeted a
+        # nonexistent 'grades' table, so old installs ran the app's largest
+        # table with no student_id index at all.
+        ('ix_grade_records_student_id', 'grade_records', 'student_id'),
         ('ix_attendance_student_id', 'attendance_records', 'student_id'),
+        # Composite indexes for the analytics hot paths (see app/models for the
+        # matching db.Index declarations that cover fresh installs):
+        ('ix_grade_records_year_type_quarter', 'grade_records',
+         'school_year, grade_type, quarter'),
+        ('ix_grade_records_student_year_quarter', 'grade_records',
+         'student_id, school_year, quarter'),
+        ('ix_attendance_student_date', 'attendance_records', 'student_id, date'),
+        ('ix_transcript_records_student_import', 'transcript_records',
+         'student_id, import_date'),
     ]
     for idx_name, table, column in indexes:
         try:
             db.session.execute(sqlalchemy.text(
                 f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"
             ))
-        except Exception:
-            pass  # Table may not exist yet
+        except Exception as e:
+            # Table may not exist yet (fresh DB before create_all ordering
+            # changes) — log instead of hiding real failures.
+            app.logger.warning(f"Index {idx_name} not created: {e}")
     db.session.commit()
 
 
