@@ -31,25 +31,91 @@
 
     <!-- Step 2: Upload -->
     <div class="card">
-        <div class="card-header">Step 2: Upload Filled Template</div>
+        <div class="card-header">Step 2: Upload &amp; Preview</div>
         <div class="card-body">
-            <form method="POST" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data" id="upload-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="departing_actions" id="departing-actions" value="">
                 <div class="form-group">
                     <label>Select Excel File (.xlsx)</label>
-                    <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required
+                    <input type="file" name="file" id="file-input" class="form-control" accept=".xlsx,.xls" required
                            style="padding:8px;">
                 </div>
                 <div style="background:var(--bg);border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
-                    <strong>What happens on upload:</strong>
+                    <strong>New school year?</strong> Upload your new roster and click
+                    <em>Preview Changes</em> — you'll see who's returning, who's new, and
+                    who from your current caseload is missing from the file, and can choose
+                    what happens to each departing student before anything is saved.
                     <ul style="margin-top:4px;padding-left:20px;">
                         <li>New Student IDs are added to your caseload</li>
-                        <li>Existing Student IDs are <strong>updated</strong> with the new data</li>
-                        <li>Invalid rows are skipped and reported</li>
+                        <li>Existing Student IDs are <strong>updated</strong> (incl. new grade level)</li>
+                        <li>Students missing from the file are <strong>kept unless you choose otherwise</strong></li>
                     </ul>
                 </div>
-                <button type="submit" class="btn btn-success">Upload & Import</button>
+                <button type="button" class="btn btn-primary" id="preview-btn" onclick="fetchPreview()">Preview Changes</button>
+                <button type="submit" class="btn btn-success" id="import-btn">Import Without Preview</button>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Preview: three-bucket diff (populated by fetchPreview) -->
+<div class="card" id="preview-card" style="display:none;margin-top:20px;">
+    <div class="card-header">Preview — Caseload Changes</div>
+    <div class="card-body">
+        <div class="stats-grid" style="margin-bottom:16px;">
+            <div class="stat-card success"><div class="stat-value" id="pv-returning">0</div><div class="stat-label">Returning</div></div>
+            <div class="stat-card info"><div class="stat-value" id="pv-new">0</div><div class="stat-label">New to My Caseload</div></div>
+            <div class="stat-card accent"><div class="stat-value" id="pv-departing">0</div><div class="stat-label">Not in File (Departing?)</div></div>
+            <div class="stat-card danger" id="pv-errors-card" style="display:none;"><div class="stat-value" id="pv-errors">0</div><div class="stat-label">Row Errors</div></div>
+        </div>
+
+        <div id="pv-departing-section" style="display:none;">
+            <h3 style="font-size:0.95rem;margin:0 0 6px;">Students on your caseload who are NOT in this file</h3>
+            <p style="font-size:0.82rem;color:var(--gray);margin:0 0 8px;">
+                Default is <strong>Keep on caseload</strong> — nothing happens unless you pick an
+                action. Applied actions can be undone for 24 hours from the Rollover page.
+            </p>
+            <div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <span style="font-size:0.78rem;color:var(--gray);">Set all to:</span>
+                <button type="button" class="btn btn-sm btn-outline" onclick="bulkSetDeparting('keep')">Keep</button>
+                <button type="button" class="btn btn-sm btn-outline" onclick="bulkSetDeparting('transfer')">Transferred</button>
+                <button type="button" class="btn btn-sm btn-outline" onclick="bulkSetDeparting('graduate')">Graduated</button>
+                <button type="button" class="btn btn-sm btn-outline" onclick="bulkSetDeparting('unassign')">Unassign</button>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>Student</th><th>ID</th><th>Grade</th><th style="width:220px;">Action</th></tr></thead>
+                    <tbody id="pv-departing-rows"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <details style="margin-top:14px;" id="pv-returning-details">
+            <summary style="cursor:pointer;font-weight:600;font-size:0.88rem;">Returning students (<span id="pv-returning-n">0</span>)</summary>
+            <div class="table-responsive" style="margin-top:8px;">
+                <table>
+                    <thead><tr><th>Student</th><th>ID</th><th>Grade</th></tr></thead>
+                    <tbody id="pv-returning-rows"></tbody>
+                </table>
+            </div>
+        </details>
+
+        <details style="margin-top:10px;" id="pv-new-details">
+            <summary style="cursor:pointer;font-weight:600;font-size:0.88rem;">New students (<span id="pv-new-n">0</span>)</summary>
+            <div class="table-responsive" style="margin-top:8px;">
+                <table>
+                    <thead><tr><th>Student</th><th>ID</th><th>Grade</th><th>Note</th></tr></thead>
+                    <tbody id="pv-new-rows"></tbody>
+                </table>
+            </div>
+        </details>
+
+        <div id="pv-error-list" style="margin-top:10px;"></div>
+
+        <div style="margin-top:16px;display:flex;gap:8px;">
+            <button type="button" class="btn btn-success" onclick="applyWithActions()">Apply Changes</button>
+            <button type="button" class="btn btn-outline" onclick="cancelPreview()">Cancel</button>
         </div>
     </div>
 </div>
@@ -106,5 +172,116 @@
         <a href="{{ url_for('caseload.export_caseload') }}" class="btn btn-outline">Export Caseload to Excel</a>
     </div>
 </div>
+
+<script>
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+}
+
+function fetchPreview() {
+    var input = document.getElementById('file-input');
+    if (!input.files.length) { alert('Choose a file first.'); return; }
+    var btn = document.getElementById('preview-btn');
+    btn.disabled = true; btn.textContent = 'Analyzing…';
+
+    var fd = new FormData();
+    fd.append('file', input.files[0]);
+    fetch('{{ url_for("caseload.upload_caseload_preview") }}', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            btn.disabled = false; btn.textContent = 'Preview Changes';
+            if (!data.ok) { alert(data.error || 'Could not read the file.'); return; }
+            renderPreview(data);
+        })
+        .catch(function () {
+            btn.disabled = false; btn.textContent = 'Preview Changes';
+            alert('Preview failed — check your connection and try again.');
+        });
+}
+
+function renderPreview(data) {
+    document.getElementById('pv-returning').textContent = data.counts.returning;
+    document.getElementById('pv-new').textContent = data.counts.new;
+    document.getElementById('pv-departing').textContent = data.counts.departing;
+    var errCard = document.getElementById('pv-errors-card');
+    errCard.style.display = data.counts.errors ? '' : 'none';
+    document.getElementById('pv-errors').textContent = data.counts.errors;
+
+    /* Departing — per-student action selects, default Keep */
+    var depSection = document.getElementById('pv-departing-section');
+    var depRows = document.getElementById('pv-departing-rows');
+    depRows.innerHTML = '';
+    if (data.departing.length) {
+        depSection.style.display = '';
+        data.departing.forEach(function (d) {
+            depRows.insertAdjacentHTML('beforeend',
+                '<tr><td>' + esc(d.name) + '</td><td>' + esc(d.sid) + '</td><td>' + esc(d.grade) + '</td>' +
+                '<td><select class="form-control departing-select" data-student-id="' + d.id + '" style="padding:4px 8px;font-size:0.84rem;">' +
+                '<option value="keep" selected>Keep on caseload</option>' +
+                '<option value="transfer">Mark Transferred</option>' +
+                '<option value="graduate">Mark Graduated</option>' +
+                '<option value="withdraw">Mark Withdrawn</option>' +
+                '<option value="unassign">Unassign (another counselor)</option>' +
+                '</select></td></tr>');
+        });
+    } else {
+        depSection.style.display = 'none';
+    }
+
+    /* Returning */
+    document.getElementById('pv-returning-n').textContent = data.returning.length;
+    var retRows = document.getElementById('pv-returning-rows');
+    retRows.innerHTML = data.returning.map(function (r) {
+        var grade = r.grade_changed
+            ? esc(r.grade_from) + ' → <strong>' + esc(r.grade_to) + '</strong>'
+            : esc(r.grade_to);
+        return '<tr><td>' + esc(r.name) + '</td><td>' + esc(r.sid) + '</td><td>' + grade + '</td></tr>';
+    }).join('');
+
+    /* New */
+    var kindLabel = {
+        brand_new: 'Brand new student',
+        promotable: 'Already in school data — will join your caseload',
+        other_counselor: "On another counselor's caseload — will be SKIPPED",
+    };
+    document.getElementById('pv-new-n').textContent = data.new.length;
+    document.getElementById('pv-new-rows').innerHTML = data.new.map(function (n) {
+        var style = n.kind === 'other_counselor' ? ' style="color:var(--danger);"' : '';
+        return '<tr' + style + '><td>' + esc(n.name) + '</td><td>' + esc(n.sid) + '</td><td>' +
+               esc(n.grade) + '</td><td style="font-size:0.8rem;">' + kindLabel[n.kind] + '</td></tr>';
+    }).join('');
+
+    /* Row errors */
+    var errList = document.getElementById('pv-error-list');
+    errList.innerHTML = data.errors.length
+        ? '<div style="font-size:0.82rem;color:var(--danger);"><strong>Row errors (skipped):</strong><ul style="margin:4px 0 0 18px;">' +
+          data.errors.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul></div>'
+        : '';
+
+    document.getElementById('preview-card').style.display = '';
+    document.getElementById('preview-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function bulkSetDeparting(action) {
+    document.querySelectorAll('.departing-select').forEach(function (sel) { sel.value = action; });
+}
+
+function applyWithActions() {
+    var actions = {};
+    document.querySelectorAll('.departing-select').forEach(function (sel) {
+        if (sel.value !== 'keep') actions[sel.getAttribute('data-student-id')] = sel.value;
+    });
+    document.getElementById('departing-actions').value =
+        Object.keys(actions).length ? JSON.stringify(actions) : '';
+    document.getElementById('upload-form').submit();
+}
+
+function cancelPreview() {
+    document.getElementById('preview-card').style.display = 'none';
+    document.getElementById('departing-actions').value = '';
+}
+</script>
 
 {% endblock %}

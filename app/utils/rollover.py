@@ -216,6 +216,11 @@ def restore(student, prior):
     student.exit_reason = prior.get('exit_reason')
     student.exit_date = _parse_iso_date(prior.get('exit_date'))
     student.exit_notes = prior.get('exit_notes')
+    # Caseload-sync snapshots also capture the counselor assignment (the
+    # 'unassign' action clears it). Old rollover snapshots predate the key —
+    # leave the assignment untouched for those.
+    if 'assigned_counselor_id' in prior:
+        student.assigned_counselor_id = prior['assigned_counselor_id']
 
     # Restore Senior Studies tag membership only — leave other tags alone, since
     # rollover only ever adds the SENIOR_STUDIES_TAG, never removes anything.
@@ -234,8 +239,45 @@ def _capture_prior(student):
         'exit_reason': student.exit_reason,
         'exit_date': student.exit_date.isoformat() if student.exit_date else None,
         'exit_notes': student.exit_notes,
+        'assigned_counselor_id': student.assigned_counselor_id,
         'had_senior_studies_tag': _has_senior_studies_tag(student),
     }
+
+
+# ── New-year caseload sync ("departing student" actions) ─────────────────────
+# Applied to students on the counselor's caseload who are ABSENT from a newly
+# uploaded roster file. 'keep' is the safe default and a strict no-op.
+SYNC_ACTIONS = ('keep', 'transfer', 'graduate', 'withdraw', 'unassign')
+
+
+def apply_sync_action(student, action, end_date):
+    """Apply a caseload-sync departing action; returns the captured prior state.
+
+    Mirrors apply_action's contract (capture first, then mutate) so the same
+    RolloverSnapshot/restore machinery provides the 24-hour undo.
+    """
+    prior = _capture_prior(student)
+
+    if action == 'transfer':
+        student.status = 'transferred'
+        student.exit_reason = 'transferred_out_district'
+        student.exit_date = end_date
+    elif action == 'graduate':
+        student.status = 'graduated'
+        student.exit_reason = 'graduated'
+        student.exit_date = end_date
+    elif action == 'withdraw':
+        student.status = 'inactive'
+        student.exit_reason = 'other'
+        student.exit_date = end_date
+    elif action == 'unassign':
+        # Moving to another counselor: stays active in the school, drops off
+        # this caseload, appears in the admin unassigned pool for pickup.
+        # Deliberately NOT an exit — no exit_reason/date on an active student.
+        student.assigned_counselor_id = None
+    # 'keep' -> no-op
+
+    return prior
 
 
 def _parse_iso_date(s):

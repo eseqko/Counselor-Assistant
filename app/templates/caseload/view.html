@@ -13,6 +13,10 @@
 </div>
 
 <div id="profile-panel-overview" class="profile-panel" role="tabpanel">
+    {# Student 360: on-track verdict + prioritized next steps, then trends #}
+    {% include "caseload/_partials/_action_plan.html" %}
+    {% include "caseload/_partials/_trends.html" %}
+
     <div class="profile-shell">
         <aside class="profile-col-left">
             {% include "caseload/_partials/_profile_identity_cards.html" %}

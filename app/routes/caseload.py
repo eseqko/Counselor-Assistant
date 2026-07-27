@@ -5,7 +5,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, send_file, jsonify, abort)
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
-from app import db
+from app import db, csrf
 from app.models.student import Student, Tag
 from app.models.rollover import RolloverSnapshot
 from app.models.transcript import TranscriptRecord
@@ -228,17 +228,42 @@ def view_student(id):
         latest_transcript.cte_completed if latest_transcript else 0,
     )
 
-    attendance_rate = None
-    total_attendance = student.attendance_records.count()
-    if total_attendance:
-        present = student.attendance_records.filter_by(status='present').count()
-        attendance_rate = round(100 * present / total_attendance, 1)
-
     goals_completion_pct = None
     total_goals = student.goals.count()
     if total_goals:
         achieved = student.goals.filter_by(status='achieved').count()
         goals_completion_pct = round(100 * achieved / total_goals, 1)
+
+    # ── Student 360: action plan + trends ────────────────────────────────
+    # The plan consolidates on graduation's engine (the single home for
+    # credit math) and computes the on-track verdict, prioritized next steps,
+    # attendance with the CORRECTED day-based denominator (the old
+    # present-records / total-period-records math understated absence), GPA
+    # trajectory, and credit velocity across transcript imports.
+    from app.routes.graduation import _build_student_grad_data
+    from app.utils.next_steps import build_action_plan
+    grad_data = _build_student_grad_data(student)
+    action_plan = build_action_plan(student, grad_data=grad_data)
+    att = action_plan['attendance']
+    attendance_rate = (round(100 - att['rate_pct'], 1)
+                       if att['rate_pct'] is not None else None)
+
+    # Per-student screening history with delta vs the previous result of the
+    # same screener (screenings previously had no per-student surface at all).
+    from app.models.screening import ScreeningResult
+    screening_rows = ScreeningResult.query.filter_by(
+        student_id=student.id).order_by(
+        ScreeningResult.administered_date.desc()).limit(12).all()
+    prev_by_template = {}
+    screenings_with_delta = []
+    for r in reversed(screening_rows):          # oldest→newest to compute deltas
+        prev = prev_by_template.get(r.template_id)
+        delta = (r.total_score - prev.total_score
+                 if prev and r.total_score is not None and prev.total_score is not None
+                 else None)
+        screenings_with_delta.append({'r': r, 'delta': delta})
+        prev_by_template[r.template_id] = r
+    screenings_with_delta.reverse()             # newest first for display
 
     return render_template('caseload/view.html',
         student=student, notes=notes,
@@ -254,6 +279,9 @@ def view_student(id):
         state_min_risk=state_min_risk,
         attendance_rate=attendance_rate,
         goals_completion_pct=goals_completion_pct,
+        action_plan=action_plan,
+        grad_data=grad_data,
+        screenings_with_delta=screenings_with_delta,
         now_date=date.today(),
         exit_reasons=Student.EXIT_REASONS)
 
@@ -524,6 +552,169 @@ def download_template():
 #  EXCEL UPLOAD
 # =====================================================================
 
+def _parse_caseload_file(file):
+    """Parse + validate a caseload template upload.
+
+    Returns (rows, errors, fatal): `rows` are normalized dicts, `errors` are
+    per-row messages, `fatal` is a whole-file error string (bad file / wrong
+    headers) or None. Shared by the preview and apply routes so the diff the
+    counselor previews is computed by the exact code that later applies it.
+    """
+    if not file or not file.filename.endswith(('.xlsx', '.xls')):
+        return [], [], 'Please upload an Excel file (.xlsx).'
+    try:
+        wb = load_workbook(file, data_only=True)
+        ws = wb.active
+    except Exception as e:
+        return [], [], f'Could not read Excel file: {str(e)}'
+
+    expected = ['first name', 'last name', 'grade', 'student id #', 'email',
+                'el status', 'el level', 'iep', '504 plan']
+    headers = [str(cell.value or '').strip().lower() for cell in ws[1]]
+    if headers[:len(expected)] != expected:
+        return [], [], ('Column headers don\'t match the template. '
+                        'Please download a fresh template and try again.')
+
+    rows, errors = [], []
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_col=9, values_only=True), start=2):
+        first_name, last_name, grade, student_id, email, el_status, el_level, iep, plan_504 = row
+
+        # Skip empty rows
+        if not first_name and not last_name and not student_id:
+            continue
+
+        row_errors = []
+        if not first_name:
+            row_errors.append('First Name is required')
+        if not last_name:
+            row_errors.append('Last Name is required')
+        if not student_id:
+            row_errors.append('Student ID # is required')
+        if not grade:
+            row_errors.append('Grade is required')
+
+        grade_val = None
+        if grade:
+            try:
+                grade_val = int(grade)
+                if grade_val < 6 or grade_val > 12:
+                    row_errors.append(f'Grade must be 6-12, got {grade_val}')
+            except (ValueError, TypeError):
+                row_errors.append(f'Invalid grade: {grade}')
+
+        el_status_clean = str(el_status or '').strip()
+        if el_status_clean and el_status_clean not in VALID_EL_STATUSES:
+            row_errors.append(f'Invalid EL Status: {el_status_clean}. Must be Newcomer, LTEL, RFEP, or EO.')
+        if not el_status_clean:
+            el_status_clean = 'EO'
+
+        el_level_clean = str(el_level or '').strip()
+        if el_status_clean == 'Newcomer' and el_level_clean and el_level_clean not in VALID_EL_LEVELS:
+            row_errors.append(f'Invalid EL Level: {el_level_clean}. Must be EL 1, EL 2, or EL 3.')
+        if el_status_clean != 'Newcomer':
+            el_level_clean = ''
+
+        if row_errors:
+            errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
+            continue
+
+        rows.append({
+            'row_idx': row_idx,
+            'sid': str(student_id).strip(),
+            'first_name': str(first_name).strip(),
+            'last_name': str(last_name).strip(),
+            'grade_level': grade_val,
+            'email': str(email or '').strip(),
+            'el_status': el_status_clean,
+            'el_level': el_level_clean,
+            'iep': str(iep or '').strip().lower() in ('yes', 'y', 'true', '1'),
+            'plan_504': str(plan_504 or '').strip().lower() in ('yes', 'y', 'true', '1'),
+        })
+    return rows, errors, None
+
+
+@caseload_bp.route('/upload/preview', methods=['POST'])
+@csrf.exempt
+@login_required
+def upload_caseload_preview():
+    """Diff an uploaded roster against the current caseload WITHOUT applying.
+
+    Returns the three-bucket JSON the new-year sync UI renders:
+      returning — in file AND currently on my caseload (with grade changes)
+      new       — in file, not on my caseload (brand-new / promotable / other-counselor)
+      departing — on my active caseload but absent from the file
+    """
+    rows, errors, fatal = _parse_caseload_file(request.files.get('file'))
+    if fatal:
+        return jsonify({'ok': False, 'error': fatal}), 400
+
+    # Dedupe file rows by student ID (last row wins, matching apply order).
+    by_sid = {}
+    for r in rows:
+        by_sid[r['sid']] = r
+
+    # My current active caseload (samples excluded — they're test fixtures).
+    mine = {s.student_id_number: s for s in Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active',
+        is_sample=False).all()}
+
+    # Global lookup for the file's IDs (classify new vs promotable vs blocked).
+    existing_global = {}
+    if by_sid:
+        sid_list = list(by_sid.keys())
+        for chunk_start in range(0, len(sid_list), 900):
+            chunk = sid_list[chunk_start:chunk_start + 900]
+            for s in Student.query.filter(Student.student_id_number.in_(chunk)).all():
+                existing_global[s.student_id_number] = s
+
+    returning, new_students = [], []
+    for sid, r in by_sid.items():
+        cur = mine.get(sid)
+        if cur:
+            returning.append({
+                'sid': sid, 'name': f'{r["last_name"]}, {r["first_name"]}',
+                'grade_from': cur.grade_level, 'grade_to': r['grade_level'],
+                'grade_changed': cur.grade_level != r['grade_level'],
+            })
+            continue
+        g = existing_global.get(sid)
+        if g is None:
+            kind = 'brand_new'
+        elif current_user.role != 'admin' \
+                and g.assigned_counselor_id not in (None, 0, current_user.id):
+            kind = 'other_counselor'   # will be skipped on apply (FERPA guard)
+        else:
+            kind = 'promotable'        # shadow / unassigned / re-activating
+        new_students.append({
+            'sid': sid, 'name': f'{r["last_name"]}, {r["first_name"]}',
+            'grade': r['grade_level'], 'kind': kind,
+        })
+
+    departing = [
+        {'id': s.id, 'sid': sid, 'name': f'{s.last_name}, {s.first_name}',
+         'grade': s.grade_level}
+        for sid, s in mine.items() if sid not in by_sid
+    ]
+    departing.sort(key=lambda d: d['name'].lower())
+    returning.sort(key=lambda d: d['name'].lower())
+    new_students.sort(key=lambda d: d['name'].lower())
+
+    return jsonify({
+        'ok': True,
+        'returning': returning,
+        'new': new_students,
+        'departing': departing,
+        'errors': errors,
+        'counts': {
+            'returning': len(returning),
+            'new': len(new_students),
+            'new_blocked': sum(1 for n in new_students if n['kind'] == 'other_counselor'),
+            'departing': len(departing),
+            'errors': len(errors),
+        },
+    })
+
+
 @caseload_bp.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload_caseload():
@@ -531,133 +722,115 @@ def upload_caseload():
         flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
         return redirect(url_for('caseload.index'))
     if request.method == 'POST':
-        file = request.files.get('file')
-        if not file or not file.filename.endswith(('.xlsx', '.xls')):
-            flash('Please upload an Excel file (.xlsx).', 'danger')
+        rows, errors, fatal = _parse_caseload_file(request.files.get('file'))
+        if fatal:
+            flash(fatal, 'danger')
             return redirect(url_for('caseload.upload_caseload'))
 
-        try:
-            wb = load_workbook(file, data_only=True)
-            ws = wb.active
-        except Exception as e:
-            flash(f'Could not read Excel file: {str(e)}', 'danger')
-            return redirect(url_for('caseload.upload_caseload'))
-
-        # Validate headers
-        expected = ['first name', 'last name', 'grade', 'student id #', 'email',
-                    'el status', 'el level', 'iep', '504 plan']
-        headers = [str(cell.value or '').strip().lower() for cell in ws[1]]
-
-        if headers[:len(expected)] != expected:
-            flash(
-                'Column headers don\'t match the template. Please download a fresh template and try again.',
-                'danger'
-            )
-            return redirect(url_for('caseload.upload_caseload'))
-
-        # Parse rows
         added = 0
         updated = 0
-        errors = []
 
-        for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_col=9, values_only=True), start=2):
-            first_name, last_name, grade, student_id, email, el_status, el_level, iep, plan_504 = row
-
-            # Skip empty rows
-            if not first_name and not last_name and not student_id:
-                continue
-
-            # Validate required fields
-            row_errors = []
-            if not first_name:
-                row_errors.append('First Name is required')
-            if not last_name:
-                row_errors.append('Last Name is required')
-            if not student_id:
-                row_errors.append('Student ID # is required')
-            if not grade:
-                row_errors.append('Grade is required')
-
-            # Validate grade
-            grade_val = None
-            if grade:
-                try:
-                    grade_val = int(grade)
-                    if grade_val < 6 or grade_val > 12:
-                        row_errors.append(f'Grade must be 6-12, got {grade_val}')
-                except (ValueError, TypeError):
-                    row_errors.append(f'Invalid grade: {grade}')
-
-            # Normalize EL status
-            el_status_clean = str(el_status or '').strip()
-            if el_status_clean and el_status_clean not in VALID_EL_STATUSES:
-                row_errors.append(f'Invalid EL Status: {el_status_clean}. Must be Newcomer, LTEL, RFEP, or EO.')
-            if not el_status_clean:
-                el_status_clean = 'EO'
-
-            # Normalize EL level
-            el_level_clean = str(el_level or '').strip()
-            if el_status_clean == 'Newcomer' and el_level_clean and el_level_clean not in VALID_EL_LEVELS:
-                row_errors.append(f'Invalid EL Level: {el_level_clean}. Must be EL 1, EL 2, or EL 3.')
-            if el_status_clean != 'Newcomer':
-                el_level_clean = ''
-
-            # Normalize IEP / 504
-            iep_bool = str(iep or '').strip().lower() in ('yes', 'y', 'true', '1')
-            plan_504_bool = str(plan_504 or '').strip().lower() in ('yes', 'y', 'true', '1')
-
-            if row_errors:
-                errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
-                continue
-
+        for r in rows:
             # student_id_number is globally unique (one row per student). Look it
             # up GLOBALLY: scoping the lookup to the current counselor would let a
             # colliding ID (owned by another counselor) fall through to an INSERT
             # that violates the unique constraint and aborts the entire batch.
-            student_id_str = str(student_id).strip()
-            existing = Student.query.filter_by(student_id_number=student_id_str).first()
+            existing = Student.query.filter_by(student_id_number=r['sid']).first()
 
             if existing and current_user.role != 'admin' \
                     and existing.assigned_counselor_id not in (None, 0, current_user.id):
                 # On another counselor's caseload: don't reassign via import (FERPA)
                 # and don't crash the batch. Skip with a clear, per-row message.
                 errors.append(
-                    f'Row {row_idx}: student ID {student_id_str} is on another '
+                    f'Row {r["row_idx"]}: student ID {r["sid"]} is on another '
                     "counselor's caseload — skipped (use Reassign to move).")
                 continue
 
             if existing:
-                existing.first_name = str(first_name).strip()
-                existing.last_name = str(last_name).strip()
-                existing.grade_level = grade_val
-                existing.email = str(email or '').strip()
-                existing.el_status = el_status_clean
-                existing.el_level = el_level_clean
-                existing.ell_status = (el_status_clean in ('Newcomer', 'LTEL', 'RFEP'))
-                existing.iep_status = iep_bool
-                existing.section_504 = plan_504_bool
+                existing.first_name = r['first_name']
+                existing.last_name = r['last_name']
+                existing.grade_level = r['grade_level']
+                existing.email = r['email']
+                existing.el_status = r['el_status']
+                existing.el_level = r['el_level']
+                existing.ell_status = (r['el_status'] in ('Newcomer', 'LTEL', 'RFEP'))
+                existing.iep_status = r['iep']
+                existing.section_504 = r['plan_504']
                 existing.assigned_counselor_id = current_user.id
                 # Promote any shadow record to a full caseload student so it stops
-                # being filtered out of UI lists.
+                # being filtered out of UI lists. Re-activate exited students who
+                # reappear on a roster (e.g. re-enrolled after a transfer).
                 existing.is_shadow = False
+                if existing.status != 'active':
+                    existing.status = 'active'
+                    existing.exit_reason = None
+                    existing.exit_date = None
                 updated += 1
             else:
                 student = Student(
-                    student_id_number=student_id_str,
-                    first_name=str(first_name).strip(),
-                    last_name=str(last_name).strip(),
-                    grade_level=grade_val,
-                    email=str(email or '').strip(),
-                    el_status=el_status_clean,
-                    el_level=el_level_clean,
-                    ell_status=(el_status_clean in ('Newcomer', 'LTEL', 'RFEP')),
-                    iep_status=iep_bool,
-                    section_504=plan_504_bool,
+                    student_id_number=r['sid'],
+                    first_name=r['first_name'],
+                    last_name=r['last_name'],
+                    grade_level=r['grade_level'],
+                    email=r['email'],
+                    el_status=r['el_status'],
+                    el_level=r['el_level'],
+                    ell_status=(r['el_status'] in ('Newcomer', 'LTEL', 'RFEP')),
+                    iep_status=r['iep'],
+                    section_504=r['plan_504'],
                     assigned_counselor_id=current_user.id,
                     status='active',
                 )
                 db.session.add(student)
                 added += 1
+
+        # ── New-year sync: departing-student actions ──────────────────────
+        # Optional JSON map {student_db_id: action} posted by the preview UI
+        # for students on my caseload who are absent from the file. Absent map
+        # or 'keep' = untouched (the safe default — a partial file can never
+        # silently exit students). Applied atomically with the upserts, with a
+        # RolloverSnapshot for the same 24-hour undo the EOY rollover has.
+        departed_counts = {}
+        snapshot = None
+        raw_actions = request.form.get('departing_actions', '').strip()
+        if raw_actions:
+            try:
+                action_map = {int(k): v for k, v in json.loads(raw_actions).items()}
+            except (ValueError, TypeError):
+                db.session.rollback()
+                flash('Invalid departing-student actions payload — nothing was changed.', 'danger')
+                return redirect(url_for('caseload.upload_caseload'))
+
+            file_sids = {r['sid'] for r in rows}
+            today = date.today()
+            snapshot_items = []
+            targets = Student.query.filter(
+                Student.id.in_(list(action_map.keys())),
+                Student.assigned_counselor_id == current_user.id,
+                Student.is_sample == False,
+            ).all() if action_map else []
+            for s in targets:
+                action = action_map.get(s.id)
+                if action not in rollover_util.SYNC_ACTIONS or action == 'keep':
+                    continue
+                if s.student_id_number in file_sids:
+                    # In the file after all (e.g. stale preview) — never exit a
+                    # student the roster says is present.
+                    continue
+                prior = rollover_util.apply_sync_action(s, action, today)
+                prior['applied_action'] = f'sync_{action}'
+                snapshot_items.append(prior)
+                departed_counts[action] = departed_counts.get(action, 0) + 1
+                log_action('caseload_sync.apply', resource_type='student',
+                           resource_id=s.id, details=f'action={action}')
+            if snapshot_items:
+                snapshot = RolloverSnapshot(
+                    counselor_id=current_user.id,
+                    student_count=len(snapshot_items),
+                    school_year_end_date=today,
+                    payload=json.dumps(snapshot_items),
+                )
+                db.session.add(snapshot)
 
         try:
             db.session.commit()
@@ -668,14 +841,18 @@ def upload_caseload():
             return render_template('caseload/upload.html',
                 errors=['Duplicate student ID conflict — import aborted. No changes saved.'],
                 added=0, updated=0)
-        log_action('import', 'caseload', details=f'Imported caseload: {added} added, {updated} updated')
+        log_action('import', 'caseload', details=f'Imported caseload: {added} added, {updated} updated'
+                   + (f', departing actions: {departed_counts}' if departed_counts else ''))
 
+        msg = f'{added} students added, {updated} updated.'
+        if departed_counts:
+            pretty = ', '.join(f'{n} {a}' for a, n in sorted(departed_counts.items()))
+            msg += f' Departing: {pretty}. Undo available for 24 hours on the Rollover page.'
         if errors:
-            flash(f'Imported with issues: {added} added, {updated} updated, {len(errors)} errors.', 'warning')
+            flash(f'Imported with issues: {msg} {len(errors)} errors.', 'warning')
             return render_template('caseload/upload.html', errors=errors, added=added, updated=updated)
-        else:
-            flash(f'Caseload imported successfully! {added} students added, {updated} updated.', 'success')
-            return redirect(url_for('caseload.index'))
+        flash(f'Caseload imported successfully! {msg}', 'success')
+        return redirect(url_for('caseload.index'))
 
     return render_template('caseload/upload.html', errors=None, added=0, updated=0)
 
@@ -996,7 +1173,18 @@ def rollover_undo(snapshot_id):
     restored = 0
     for entry in snapshot.items():
         s = Student.query.get(entry.get('student_id'))
-        if not s or s.assigned_counselor_id != current_user.id:
+        # Ownership: restore students who are mine NOW, or who are currently
+        # UNOWNED but were mine at capture time (the sync 'unassign' action
+        # clears assigned_counselor_id, so the current-owner check alone would
+        # make unassignment un-undoable). A student meanwhile claimed by
+        # another counselor matches neither arm and stays untouched — undo
+        # must never pull a student off someone else's caseload.
+        if not s:
+            continue
+        is_mine = s.assigned_counselor_id == current_user.id
+        unowned_was_mine = (s.assigned_counselor_id in (None, 0)
+                            and entry.get('assigned_counselor_id') == current_user.id)
+        if not (is_mine or unowned_was_mine):
             continue
         rollover_util.restore(s, entry)
         log_action('rollover.undo', resource_type='student',
