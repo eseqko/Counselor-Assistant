@@ -228,17 +228,42 @@ def view_student(id):
         latest_transcript.cte_completed if latest_transcript else 0,
     )
 
-    attendance_rate = None
-    total_attendance = student.attendance_records.count()
-    if total_attendance:
-        present = student.attendance_records.filter_by(status='present').count()
-        attendance_rate = round(100 * present / total_attendance, 1)
-
     goals_completion_pct = None
     total_goals = student.goals.count()
     if total_goals:
         achieved = student.goals.filter_by(status='achieved').count()
         goals_completion_pct = round(100 * achieved / total_goals, 1)
+
+    # ── Student 360: action plan + trends ────────────────────────────────
+    # The plan consolidates on graduation's engine (the single home for
+    # credit math) and computes the on-track verdict, prioritized next steps,
+    # attendance with the CORRECTED day-based denominator (the old
+    # present-records / total-period-records math understated absence), GPA
+    # trajectory, and credit velocity across transcript imports.
+    from app.routes.graduation import _build_student_grad_data
+    from app.utils.next_steps import build_action_plan
+    grad_data = _build_student_grad_data(student)
+    action_plan = build_action_plan(student, grad_data=grad_data)
+    att = action_plan['attendance']
+    attendance_rate = (round(100 - att['rate_pct'], 1)
+                       if att['rate_pct'] is not None else None)
+
+    # Per-student screening history with delta vs the previous result of the
+    # same screener (screenings previously had no per-student surface at all).
+    from app.models.screening import ScreeningResult
+    screening_rows = ScreeningResult.query.filter_by(
+        student_id=student.id).order_by(
+        ScreeningResult.administered_date.desc()).limit(12).all()
+    prev_by_template = {}
+    screenings_with_delta = []
+    for r in reversed(screening_rows):          # oldest→newest to compute deltas
+        prev = prev_by_template.get(r.template_id)
+        delta = (r.total_score - prev.total_score
+                 if prev and r.total_score is not None and prev.total_score is not None
+                 else None)
+        screenings_with_delta.append({'r': r, 'delta': delta})
+        prev_by_template[r.template_id] = r
+    screenings_with_delta.reverse()             # newest first for display
 
     return render_template('caseload/view.html',
         student=student, notes=notes,
@@ -254,6 +279,9 @@ def view_student(id):
         state_min_risk=state_min_risk,
         attendance_rate=attendance_rate,
         goals_completion_pct=goals_completion_pct,
+        action_plan=action_plan,
+        grad_data=grad_data,
+        screenings_with_delta=screenings_with_delta,
         now_date=date.today(),
         exit_reasons=Student.EXIT_REASONS)
 

@@ -1,0 +1,106 @@
+{# Student 360 — per-student trend row: GPA by quarter, absence rate by month,
+   credit velocity across transcript imports, screener deltas.
+   Context: action_plan (gpa_trend / attendance / credit_velocity),
+            screenings_with_delta, student #}
+{% set gpa = action_plan.gpa_trend %}
+{% set att = action_plan.attendance %}
+{% set vel = action_plan.credit_velocity %}
+
+<div class="chart-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:16px;">
+
+    <div class="chart-card" style="padding:14px;">
+        <h3 style="font-size:0.85rem;margin:0 0 2px;">GPA by Quarter
+            {% if gpa.direction == 'improving' %}<span style="color:var(--success);font-size:0.75rem;">&#9650; improving</span>
+            {% elif gpa.direction == 'declining' %}<span style="color:var(--danger);font-size:0.75rem;">&#9660; declining</span>
+            {% elif gpa.direction == 'flat' %}<span style="color:var(--text-muted);font-size:0.75rem;">&#8212; steady</span>{% endif %}
+        </h3>
+        {% if gpa.series|length >= 2 %}
+        <canvas id="trend-gpa" height="90"></canvas>
+        {% else %}
+        <div class="empty-note" style="padding:14px;font-size:0.8rem;">Needs 2+ quarters of final grades.</div>
+        {% endif %}
+    </div>
+
+    <div class="chart-card" style="padding:14px;">
+        <h3 style="font-size:0.85rem;margin:0 0 2px;">Absence Rate by Month
+            {% if att.level == 'chronic' %}<span style="color:var(--danger);font-size:0.75rem;">CHRONIC {{ att.rate_pct }}%</span>
+            {% elif att.level == 'at_risk' %}<span style="color:var(--warning);font-size:0.75rem;">AT RISK {{ att.rate_pct }}%</span>
+            {% elif att.rate_pct is not none %}<span style="color:var(--success);font-size:0.75rem;">{{ att.rate_pct }}%</span>{% endif %}
+        </h3>
+        {% if att.monthly|length >= 2 %}
+        <canvas id="trend-att" height="90"></canvas>
+        {% else %}
+        <div class="empty-note" style="padding:14px;font-size:0.8rem;">Needs attendance imports across 2+ months.</div>
+        {% endif %}
+    </div>
+
+    <div class="chart-card" style="padding:14px;">
+        <h3 style="font-size:0.85rem;margin:0 0 2px;">Credits per Transcript
+            {% if vel.latest_gain is not none %}
+            <span style="font-size:0.75rem;color:{{ 'var(--success)' if vel.latest_gain >= 12 else 'var(--warning)' }};">
+                +{{ vel.latest_gain }} last term</span>
+            {% endif %}
+        </h3>
+        {% if vel.series|length >= 2 %}
+        <canvas id="trend-credits" height="90"></canvas>
+        {% else %}
+        <div class="empty-note" style="padding:14px;font-size:0.8rem;">Needs 2+ transcript imports to show velocity.</div>
+        {% endif %}
+    </div>
+
+    {% if screenings_with_delta %}
+    <div class="chart-card" style="padding:14px;">
+        <h3 style="font-size:0.85rem;margin:0 0 6px;">Screeners</h3>
+        {% for row in screenings_with_delta[:5] %}
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;padding:3px 0;">
+            <a href="{{ url_for('screenings.view_result', id=row.r.id) }}" style="text-decoration:none;color:inherit;">
+                {{ row.r.template.short_name or row.r.template.name }}
+                <span style="color:var(--text-muted);">{{ row.r.administered_date.strftime('%m/%d/%y') }}</span>
+            </a>
+            <span>
+                <strong>{{ row.r.total_score if row.r.total_score is not none else row.r.severity }}</strong>
+                {% if row.delta is not none %}
+                <span style="font-size:0.72rem;color:{{ 'var(--danger)' if row.delta > 0 else 'var(--success)' if row.delta < 0 else 'var(--text-muted)' }};">
+                    ({{ '+' if row.delta > 0 }}{{ row.delta }})</span>
+                {% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function(){
+    if (typeof Chart === 'undefined') return;
+    var muted = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#888';
+    var opts = {responsive:true, plugins:{legend:{display:false}},
+                scales:{x:{ticks:{font:{size:9}, color:muted}},
+                        y:{beginAtZero:true, ticks:{font:{size:9}, color:muted}}}};
+
+    {% if gpa.series|length >= 2 %}
+    new Chart(document.getElementById('trend-gpa'), {type:'line', data:{
+        labels: {{ gpa.series|map(attribute='label')|list|tojson }},
+        datasets:[{data: {{ gpa.series|map(attribute='gpa')|list|tojson }},
+                   borderColor:'#4A90D9', backgroundColor:'#4A90D920', fill:true, tension:0.3}]},
+        options: Object.assign({}, opts, {scales:{x:opts.scales.x,
+                 y:{min:0, max:4, ticks:{font:{size:9}, color:muted}}}})});
+    {% endif %}
+
+    {% if att.monthly|length >= 2 %}
+    new Chart(document.getElementById('trend-att'), {type:'bar', data:{
+        labels: {{ att.monthly|map(attribute=0)|list|tojson }},
+        datasets:[{data: {{ att.monthly|map(attribute=1)|list|tojson }},
+                   backgroundColor:'#E74C3C88', borderColor:'#E74C3C'}]},
+        options: opts});
+    {% endif %}
+
+    {% if vel.series|length >= 2 %}
+    new Chart(document.getElementById('trend-credits'), {type:'line', data:{
+        labels: {{ vel.series|map(attribute='label')|list|tojson }},
+        datasets:[{data: {{ vel.series|map(attribute='total')|list|tojson }},
+                   borderColor:'#5CB85C', backgroundColor:'#5CB85C20', fill:true, tension:0.2}]},
+        options: opts});
+    {% endif %}
+})();
+</script>
