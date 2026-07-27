@@ -44,6 +44,7 @@ def _add_missing_indexes(app):
         ('ix_attendance_student_date', 'attendance_records', 'student_id, date'),
         ('ix_transcript_records_student_import', 'transcript_records',
          'student_id, import_date'),
+        ('ix_students_postgrad_survey_token', 'students', 'postgrad_survey_token'),
     ]
     for idx_name, table, column in indexes:
         try:

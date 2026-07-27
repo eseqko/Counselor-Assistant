@@ -83,6 +83,10 @@ ALLOWLIST = {
     ('A', 'availability/book.html', None),
     ('B', 'availability/book.html', None),
     ('B', 'availability/auto_review.html', None),
+    # post_grad/survey is the alumni-facing self-report link — same
+    # no-login/no-theme public page pattern as availability/book.
+    ('A', 'post_grad/survey.html', None),
+    ('B', 'post_grad/survey.html', None),
     ('A', 'meeting_prep/pack.html', None),
     ('B', 'meeting_prep/pack.html', None),
     ('A', 'academic_plan/print.html', None),
