@@ -237,7 +237,13 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
     whole year. Student-based percentages dedupe across quarters, so the
     whole-year view reads as "% of students who failed the class at any point".
     """
-    q = GradeRecord.query.filter(GradeRecord.student_id.in_(student_ids))
+    # Tuple query — the aggregation below reads exactly these 6 columns, and
+    # skipping ORM hydration is several-fold cheaper on multi-thousand-row
+    # caseload scans (same rationale as _school_wide_summary).
+    q = db.session.query(
+        GradeRecord.student_id, GradeRecord.letter_grade, GradeRecord.course_name,
+        GradeRecord.teacher, GradeRecord.period, GradeRecord.subject_area,
+    ).filter(GradeRecord.student_id.in_(student_ids))
     if final_only:
         q = q.filter(GradeRecord.grade_type == 'final')
     if year:
@@ -277,12 +283,12 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
     caseload_graded = set()
     caseload_fail_set = set()
 
-    for g in grades:
-        lg = (g.letter_grade or '').strip()
+    for g_sid, g_letter, g_course, g_teacher, g_period, g_subject in grades:
+        lg = (g_letter or '').strip()
         if lg:
-            caseload_graded.add(g.student_id)
+            caseload_graded.add(g_sid)
         if lg in _FAIL:
-            caseload_fail_set.add(g.student_id)
+            caseload_fail_set.add(g_sid)
         # Overall grade distribution bucket
         if lg in ('A+', 'A', 'A-'): dist['A'] += 1
         elif lg in ('B+', 'B', 'B-'): dist['B'] += 1
@@ -292,40 +298,40 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
         elif lg == 'P': dist['P/NP'] += 1
         elif lg: dist['Other'] += 1
 
-        course = (g.course_name or 'Unknown').strip()
-        teacher = (g.teacher or '').strip()
+        course = (g_course or 'Unknown').strip()
+        teacher = (g_teacher or '').strip()
         by_course[course]['total'] += 1
         # Every student appearing in the class — denominator for the % columns.
-        by_course[course]['all_students'].add(g.student_id)
+        by_course[course]['all_students'].add(g_sid)
         if teacher:
             by_teacher[teacher]['total'] += 1
-            by_teacher[teacher]['all_students'].add(g.student_id)
-        if g.period is not None:
-            by_period[g.period]['total'] += 1
+            by_teacher[teacher]['all_students'].add(g_sid)
+        if g_period is not None:
+            by_period[g_period]['total'] += 1
 
         is_fail = lg in _FAIL
         is_df = lg in _DF
         if is_df:
             total_df += 1
-            per_student_df[g.student_id] += 1
-            failing_students.add(g.student_id)
-            by_course[course]['students_df'].add(g.student_id)
-            by_course[course]['df_list'].append((g.student_id, lg))
-            if g.period is not None:
-                by_period[g.period]['df'] += 1
-            subj = g.subject_area or course or 'Unknown'
+            per_student_df[g_sid] += 1
+            failing_students.add(g_sid)
+            by_course[course]['students_df'].add(g_sid)
+            by_course[course]['df_list'].append((g_sid, lg))
+            if g_period is not None:
+                by_period[g_period]['df'] += 1
+            subj = g_subject or course or 'Unknown'
             if is_fail:
                 by_course[course]['fail'] += 1
-                by_course[course]['students_fail'].add(g.student_id)
+                by_course[course]['students_fail'].add(g_sid)
                 by_subject[subj]['f'] += 1
             else:
                 by_course[course]['d'] += 1
                 by_subject[subj]['d'] += 1
             if teacher:
-                by_teacher[teacher]['students_df'].add(g.student_id)
+                by_teacher[teacher]['students_df'].add(g_sid)
                 if is_fail:
                     by_teacher[teacher]['fail'] += 1
-                    by_teacher[teacher]['students_fail'].add(g.student_id)
+                    by_teacher[teacher]['students_fail'].add(g_sid)
                 else:
                     by_teacher[teacher]['d'] += 1
 
@@ -456,7 +462,11 @@ def _quarter_trend(student_ids, year, final_only):
     """
     if not student_ids:
         return []
-    q = GradeRecord.query.filter(
+    # Tuple query — only 3 columns needed; skips ORM hydration (see
+    # _school_wide_summary for rationale).
+    q = db.session.query(
+        GradeRecord.student_id, GradeRecord.quarter, GradeRecord.letter_grade,
+    ).filter(
         GradeRecord.student_id.in_(student_ids),
         GradeRecord.quarter.isnot(None))
     if final_only:
@@ -467,17 +477,17 @@ def _quarter_trend(student_ids, year, final_only):
 
     by_q = defaultdict(lambda: {'graded': set(), 'fail': set(), 'df': set(),
                                 'fail_grades': 0, 'd_grades': 0, 'total': 0})
-    for g in grades:
-        lg = (g.letter_grade or '').strip()
-        cell = by_q[g.quarter]
-        cell['graded'].add(g.student_id)
+    for g_sid, g_quarter, g_letter in grades:
+        lg = (g_letter or '').strip()
+        cell = by_q[g_quarter]
+        cell['graded'].add(g_sid)
         cell['total'] += 1
         if lg in _FAIL:
-            cell['fail'].add(g.student_id)
-            cell['df'].add(g.student_id)
+            cell['fail'].add(g_sid)
+            cell['df'].add(g_sid)
             cell['fail_grades'] += 1
         elif lg in _NEAR_FAILING:
-            cell['df'].add(g.student_id)
+            cell['df'].add(g_sid)
             cell['d_grades'] += 1
 
     rows = []
@@ -511,7 +521,13 @@ def _school_wide_summary(year, quarter, final_only):
     that hasn't yet imported any non-caseload grade rows), so the UI can
     suppress the comparison section instead of showing meaningless 0s.
     """
-    q = GradeRecord.query.filter(GradeRecord.student_id.isnot(None))
+    # Tuple query, not full ORM objects: this scans EVERY grade row school-wide
+    # (can be 100k+), and we only need 3 columns. Materializing full GradeRecord
+    # instances cost ~1.2s per 60k rows in profiling; plain tuples skip ORM
+    # hydration entirely (~10x less overhead for the same rows).
+    q = db.session.query(
+        GradeRecord.student_id, GradeRecord.course_name, GradeRecord.letter_grade,
+    ).filter(GradeRecord.student_id.isnot(None))
     if final_only:
         q = q.filter(GradeRecord.grade_type == 'final')
     if year:
@@ -529,19 +545,19 @@ def _school_wide_summary(year, quarter, final_only):
     all_students_set = set()
     fail_students_set = set()
     df_students_set = set()
-    for g in grades:
-        lg = (g.letter_grade or '').strip()
-        course = (g.course_name or 'Unknown').strip()
-        by_course[course]['all_students'].add(g.student_id)
-        all_students_set.add(g.student_id)
+    for student_id, course_name, letter_grade in grades:
+        lg = (letter_grade or '').strip()
+        course = (course_name or 'Unknown').strip()
+        by_course[course]['all_students'].add(student_id)
+        all_students_set.add(student_id)
         if lg in _FAIL:
-            by_course[course]['students_fail'].add(g.student_id)
-            by_course[course]['students_df'].add(g.student_id)
-            fail_students_set.add(g.student_id)
-            df_students_set.add(g.student_id)
+            by_course[course]['students_fail'].add(student_id)
+            by_course[course]['students_df'].add(student_id)
+            fail_students_set.add(student_id)
+            df_students_set.add(student_id)
         elif lg in _NEAR_FAILING:
-            by_course[course]['students_df'].add(g.student_id)
-            df_students_set.add(g.student_id)
+            by_course[course]['students_df'].add(student_id)
+            df_students_set.add(student_id)
 
     by_course_payload = {}
     for course, c in by_course.items():
@@ -579,7 +595,14 @@ _WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 def _insights_attendance(student_ids, start, end):
     """Attendance patterns: absences/tardies by period, by weekday, by status,
     and the courses students miss most."""
-    records = AttendanceRecord.query.filter(
+    # Tuple query — a year of period-level attendance for a full caseload can
+    # be 100k+ rows; hydrating full ORM objects for 5 columns is the dominant
+    # cost (see _school_wide_summary for rationale).
+    records = db.session.query(
+        AttendanceRecord.student_id, AttendanceRecord.status,
+        AttendanceRecord.period, AttendanceRecord.date,
+        AttendanceRecord.course_name,
+    ).filter(
         AttendanceRecord.student_id.in_(student_ids),
         AttendanceRecord.date >= start,
         AttendanceRecord.date <= end,
@@ -592,24 +615,24 @@ def _insights_attendance(student_ids, start, end):
     per_student_absent = defaultdict(int)
     total_absences = 0
 
-    for r in records:
-        status = (r.status or '').lower()
+    for r_sid, r_status, r_period, r_date, r_course in records:
+        status = (r_status or '').lower()
         by_status[status] += 1
         if status == 'absent':
             total_absences += 1
-            per_student_absent[r.student_id] += 1
+            per_student_absent[r_sid] += 1
         # Period-level breakdown (daily rows have period NULL — skip those here)
-        if r.period is not None and r.period >= 1:
+        if r_period is not None and r_period >= 1:
             if status == 'absent':
-                by_period[r.period]['absent'] += 1
+                by_period[r_period]['absent'] += 1
             elif status == 'tardy':
-                by_period[r.period]['tardy'] += 1
+                by_period[r_period]['tardy'] += 1
         # Weekday pattern (any record with a date)
-        if r.date and status in ('absent', 'tardy'):
-            by_weekday[r.date.weekday()][status] += 1
+        if r_date and status in ('absent', 'tardy'):
+            by_weekday[r_date.weekday()][status] += 1
         # Course the student is missing
-        if status in ('absent', 'tardy') and r.course_name:
-            by_course[r.course_name.strip()] += 1
+        if status in ('absent', 'tardy') and r_course:
+            by_course[r_course.strip()] += 1
 
     periods = sorted(by_period.keys())
     weekday_idx = list(range(5))  # Mon-Fri
@@ -1112,11 +1135,25 @@ def elpac_dashboard():
     filtered = _filter_students(students, grade, cohort, el_status, years_bucket)
     student_ids = [s.id for s in filtered]
 
+    # Preload EVERY ELPAC score for the filtered students in ONE query.
+    # This page previously walked the lazy-'dynamic' elpac_scores relationship
+    # in three separate per-student loops (latest_elpac, the table rows, and
+    # the ELPI section) — 3 queries per student, ~750 for a 250-student
+    # caseload. Same ORDER BY as the relationship (test_date DESC), so
+    # group[0] is exactly what .first()/latest_elpac returned.
+    scores_by_student = defaultdict(list)
+    if student_ids:
+        for sc in ELPACScore.query.filter(
+                ELPACScore.student_id.in_(student_ids),
+        ).order_by(ELPACScore.test_date.desc()).all():
+            scores_by_student[sc.student_id].append(sc)
+
     # Chart 1: Overall Level Distribution (latest test per student)
     overall_dist = Counter()
     latest_by_student = {}
     for s in filtered:
-        latest = s.latest_elpac
+        group = scores_by_student.get(s.id)
+        latest = group[0] if group else None
         if latest:
             latest_by_student[s.id] = latest
             if latest.overall_level:
@@ -1145,14 +1182,12 @@ def elpac_dashboard():
     el_status_dist = Counter(s.el_status or 'EO' for s in filtered)
 
     # Chart 5: Year-over-Year Growth (% of caseload at each Overall level per school year)
-    # Use ALL ELPAC records for filtered students, not just latest
-    all_scores = []
-    if student_ids:
-        all_scores = ELPACScore.query.filter(
-            ELPACScore.student_id.in_(student_ids),
-            ELPACScore.test_purpose == 'Summative',
-            ELPACScore.overall_level.isnot(None),
-        ).all()
+    # Use ALL ELPAC records for filtered students, not just latest — filtered
+    # from the single preload above instead of a second query.
+    all_scores = [
+        sc for group in scores_by_student.values() for sc in group
+        if sc.test_purpose == 'Summative' and sc.overall_level is not None
+    ]
     yoy = defaultdict(lambda: Counter())
     for sc in all_scores:
         if sc.school_year:
@@ -1170,8 +1205,8 @@ def elpac_dashboard():
         latest = latest_by_student.get(s.id)
         prior = None
         if latest:
-            # Find prior Summative
-            summatives = [r for r in s.elpac_scores
+            # Find prior Summative (from the preload — no per-student query)
+            summatives = [r for r in scores_by_student.get(s.id, [])
                           if r.test_purpose == 'Summative' and r.id != latest.id]
             prior = summatives[0] if summatives else None
         growth = None
@@ -1201,8 +1236,9 @@ def elpac_dashboard():
     big_movers = []                  # students who jumped 2+ levels (simplified or CDE)
 
     for s in filtered:
-        summatives = [r for r in s.elpac_scores if r.test_purpose == 'Summative']
-        # `elpac_scores` relationship is ordered by test_date DESC.
+        summatives = [r for r in scores_by_student.get(s.id, [])
+                      if r.test_purpose == 'Summative']
+        # Preload is ordered by test_date DESC, same as the relationship.
         if not summatives:
             continue
         current = summatives[0]
@@ -1353,24 +1389,29 @@ def _caseload_data(students):
 
 def _academic_data(student_ids):
     """GPA distribution and failing grades by subject."""
-    # Get most recent grades per student
-    grades = GradeRecord.query.filter(
-        GradeRecord.student_id.in_(student_ids)
-    ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
+    from app.models.grade import GPA_POINTS
+    # Tuple query over the caseload's full grade history — this aggregates
+    # every year (GPA is cumulative), so skipping ORM hydration matters most
+    # here. The ORDER BY is kept: the GPA mean sums floats, and float addition
+    # is order-sensitive at the epsilon level — a student sitting exactly on a
+    # bucket boundary (e.g. 2.0) can flip buckets if the summation order
+    # changes. Same order as before the tuple-query conversion.
+    grades = db.session.query(
+        GradeRecord.student_id, GradeRecord.letter_grade,
+        GradeRecord.subject_area, GradeRecord.course_name,
+    ).filter(GradeRecord.student_id.in_(student_ids)).order_by(
+        GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
 
     # GPA calculation per student
     student_gpas = {}
-    student_grades_map = {}
-    for g in grades:
-        if g.student_id not in student_grades_map:
-            student_grades_map[g.student_id] = []
-        student_grades_map[g.student_id].append(g)
+    student_points_map = {}
+    for g_sid, g_letter, _subj, _course in grades:
+        pts = GPA_POINTS.get(g_letter)
+        if pts is not None:
+            student_points_map.setdefault(g_sid, []).append(pts)
 
     gpa_buckets = {'4.0+': 0, '3.0-3.9': 0, '2.0-2.9': 0, '1.0-1.9': 0, '< 1.0': 0}
-    for sid, sg in student_grades_map.items():
-        points = [g.gpa_points for g in sg if g.gpa_points is not None]
-        if not points:
-            continue
+    for sid, points in student_points_map.items():
         gpa = sum(points) / len(points)
         student_gpas[sid] = gpa
         if gpa >= 4.0:
@@ -1387,17 +1428,20 @@ def _academic_data(student_ids):
     # Failing grades by subject — separate F and D counts
     failing_f = {}
     failing_d = {}
-    for g in grades:
-        subj = g.subject_area or g.course_name or 'Unknown'
-        if g.letter_grade == 'F':
+    for _sid, g_letter, g_subject, g_course in grades:
+        subj = g_subject or g_course or 'Unknown'
+        if g_letter == 'F':
             failing_f[subj] = failing_f.get(subj, 0) + 1
-        elif g.letter_grade in ('D', 'D-', 'D+'):
+        elif g_letter in ('D', 'D-', 'D+'):
             failing_d[subj] = failing_d.get(subj, 0) + 1
 
     # Combine and sort by total count descending
     all_subjects = set(list(failing_f.keys()) + list(failing_d.keys()))
     combined = [(s, failing_f.get(s, 0) + failing_d.get(s, 0)) for s in all_subjects]
-    sorted_failing = sorted(combined, key=lambda x: -x[1])
+    # Tie-break by label: `all_subjects` is a set, whose iteration order varies
+    # per process (hash randomization) — without this, equal-count subjects
+    # shuffled order between server restarts.
+    sorted_failing = sorted(combined, key=lambda x: (-x[1], x[0]))
     all_subjects_sorted = [f[0] for f in sorted_failing]
 
     return {

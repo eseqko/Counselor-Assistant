@@ -237,17 +237,24 @@ def index():
         Note.follow_up_completed_date > five_days_ago
     ).order_by(Note.follow_up_completed_date.desc()).all()
 
-    # Graduation at-risk summary from transcript records
+    # Graduation at-risk summary from transcript records.
+    # Tuple query on purpose: TranscriptRecord rows carry large JSON blobs and
+    # this widget only needs (student_id, risk_level). Hydrating full ORM
+    # objects for the whole caseload's transcript history dominated dashboard
+    # load time in profiling. Same DESC iteration + first-per-student dedup as
+    # before, so bucket semantics (latest row wins, even if unknown) unchanged.
     grad_risk = {'critical': 0, 'at-risk': 0, 'warning': 0, 'on-track': 0}
     if my_student_ids:
         seen = set()
-        transcripts = TranscriptRecord.query.filter(
+        transcript_rows = db.session.query(
+            TranscriptRecord.student_id, TranscriptRecord.risk_level,
+        ).filter(
             TranscriptRecord.student_id.in_(my_student_ids)
         ).order_by(TranscriptRecord.import_date.desc()).all()
-        for tr in transcripts:
-            if tr.student_id not in seen:
-                seen.add(tr.student_id)
-                rl = tr.risk_level or 'unknown'
+        for tr_sid, tr_risk in transcript_rows:
+            if tr_sid not in seen:
+                seen.add(tr_sid)
+                rl = tr_risk or 'unknown'
                 if rl in grad_risk:
                     grad_risk[rl] += 1
     grad_at_risk_total = grad_risk['critical'] + grad_risk['at-risk']

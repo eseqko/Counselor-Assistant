@@ -4,6 +4,12 @@ from datetime import datetime, timezone
 
 class TranscriptRecord(db.Model):
     __tablename__ = 'transcript_records'
+    # Dashboard + student pages fetch latest-transcript-per-student constantly;
+    # without this the whole table scans on every dashboard load. Existing DBs
+    # get it via _add_missing_indexes (keep in sync).
+    __table_args__ = (
+        db.Index('ix_transcript_records_student_import', 'student_id', 'import_date'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)

@@ -5,6 +5,11 @@ from datetime import datetime, timezone
 class AttendanceRecord(db.Model):
     """Imported attendance data for trend analysis and early warning."""
     __tablename__ = 'attendance_records'
+    # Hot path: per-student date-window scans (analytics, alerts). Existing
+    # DBs get this via _add_missing_indexes (keep in sync).
+    __table_args__ = (
+        db.Index('ix_attendance_student_date', 'student_id', 'date'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)

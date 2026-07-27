@@ -326,20 +326,24 @@ def _check_failing_grades(user, student_ids, student_map, thresholds=None):
     t = thresholds or DEFAULT_THRESHOLDS
     high_count = t['failing_high_count']
     alerts = []
-    # Get the most recent grades per student
-    failing_grades = GradeRecord.query.filter(
+    # Get the most recent grades per student. Tuple query (3 needed columns +
+    # sort keys) — the D/F set grows every year and full ORM hydration of the
+    # whole history was the dominant cost here.
+    failing_grades = db.session.query(
+        GradeRecord.student_id, GradeRecord.course_name, GradeRecord.letter_grade,
+    ).filter(
         GradeRecord.student_id.in_(student_ids),
         GradeRecord.letter_grade.in_(['F', 'D', 'D-', 'D+']),
     ).order_by(GradeRecord.school_year.desc(), GradeRecord.quarter.desc()).all()
 
     # Group by student — only flag each student once with their failing courses
     student_fails = {}
-    for g in failing_grades:
-        if g.student_id not in student_fails:
-            student_fails[g.student_id] = []
-        if len(student_fails[g.student_id]) < 5:  # cap at 5 courses
-            student_fails[g.student_id].append(
-                f'{g.course_name} ({g.letter_grade})'
+    for g_sid, g_course, g_letter in failing_grades:
+        if g_sid not in student_fails:
+            student_fails[g_sid] = []
+        if len(student_fails[g_sid]) < 5:  # cap at 5 courses
+            student_fails[g_sid].append(
+                f'{g_course} ({g_letter})'
             )
 
     for sid, courses in student_fails.items():
