@@ -13,7 +13,7 @@ student_portal_bp = Blueprint('student_portal', __name__,
 
 
 def _get_counselor_by_token(token):
-    return User.query.filter_by(calendar_feed_token=token).first()
+    return User.query.filter_by(portal_token=token).first()
 
 
 @student_portal_bp.route('/<token>')

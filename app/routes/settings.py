@@ -3,7 +3,8 @@ import os
 import re
 import shutil
 from datetime import datetime, date, timezone
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, Response, session
+from flask import (Blueprint, render_template, request, redirect, url_for, flash,
+                   send_file, Response, session, abort)
 from flask_login import login_required, current_user
 from flask import jsonify
 from app import db, csrf
@@ -160,6 +161,27 @@ def export_backup():
         return redirect(url_for('settings.index'))
     log_action('export', 'database', details='Downloaded backup')
     return send_file(backup_path, as_attachment=True)
+
+
+@settings_bp.route('/regenerate-token/<surface>', methods=['POST'])
+@login_required
+def regenerate_token(surface):
+    """Rotate exactly one share link, leaving the other two untouched.
+
+    Each surface is independently rotatable on purpose: revoking a leaked
+    portal link must not also kill the counselor's calendar subscription.
+    """
+    labels = {'portal': 'Student Portal', 'booking': 'Booking Page',
+              'ical': 'Private Calendar Feed'}
+    if surface not in labels:
+        abort(404)
+    current_user.rotate_token(surface)
+    log_action('update', 'user', current_user.id,
+               details=f'Regenerated {surface} share token')
+    flash(f'{labels[surface]} link regenerated. The previous link no longer works'
+          + (' — re-add the feed in your calendar app.' if surface == 'ical' else '.'),
+          'success')
+    return redirect(url_for('settings.index'))
 
 
 def _serialize_date(val):

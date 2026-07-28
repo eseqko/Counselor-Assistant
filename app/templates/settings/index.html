@@ -33,34 +33,55 @@
     </a>
 </div>
 
-<!-- Student Portal Link -->
+<!-- Share links -->
 <div class="card" style="margin-top:18px;">
-    <div class="card-header">Student Portal</div>
+    <div class="card-header">Share Links</div>
     <div class="card-body">
-        <div style="font-size:0.84rem;color:var(--text-muted);margin-bottom:10px;">
-            Share this link with students so they can access free AI-powered tools
-            (essay coaching, study planning, career exploration, and more).
-            No student login is needed — all AI runs locally.
+        <div class="alert alert-warning" style="font-size:0.84rem;margin-bottom:14px;">
+            <strong>Your calendar feed address changed.</strong>
+            These three links used to share a single token, which meant anyone with
+            the student portal link could also open your private calendar feed and
+            read student names and appointment notes. They are now separate. Your
+            portal and booking links still work unchanged, but the calendar feed has
+            been re-issued &mdash; <strong>re-add it in Google Calendar or Outlook
+            using the new address below.</strong>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <input type="text" id="portal-link" class="form-control" readonly
-                   value="{{ url_for('student_portal.index', token=current_user.get_or_create_feed_token(), _external=True) }}"
-                   style="font-size:0.84rem;flex:1;">
-            <button onclick="copyPortalLink()" class="btn btn-sm btn-primary"
-                    style="border-radius:8px;white-space:nowrap;" id="copy-portal-btn">&#128203; Copy</button>
+
+        {% set links = [
+            ('portal', 'Student Portal',
+             url_for('student_portal.index', token=current_user.get_or_create_portal_token(), _external=True),
+             'Safe to broadcast. Free AI tools for students &mdash; no login, runs locally.'),
+            ('booking', 'Booking Page',
+             url_for('availability.public_booking_page', token=current_user.get_or_create_booking_token(), _external=True),
+             'Safe to share with families. Lets them book an appointment with you.'),
+            ('ical', 'Private Calendar Feed',
+             url_for('calendar.ical_feed', token=current_user.get_or_create_ical_token(), _external=True),
+             'KEEP THIS PRIVATE. It contains student names and appointment notes.')
+        ] %}
+
+        {% for key, label, link, blurb in links %}
+        <div style="margin-bottom:16px;">
+            <label style="font-weight:600;font-size:0.86rem;display:block;">
+                {{ label }}
+                {% if key == 'ical' %}<span class="badge badge-danger" style="margin-left:6px;">Private</span>{% endif %}
+            </label>
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:6px;">{{ blurb|safe }}</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="text" id="link-{{ key }}" class="form-control" readonly
+                       value="{{ link }}" style="font-size:0.8rem;flex:1;min-width:240px;">
+                <button type="button" class="btn btn-sm btn-primary" style="white-space:nowrap;"
+                        onclick="copyLink(this, document.getElementById('link-{{ key }}').value)">&#128203; Copy</button>
+                <form method="POST" action="{{ url_for('settings.regenerate_token', surface=key) }}"
+                      style="margin:0;"
+                      onsubmit="return confirm('Regenerate the {{ label }} link? The current one stops working immediately and anyone using it will need the new address.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline" style="white-space:nowrap;">Regenerate</button>
+                </form>
+            </div>
         </div>
+        {% endfor %}
     </div>
 </div>
-<script>
-function copyPortalLink() {
-    var input = document.getElementById('portal-link');
-    navigator.clipboard.writeText(input.value).then(function() {
-        var btn = document.getElementById('copy-portal-btn');
-        btn.textContent = 'Copied!';
-        setTimeout(function() { btn.innerHTML = '&#128203; Copy'; }, 1500);
-    });
-}
-</script>
 
 <!-- Appearance / Theme Picker -->
 <div class="card">

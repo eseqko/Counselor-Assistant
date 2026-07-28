@@ -188,7 +188,7 @@ def delete_event(id):
 @login_required
 def feed_url():
     """Generate and return the user's personal iCal feed URL."""
-    token = current_user.get_or_create_feed_token()
+    token = current_user.get_or_create_ical_token()
     feed_link = url_for('calendar.ical_feed', token=token, _external=True)
     return jsonify({'feed_url': feed_link})
 
@@ -201,7 +201,7 @@ def ical_feed(token):
     (parent/cohort-booked appointments) so subscribed Google Calendars see
     everything the app considers scheduled.
     """
-    user = User.query.filter_by(calendar_feed_token=token).first()
+    user = User.query.filter_by(ical_feed_token=token).first()
     if not user:
         abort(404)
 

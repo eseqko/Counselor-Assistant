@@ -501,4 +501,44 @@ def create_app(config_class=Config):
                     u.setup_completed = True
             db.session.commit()
 
+        _split_feed_tokens(app)
+
     return app
+
+
+def _split_feed_tokens(app):
+    """One-time migration off the single overloaded calendar_feed_token.
+
+    That one value gated the student portal, the public booking page and the
+    private iCal feed. The portal link is meant to be broadcast to a whole
+    caseload, so every student holding it could swap the URL path and read the
+    counselor's calendar — student names and free-text note bodies included.
+
+    Portal and booking tokens INHERIT the old value, so links already sent to
+    families keep working. The iCal token is deliberately generated FRESH: the
+    old value is already in students' hands, so carrying it over would migrate
+    the disclosure rather than close it. That does break an existing calendar
+    subscription, which is why Settings shows the new URL with a one-time
+    notice explaining it has to be re-added.
+    """
+    from app.models.user import User
+    try:
+        users = User.query.filter(
+            (User.portal_token.is_(None)) | (User.ical_feed_token.is_(None))
+        ).all()
+    except Exception:
+        return          # columns not present yet on a very old DB
+    if not users:
+        return
+    import secrets as _secrets
+    for u in users:
+        legacy = u.calendar_feed_token
+        if not u.portal_token:
+            u.portal_token = legacy or _secrets.token_urlsafe(32)
+        if not u.booking_token:
+            u.booking_token = legacy or _secrets.token_urlsafe(32)
+        if not u.ical_feed_token:
+            u.ical_feed_token = _secrets.token_urlsafe(32)   # never the legacy value
+    db.session.commit()
+    app.logger.info(f"Split feed tokens for {len(users)} user(s); "
+                    "iCal feed re-issued and must be re-subscribed.")

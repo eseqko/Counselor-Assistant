@@ -34,7 +34,7 @@ def index():
                 .order_by(Booking.appointment_date, Booking.start_time)
                 .all())
     google_connected = google_client.is_connected(current_user)
-    booking_token = current_user.get_or_create_feed_token()
+    booking_token = current_user.get_or_create_booking_token()
     return render_template('availability/index.html',
                            slots=slots, bookings=bookings,
                            google_connected=google_connected,
@@ -124,7 +124,7 @@ def api_cancel_booking(booking_id):
 @availability_bp.route('/book/<token>')
 def public_booking_page(token):
     """Public-facing page where parents/students can book an appointment."""
-    user = User.query.filter_by(calendar_feed_token=token).first()
+    user = User.query.filter_by(booking_token=token).first()
     if not user:
         abort(404)
     return render_template('availability/book.html',
@@ -135,7 +135,7 @@ def public_booking_page(token):
 @availability_bp.route('/book/<token>/slots')
 def public_available_slots(token):
     """Return available time slots for the next N days."""
-    user = User.query.filter_by(calendar_feed_token=token).first()
+    user = User.query.filter_by(booking_token=token).first()
     if not user:
         abort(404)
 
@@ -151,7 +151,7 @@ def public_available_slots(token):
 @rate_limit('public_booking', limit=5, window=300)
 def public_confirm_booking(token):
     """Confirm a booking from the public page."""
-    user = User.query.filter_by(calendar_feed_token=token).first()
+    user = User.query.filter_by(booking_token=token).first()
     if not user:
         abort(404)
 
