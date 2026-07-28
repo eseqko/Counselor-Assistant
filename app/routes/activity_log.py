@@ -4,6 +4,7 @@ from app import db
 from app.models.activity import Activity
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date, parse_time
+from app.utils.roles import owned_or_404
 from datetime import date, datetime
 
 activity_log_bp = Blueprint('activity_log', __name__)
@@ -77,7 +78,7 @@ def add_activity():
 @activity_log_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_activity(id):
-    activity = Activity.query.get_or_404(id)
+    activity = owned_or_404(Activity, id)
 
     if request.method == 'POST':
         activity.title = request.form['title']
@@ -108,7 +109,7 @@ def edit_activity(id):
 @activity_log_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_activity(id):
-    activity = Activity.query.get_or_404(id)
+    activity = owned_or_404(Activity, id)
     log_action('delete', 'activity', activity.id)
     db.session.delete(activity)
     db.session.commit()

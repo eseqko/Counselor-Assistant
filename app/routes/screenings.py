@@ -184,7 +184,7 @@ def index():
 @screenings_bp.route('/template/<int:tid>/administer', methods=['GET', 'POST'])
 @login_required
 def administer(tid):
-    template = ScreeningTemplate.query.get_or_404(tid)
+    template = owned_or_404(ScreeningTemplate, tid)
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
     ).order_by(Student.last_name).all()
@@ -304,7 +304,7 @@ def add_template():
 @login_required
 def create_google_form(tid):
     """Create a Google Form from a screening template."""
-    template = ScreeningTemplate.query.get_or_404(tid)
+    template = owned_or_404(ScreeningTemplate, tid)
 
     if not is_connected(current_user):
         flash('Connect your Google account first (Settings → Google).', 'warning')
@@ -331,7 +331,7 @@ def create_google_form(tid):
 @login_required
 def manage_form(tid):
     """Manage Google Form for a screening template — share link, post to Classroom."""
-    template = ScreeningTemplate.query.get_or_404(tid)
+    template = owned_or_404(ScreeningTemplate, tid)
 
     if not template.google_form_id:
         flash('No Google Form created yet for this template.', 'info')
@@ -354,7 +354,7 @@ def manage_form(tid):
 @login_required
 def post_to_classroom(tid):
     """Post a screening form link to a Google Classroom course."""
-    template = ScreeningTemplate.query.get_or_404(tid)
+    template = owned_or_404(ScreeningTemplate, tid)
 
     if not template.google_form_url:
         flash('Create the Google Form first.', 'warning')
@@ -399,7 +399,7 @@ def post_to_classroom(tid):
 @login_required
 def import_form_responses(tid):
     """Preview responses from Google Form for assignment to students."""
-    template = ScreeningTemplate.query.get_or_404(tid)
+    template = owned_or_404(ScreeningTemplate, tid)
 
     if not template.google_form_id:
         flash('No Google Form linked to this template.', 'warning')
@@ -453,7 +453,7 @@ def import_form_responses(tid):
 @login_required
 def save_imported_responses(tid):
     """Save imported form responses after student assignment."""
-    template = ScreeningTemplate.query.get_or_404(tid)
+    template = owned_or_404(ScreeningTemplate, tid)
 
     response_ids = request.form.getlist('response_id')
     imported = 0

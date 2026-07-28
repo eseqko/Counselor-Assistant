@@ -605,7 +605,7 @@ def asca_results_add():
 @login_required
 def asca_results_view(id):
     from app.models.asca_program import ASCAProgram
-    prog = ASCAProgram.query.get_or_404(id)
+    prog = owned_or_404(ASCAProgram, id)
     log_action('view', 'asca_program', prog.id)
     return render_template('reports/asca_results_view.html', program=prog)
 
@@ -614,7 +614,7 @@ def asca_results_view(id):
 @login_required
 def asca_results_edit(id):
     from app.models.asca_program import ASCAProgram
-    prog = ASCAProgram.query.get_or_404(id)
+    prog = owned_or_404(ASCAProgram, id)
     if request.method == 'POST':
         prog.name = request.form['name'].strip()
         prog.school_year = request.form.get('school_year', '').strip()
@@ -648,7 +648,7 @@ def asca_results_edit(id):
 @login_required
 def asca_results_delete(id):
     from app.models.asca_program import ASCAProgram
-    prog = ASCAProgram.query.get_or_404(id)
+    prog = owned_or_404(ASCAProgram, id)
     log_action('delete', 'asca_program', prog.id)
     db.session.delete(prog)
     db.session.commit()

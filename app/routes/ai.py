@@ -193,7 +193,7 @@ def note_feedback():
     if not note_id:
         return jsonify({'error': 'Missing note_id'}), 400
 
-    note = Note.query.get_or_404(note_id)
+    note = owned_or_404(Note, note_id, owner_attr='author_id')
 
     # Build context about the student
     student = note.student
@@ -250,7 +250,7 @@ def note_feedback_stream():
     if not note_id:
         return jsonify({'error': 'Missing note_id'}), 400
 
-    note = Note.query.get_or_404(note_id)
+    note = owned_or_404(Note, note_id, owner_attr='author_id')
     student = note.student
     student_context = f"Student: Grade {student.grade_level or 'N/A'}"
     if student.iep_status:

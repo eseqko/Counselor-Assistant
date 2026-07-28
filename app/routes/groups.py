@@ -11,6 +11,18 @@ from app.utils.roles import owned_or_404, caseload_student_or_404
 groups_bp = Blueprint('groups', __name__)
 
 
+def _owned_group_child_or_404(model, obj_id):
+    """Fetch a GroupMember/GroupSession scoped to a group the caller owns.
+
+    Neither child model has an owner column — only group_id — so ownership has
+    to be resolved through the parent group. Delegates the actual check to
+    owned_or_404 so the admin bypass and 404-not-403 behaviour stay consistent.
+    """
+    obj = model.query.get_or_404(obj_id)
+    owned_or_404(CounselingGroup, obj.group_id)
+    return obj
+
+
 @groups_bp.route('/')
 @login_required
 def index():
@@ -59,7 +71,7 @@ def add():
 @groups_bp.route('/<int:id>')
 @login_required
 def view(id):
-    group = CounselingGroup.query.get_or_404(id)
+    group = owned_or_404(CounselingGroup, id)
     log_action('view', 'counseling_group', group.id)
     students = Student.query.filter_by(
         assigned_counselor_id=current_user.id, status='active'
@@ -73,7 +85,7 @@ def view(id):
 @groups_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(id):
-    group = CounselingGroup.query.get_or_404(id)
+    group = owned_or_404(CounselingGroup, id)
     if request.method == 'POST':
         group.name = request.form['name'].strip()
         group.group_type = request.form.get('group_type', '')
@@ -115,7 +127,7 @@ def add_member(id):
 @groups_bp.route('/member/<int:member_id>/remove', methods=['POST'])
 @login_required
 def remove_member(member_id):
-    member = GroupMember.query.get_or_404(member_id)
+    member = _owned_group_child_or_404(GroupMember, member_id)
     group_id = member.group_id
     log_action('delete', 'group_member', member.id)
     db.session.delete(member)
@@ -127,7 +139,7 @@ def remove_member(member_id):
 @groups_bp.route('/member/<int:member_id>/update', methods=['POST'])
 @login_required
 def update_member(member_id):
-    member = GroupMember.query.get_or_404(member_id)
+    member = _owned_group_child_or_404(GroupMember, member_id)
     member.consent_status = request.form.get('consent_status', member.consent_status)
     member.consent_date = parse_date(request.form.get('consent_date'))
     member.pre_score = request.form.get('pre_score', '').strip()
@@ -142,7 +154,7 @@ def update_member(member_id):
 @groups_bp.route('/<int:id>/session/add', methods=['POST'])
 @login_required
 def add_session(id):
-    group = CounselingGroup.query.get_or_404(id)
+    group = owned_or_404(CounselingGroup, id)
     session = GroupSession(
         group_id=group.id,
         session_date=parse_date(request.form.get('session_date')) or date.today(),
@@ -170,7 +182,7 @@ def add_session(id):
 @groups_bp.route('/session/<int:sid>/delete', methods=['POST'])
 @login_required
 def delete_session(sid):
-    session = GroupSession.query.get_or_404(sid)
+    session = _owned_group_child_or_404(GroupSession, sid)
     group_id = session.group_id
     log_action('delete', 'group_session', session.id)
     db.session.delete(session)
@@ -181,7 +193,7 @@ def delete_session(sid):
 @groups_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    group = CounselingGroup.query.get_or_404(id)
+    group = owned_or_404(CounselingGroup, id)
     log_action('delete', 'counseling_group', group.id)
     db.session.delete(group)
     db.session.commit()
