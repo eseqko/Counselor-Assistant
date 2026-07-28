@@ -14,6 +14,26 @@ import ipaddress
 _TAILSCALE_CGNAT = ipaddress.ip_network('100.64.0.0/10')
 
 
+def is_loopback(remote_addr):
+    """Return True if ``remote_addr`` is a loopback address.
+
+    Used to confine the first-run setup wizard to the machine itself. The
+    wizard is necessarily anonymous — no account exists yet — so without this
+    anyone who can reach the port during the first-run window could complete
+    setup and claim the account.
+
+    ``ip_address(...).is_loopback`` already covers 127.0.0.0/8, ::1, AND
+    ::ffff:127.0.0.1 (Python maps the v4-mapped form before testing), so no
+    manual ipv4_mapped unwrapping is needed here.
+    """
+    if not remote_addr:
+        return False
+    try:
+        return ipaddress.ip_address(remote_addr).is_loopback
+    except ValueError:
+        return False
+
+
 def is_tailnet_or_localhost(remote_addr):
     """Return True if ``remote_addr`` is loopback or in Tailscale's CGNAT range.
 

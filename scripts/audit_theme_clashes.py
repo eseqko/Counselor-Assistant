@@ -87,6 +87,9 @@ ALLOWLIST = {
     # no-login/no-theme public page pattern as availability/book.
     ('A', 'post_grad/survey.html', None),
     ('B', 'post_grad/survey.html', None),
+    # setup/blocked renders pre-login, before any theme preference exists.
+    ('A', 'setup/blocked.html', None),
+    ('B', 'setup/blocked.html', None),
     ('A', 'meeting_prep/pack.html', None),
     ('B', 'meeting_prep/pack.html', None),
     ('A', 'academic_plan/print.html', None),

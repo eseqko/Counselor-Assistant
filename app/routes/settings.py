@@ -3,7 +3,7 @@ import os
 import re
 import shutil
 from datetime import datetime, date, timezone
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, Response, session
 from flask_login import login_required, current_user
 from flask import jsonify
 from app import db, csrf
@@ -15,6 +15,7 @@ from app.models.transcript import TranscriptRecord
 from app.models.course import Department, Course, GraduationRequirement
 from app.utils.audit import log_action
 from app.utils.helpers import current_school_year
+from app.utils.roles import admin_or_sole_user_required, admin_required
 from config import Config
 
 settings_bp = Blueprint('settings', __name__)
@@ -122,7 +123,7 @@ def audit_log():
 
 
 @settings_bp.route('/backup', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def backup():
     """Create a local backup of the database."""
     backup_dir = Config.BACKUP_DIR
@@ -142,7 +143,7 @@ def backup():
 
 
 @settings_bp.route('/export-backup')
-@login_required
+@admin_or_sole_user_required
 def export_backup():
     """Download the latest backup."""
     backup_dir = Config.BACKUP_DIR
@@ -333,7 +334,7 @@ def _grad_req_to_dict(gr):
 
 
 @settings_bp.route('/export-data')
-@login_required
+@admin_or_sole_user_required
 def export_data():
     """Export caseload and course catalog data as a portable JSON file.
 
@@ -426,7 +427,7 @@ def export_data():
 
 
 @settings_bp.route('/import-data', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def import_data():
     """Import caseload and course catalog data from a portable JSON file."""
     file = request.files.get('import_file')
@@ -726,7 +727,7 @@ def import_data():
 
 
 @settings_bp.route('/cleanup-duplicates', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def cleanup_duplicates():
     """Remove duplicate notes from the database."""
     removed = _cleanup_duplicate_notes()
@@ -923,7 +924,10 @@ def upload_calendar():
 
 
 @settings_bp.route('/calendars/<int:cal_id>/delete', methods=['POST'])
-@login_required
+# SchoolCalendar is school-wide config with no owner column, so owned_or_404
+# doesn't apply — deleting one wipes the quarter/semester windows for EVERY
+# counselor. Gate it rather than scope it. (Sole-user installs keep working.)
+@admin_or_sole_user_required
 def delete_calendar(cal_id):
     from app.models.school_calendar import SchoolCalendar
     cal = SchoolCalendar.query.get_or_404(cal_id)
@@ -936,7 +940,7 @@ def delete_calendar(cal_id):
 
 
 @settings_bp.route('/factory-reset', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def factory_reset():
     """Delete all data and restart the setup wizard."""
     from flask_login import logout_user
@@ -959,4 +963,13 @@ def factory_reset():
     # Force the before_request handler to re-check setup status
     if hasattr(current_app, '_setup_done'):
         current_app._setup_done = False
+    # The wizard is loopback-only (it can't require a login — no account exists
+    # after this wipe). Carry a one-shot grant in the session so a counselor who
+    # reset from a remote device isn't stranded with an empty DB and a 403.
+    # Safe to mint here: this route is @login_required + CSRF-protected, and
+    # logout_user() above leaves the rest of the session intact. The signed
+    # cookie survives because SECRET_KEY lives in data/.secret_key, which this
+    # reset does not delete.
+    from app.routes.setup import SETUP_GRANT_KEY
+    session[SETUP_GRANT_KEY] = True
     return redirect('/setup')
