@@ -29,6 +29,7 @@
         } catch(e){}
         {% endif %}
         var t = localStorage.getItem('theme_preference');
+        if (t === 'glass-navy') t = 'glass-emerald';  /* retired theme alias */
         if (t === 'auto') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         if (t) document.documentElement.dataset.theme = t;
         if (localStorage.getItem('reduced_motion') === 'true') document.documentElement.dataset.reducedMotion = 'true';
@@ -384,8 +385,8 @@
                                         onclick="pickTheme('glass')">Glass</button>
                                 <button type="button" data-theme="glass-blue" class="theme-btn"
                                         onclick="pickTheme('glass-blue')">Glass Blue</button>
-                                <button type="button" data-theme="glass-navy" class="theme-btn"
-                                        onclick="pickTheme('glass-navy')">Glass Navy</button>
+                                <button type="button" data-theme="glass-emerald" class="theme-btn"
+                                        onclick="pickTheme('glass-emerald')">Glass Emerald</button>
                             </div>
                         </div>
                         <div style="padding:4px 0;border-top:1px solid var(--border);">

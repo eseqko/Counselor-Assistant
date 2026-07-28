@@ -287,14 +287,21 @@ def index():
         note_trend.append({'label': wk_start.strftime('%m/%d'),
                            'count': week_counts.get(wk_start, 0)})
 
-    # 2) Note category breakdown — all-time counts by note_type
+    # 2) Note category breakdown — all-time counts by note_type. Top 7 +
+    # "Other": the donut's categorical palette has 8 fixed slots (identity
+    # colors are assigned in order, never cycled), and a 15-sliver donut is
+    # unreadable anyway.
     note_type_labels = dict(Note.NOTE_TYPES)
     note_type_rows = db.session.query(
         Note.note_type, sa_func.count(Note.id)
     ).filter_by(author_id=current_user.id).group_by(
         Note.note_type
     ).all()
-    svc_breakdown = {note_type_labels.get(k, k): v for k, v in note_type_rows}
+    ranked = sorted(note_type_rows, key=lambda r: r[1], reverse=True)
+    svc_breakdown = {note_type_labels.get(k, k): v for k, v in ranked[:7]}
+    other_count = sum(v for _, v in ranked[7:])
+    if other_count:
+        svc_breakdown['Other'] = other_count
 
     return render_template('dashboard/index.html',
         today=today,

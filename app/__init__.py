@@ -323,8 +323,11 @@ def create_app(config_class=Config):
     def inject_theme():
         from flask_login import current_user
         if current_user.is_authenticated:
+            theme = current_user.theme_preference or 'light'
+            if theme == 'glass-navy':  # retired theme; DB self-heals on next save
+                theme = 'glass-emerald'
             return {
-                'user_theme': current_user.theme_preference or 'light',
+                'user_theme': theme,
                 'user_reduced_motion': current_user.reduced_motion or False
             }
         return {'user_theme': 'light', 'user_reduced_motion': False}

@@ -8,7 +8,11 @@ var ThemeManager = (function() {
     // Keep in sync with the server-side whitelists (settings.py / setup.py) and
     // the theme pickers (base.html user menu + settings/index.html). A name not
     // listed here silently falls back to 'light' in setTheme().
-    var VALID = ['light', 'dark', 'school', 'focus', 'auto', 'fiesta', 'glass', 'glass-blue', 'glass-navy'];
+    var VALID = ['light', 'dark', 'school', 'focus', 'auto', 'fiesta', 'glass', 'glass-blue', 'glass-emerald'];
+    // Retired theme names → their replacement. A stored preference for a
+    // retired theme must keep working (localStorage + DB can both hold one),
+    // otherwise the page renders with a data-theme no CSS defines.
+    var LEGACY = { 'glass-navy': 'glass-emerald' };
     var root = document.documentElement;
 
     // ── Color math helpers (self-contained, no dependencies) ──
@@ -60,6 +64,7 @@ var ThemeManager = (function() {
     // ── Core ──
 
     function getEffective(theme) {
+        theme = LEGACY[theme] || theme;
         if (theme === 'auto') {
             return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
@@ -119,6 +124,7 @@ var ThemeManager = (function() {
     }
 
     function setTheme(name) {
+        name = LEGACY[name] || name;
         if (VALID.indexOf(name) === -1) name = 'light';
         localStorage.setItem('theme_preference', name);
         apply(name);
@@ -132,7 +138,8 @@ var ThemeManager = (function() {
     }
 
     function getTheme() {
-        return localStorage.getItem('theme_preference') || 'light';
+        var t = localStorage.getItem('theme_preference') || 'light';
+        return LEGACY[t] || t;
     }
 
     // ── Reduced motion ──

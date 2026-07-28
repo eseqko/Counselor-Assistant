@@ -465,6 +465,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window._chartsInit) return;
         window._chartsInit = true;
 
+        // Shared validated palette from chart-enhancements.js (slate fallback
+        // only if that script somehow didn't run).
+        var palette = window.chartPalette ||
+            ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+        function withAlpha(hex, a) {
+            var n = parseInt(hex.slice(1), 16);
+            return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+        }
+
         // 1) Note Activity — line chart
         var noteCtx = document.getElementById('noteActivityChart');
         if (noteCtx) {
@@ -475,12 +484,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     datasets: [{
                         label: 'Notes',
                         data: noteTrend.map(function(d){ return d.count; }),
-                        borderColor: '#94a3b8',
-                        backgroundColor: 'rgba(148,163,184,0.06)',
+                        borderColor: palette[0],
+                        backgroundColor: withAlpha(palette[0], 0.08),
                         fill: true,
                         tension: 0.3,
                         pointRadius: 3,
-                        pointBackgroundColor: '#64748b',
+                        pointBackgroundColor: palette[0],
                         borderWidth: 2
                     }]
                 },
@@ -501,7 +510,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (svcCtx) {
             var svcLabels = Object.keys(svcBreakdown);
             var svcValues = Object.values(svcBreakdown);
-            var svcColors = ['#64748b','#94a3b8','#a5b4c4','#7c9ab5','#6b8faa','#8ba4b8','#9fb6c8','#b0c4d4','#7899b0','#6683a0','#8dadc0','#a0bdd0','#758fa0','#6a849a','#b8c8d8'];
             if (svcLabels.length > 0) {
                 new Chart(svcCtx, {
                     type: 'doughnut',
@@ -509,9 +517,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         labels: svcLabels,
                         datasets: [{
                             data: svcValues,
-                            backgroundColor: svcColors.slice(0, svcLabels.length),
+                            backgroundColor: palette.slice(0, svcLabels.length),
                             borderWidth: 2,
-                            borderColor: '#fff'
+                            borderColor: window.chartSurface || '#fff'
                         }]
                     },
                     options: {

@@ -53,7 +53,7 @@
 [data-theme="fiesta"]     { --scrollbar-thumb: rgba(228, 0, 124, 0.30);   --scrollbar-thumb-hover: rgba(228, 0, 124, 0.55); }
 [data-theme="glass"]      { --scrollbar-thumb: rgba(255, 235, 200, 0.20); --scrollbar-thumb-hover: rgba(255, 235, 200, 0.40); }
 [data-theme="glass-blue"] { --scrollbar-thumb: rgba(200, 225, 255, 0.20); --scrollbar-thumb-hover: rgba(200, 225, 255, 0.40); }
-[data-theme="glass-navy"] { --scrollbar-thumb: rgba(180, 200, 255, 0.20); --scrollbar-thumb-hover: rgba(180, 200, 255, 0.40); }
+[data-theme="glass-emerald"] { --scrollbar-thumb: rgba(180, 255, 215, 0.20); --scrollbar-thumb-hover: rgba(180, 255, 215, 0.40); }
 
 
 /* ══════════════════════════════════════════════
@@ -647,7 +647,7 @@
 
 /* ══════════════════════════════════════════════
    GLASS THEMES — dark glassmorphism in three
-   palettes (Amber / Sky / Navy). Structure is
+   palettes (Amber / Sky / Emerald). Structure is
    shared via [data-theme^="glass"]; each variant
    only redefines colour tokens + the body's
    light-source gradient. Panels are low-opacity so
@@ -736,49 +736,97 @@
     color: var(--text);
 }
 
-[data-theme="glass-navy"] {             /* Navy (deep, moody) */
-    --bg: #070b18;
-    --text: #e6ebf5;  --text-muted: #98a3c0;
+[data-theme="glass-emerald"] {          /* Emerald (lush green) */
+    --bg: #08120c;
+    --text: #e8f8ef;  --text-muted: #9cc4ad;
     /* See "CRITICAL" note in [data-theme="glass"] above — these are text colors. */
-    --white: #e6ebf5;  --dark: #e6ebf5;  --gray: #98a3c0;  --light-gray: rgba(180,200,255,0.10);
-    --primary: #7da3e8;  --primary-light: #a3c0f5;  --primary-dark: #5577bb;
-    --border: rgba(180,200,255,0.22);
-    --glass-sidebar: rgba(10,14,30,0.45);
-    --glass-topbar:  rgba(14,20,40,0.35);
-    --glass-panel:   rgba(40,55,95,0.42);
-    --glass-panel-2: rgba(40,55,95,0.50);
-    --glass-header:  rgba(50,68,115,0.55);
-    --glass-border:  rgba(180,200,255,0.22);
-    --glass-highlight: rgba(200,215,255,0.26);
-    --glass-input:   rgba(14,20,40,0.50);
-    --glass-hover:   rgba(180,200,255,0.10);
-    --glass-th:      rgba(40,55,95,0.55);
-    --glass-td:      rgba(40,55,95,0.25);
-    --glass-action:  rgba(180,200,255,0.10);
-    --glass-action-hover: rgba(180,200,255,0.18);
-    --glass-accent-bg: rgba(125,163,232,0.16);
-    --glass-accent-border: rgba(125,163,232,0.40);
-    --glass-menu:     #141d3e;
-    --glass-fallback: rgba(7,11,24,0.95);
+    --white: #e8f8ef;  --dark: #e8f8ef;  --gray: #9cc4ad;  --light-gray: rgba(180,255,215,0.10);
+    --primary: #45d08e;  --primary-light: #7fe3b4;  --primary-dark: #2aa06a;
+    --border: rgba(180,255,215,0.22);
+    --glass-sidebar: rgba(8,20,14,0.45);
+    --glass-topbar:  rgba(12,28,20,0.35);
+    --glass-panel:   rgba(24,60,44,0.42);
+    --glass-panel-2: rgba(24,60,44,0.50);
+    --glass-header:  rgba(30,74,54,0.55);
+    --glass-border:  rgba(180,255,215,0.22);
+    --glass-highlight: rgba(200,255,225,0.26);
+    --glass-input:   rgba(10,24,17,0.50);
+    --glass-hover:   rgba(180,255,215,0.10);
+    --glass-th:      rgba(24,60,44,0.55);
+    --glass-td:      rgba(24,60,44,0.25);
+    --glass-action:  rgba(180,255,215,0.10);
+    --glass-action-hover: rgba(180,255,215,0.18);
+    --glass-accent-bg: rgba(69,208,142,0.16);
+    --glass-accent-border: rgba(69,208,142,0.40);
+    --glass-menu:     #123528;
+    --glass-fallback: rgba(6,18,12,0.95);
 }
-/* Navy needs MORE light sources than the warm/blue variants. The original gradient
-   left huge dead zones where the card-header would sit, making panels look like
-   solid black boxes. More + brighter + larger spots so every region has something
-   for the blur to absorb. */
-[data-theme="glass-navy"] body {
+/* Deep variants need MORE light sources than the warm/blue ones. Sparse gradients
+   leave dead zones where the card-header sits, making panels look like solid
+   black boxes. More + brighter + larger spots so every region has something
+   for the blur to absorb. (Learned on the retired Navy variant.) */
+[data-theme="glass-emerald"] body {
     background:
-        radial-gradient(circle at 8% 10%, rgba(100,150,255,0.55), transparent 30%),
-        radial-gradient(circle at 92% 12%, rgba(140,110,230,0.45), transparent 32%),
-        radial-gradient(circle at 50% 30%, rgba(80,130,230,0.30), transparent 40%),
-        radial-gradient(circle at 15% 60%, rgba(120,140,230,0.40), transparent 35%),
-        radial-gradient(circle at 85% 70%, rgba(90,130,220,0.45), transparent 35%),
-        radial-gradient(circle at 50% 92%, rgba(70,110,200,0.40), transparent 40%),
-        linear-gradient(135deg, #0a1024 0%, #1a2856 30%, #0a1024 60%, #1a2856 85%, #0a1024 100%);
+        radial-gradient(circle at 8% 10%, rgba(90,230,160,0.50), transparent 30%),
+        radial-gradient(circle at 92% 12%, rgba(60,200,180,0.42), transparent 32%),
+        radial-gradient(circle at 50% 30%, rgba(60,190,130,0.28), transparent 40%),
+        radial-gradient(circle at 15% 60%, rgba(100,220,170,0.38), transparent 35%),
+        radial-gradient(circle at 85% 70%, rgba(50,180,140,0.42), transparent 35%),
+        radial-gradient(circle at 50% 92%, rgba(40,160,110,0.38), transparent 40%),
+        linear-gradient(135deg, #08120c 0%, #14402a 30%, #08120c 60%, #14402a 85%, #08120c 100%);
     background-attachment: fixed;
     color: var(--text);
 }
 
 /* ── Shared structure (all glass variants) ───── */
+
+/* Overlay-surface tokens. Glass variants redefine --white as a light TEXT
+   color, but :root's --surface is `var(--white)` — so every panel that uses
+   --surface (user dropdown, global search, alerts panel, theme pills, admin
+   tables) rendered near-WHITE with near-white text on glass: invisible.
+   Point --surface at the variant's solid opaque menu color instead, and
+   --hover-bg at the translucent glass hover tint. */
+[data-theme^="glass"] {
+    --surface: var(--glass-menu);
+    --hover-bg: var(--glass-hover);
+}
+
+/* Theme buttons in the user dropdown / settings pills. Two traps here:
+   1. Each button carries data-theme="<name>", so the theme TOKEN blocks in
+      this file match the button itself and re-scope --text/--bg on it — the
+      Fiesta chip resolves color:var(--text) to Fiesta's near-black ink,
+      invisible on a dark glass panel. `color: inherit` takes the menu's
+      computed ink instead, sidestepping the re-scope for every chip at once.
+   2. Base CSS paints the active one `background: var(--primary); color:#fff`
+      — glass primaries are light pastels, so white-on-pastel lands ~2:1.
+      Keep the pastel chip and switch to dark ink (9:1+ on all variants). */
+[data-theme^="glass"] .theme-btn,
+[data-theme^="glass"] .theme-pill {
+    background: var(--glass-action);
+    border-color: var(--glass-border);
+    color: inherit;
+}
+[data-theme^="glass"] .theme-btn:hover,
+[data-theme^="glass"] .theme-pill:hover { background: var(--glass-action-hover); }
+[data-theme^="glass"] .theme-btn.is-active,
+[data-theme^="glass"] .theme-pill.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #16130e;
+}
+
+/* .btn-warning uses `color: var(--dark)` (dark ink on amber in light themes)
+   — glass remaps --dark to near-white, gutting the contrast. Re-pin the ink.
+   .btn-secondary is light-grey-on-light-grey on glass; give it the same
+   glassy neutral treatment as .btn-outline. */
+[data-theme^="glass"] .btn-warning { color: #241a08; }
+[data-theme^="glass"] .btn-secondary {
+    background: var(--glass-action);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+}
+[data-theme^="glass"] .btn-secondary:hover { background: var(--glass-action-hover); }
+
 [data-theme^="glass"] .sidebar {
     background: var(--glass-sidebar);
     backdrop-filter: blur(40px) saturate(180%) brightness(110%);
@@ -927,8 +975,8 @@
 [data-theme="glass"]      .btn-primary:hover { background: #a5662a; }
 [data-theme="glass-blue"] .btn-primary { background: #2864b0; }  /* 5.7:1 vs #fff */
 [data-theme="glass-blue"] .btn-primary:hover { background: #357fcc; }
-[data-theme="glass-navy"] .btn-primary { background: #3f5fa8; }  /* 5.3:1 vs #fff */
-[data-theme="glass-navy"] .btn-primary:hover { background: #5577bb; }
+[data-theme="glass-emerald"] .btn-primary { background: #1d7a4c; }  /* 4.9:1 vs #fff */
+[data-theme="glass-emerald"] .btn-primary:hover { background: #259257; }
 
 [data-theme^="glass"] .btn-success {
     background: #218238; color: #fff;                            /* 4.87:1 vs #fff */
