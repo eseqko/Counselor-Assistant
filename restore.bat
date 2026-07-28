@@ -47,6 +47,15 @@ REM --- Copy database ---
 copy /y "%NETWORK_PATH%\CounselorBackup\counselor.db" "data\counselor.db" >nul
 echo  Database restored.
 
+REM --- Clear the schema sentinel ---
+REM data\.schema_hash records which schema the PREVIOUS database was migrated
+REM to, and it lives next to the .db rather than inside it. Swapping the
+REM database out from under it leaves a hash that still matches the current
+REM models, so startup skips _add_missing_columns entirely and the restored
+REM (older) database never gets its missing columns -- surfacing as
+REM "no such column" 500s on first use. Deleting it forces a re-check.
+if exist "data\.schema_hash" del /q "data\.schema_hash"
+
 REM --- Copy uploads ---
 if exist "%NETWORK_PATH%\CounselorBackup\uploads" (
     xcopy /s /e /y /i "%NETWORK_PATH%\CounselorBackup\uploads" "data\uploads" >nul

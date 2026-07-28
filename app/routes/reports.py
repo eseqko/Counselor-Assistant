@@ -9,7 +9,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
-from app.utils.helpers import parse_date
+from app.utils.helpers import parse_date, current_school_year
 from app.utils.security import csv_safe
 from app.utils.roles import owned_or_404
 from datetime import date, timedelta
@@ -471,9 +471,16 @@ def cohort_trends():
             att_weekly_rates[week] = round((1 - data['absent'] / data['total']) * 100, 1)
 
     # --- Grade distribution by quarter ---
+    # Scoped to ONE school year. Without this filter the buckets are keyed on
+    # quarter alone, so a student's 9th-grade Q1 and 12th-grade Q1 merge into a
+    # single "Q1" column — a *trend* report whose time axis flattens further
+    # every year the caseload accumulates history. Also feeds grades_by_subject
+    # below, so subject pass rates and GPA were lifetime averages too.
+    trend_year = request.args.get('school_year') or current_school_year()
     grade_dist_by_quarter = defaultdict(lambda: defaultdict(int))
     all_grades = GradeRecord.query.filter(
-        GradeRecord.student_id.in_(student_ids)
+        GradeRecord.student_id.in_(student_ids),
+        GradeRecord.school_year == trend_year,
     ).all()
     for g in all_grades:
         q_label = f"Q{g.quarter}" if g.quarter else "Unknown"

@@ -1491,11 +1491,29 @@ def _attendance_data(student_ids, start, end):
                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         month_labels.append(months[int(parts[1])])
 
-    # Per-student absence counts (top 10 most absent)
-    student_absences = {}
+    # Per-student attendance, computed at DAY level per the Attendance Works
+    # definition — the same math as app/utils/next_steps.py, so the dashboard
+    # and a student's action plan can't disagree about who is chronic.
+    #
+    # This previously counted absence *records* (period-level, so a 6-period
+    # day scored as 6) over a denominator of distinct dates seen across the
+    # WHOLE caseload. Both halves were wrong: it inflated the numerator for
+    # schools that take attendance per period, and the shared denominator
+    # understated any student who enrolled mid-year, since they were charged
+    # for days before they existed on the roster.
+    day_status = defaultdict(lambda: defaultdict(set))     # sid -> date -> {status}
     for r in records:
-        if r.status == 'absent':
-            student_absences[r.student_id] = student_absences.get(r.student_id, 0) + 1
+        if r.date is None:
+            continue
+        day_status[r.student_id][r.date].add((r.status or '').lower())
+
+    student_absences = {}      # sid -> absent DAYS
+    student_enrolled = {}      # sid -> days with any record for that student
+    for sid, days in day_status.items():
+        student_enrolled[sid] = len(days)
+        absent_days = sum(1 for statuses in days.values() if 'absent' in statuses)
+        if absent_days:
+            student_absences[sid] = absent_days
 
     sorted_students = sorted(student_absences.items(), key=lambda x: -x[1])[:10]
     student_names = []
@@ -1506,10 +1524,11 @@ def _attendance_data(student_ids, start, end):
             student_names.append(f'{s.first_name} {s.last_name[0]}.')
             student_abs_values.append(count)
 
-    # Chronic absenteeism (10%+ absence rate)
-    total_days = len(set(r.date for r in records)) or 1
-    chronic_count = sum(1 for count in student_absences.values()
-                        if count / total_days >= 0.10)
+    # Chronic absenteeism: ≥10% of the student's OWN enrolled days.
+    chronic_count = sum(
+        1 for sid, absent_days in student_absences.items()
+        if student_enrolled.get(sid) and absent_days / student_enrolled[sid] >= 0.10
+    )
 
     return {
         'monthly_trend': {

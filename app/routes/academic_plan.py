@@ -15,10 +15,10 @@ from app.routes.graduation import (
 )
 from app.routes.ai import build_recommended_schedule
 from app.utils.audit import log_action
+from app.utils.helpers import current_school_year
 
 academic_plan_bp = Blueprint('academic_plan', __name__)
 
-CURRENT_SCHOOL_YEAR = '2025-2026'
 SLOTS_PER_TERM = 4
 
 
@@ -36,7 +36,7 @@ def _grade_for_school_year(student, school_year):
         return None
     try:
         start_year = int(school_year.split('-')[0])
-        current_start = int(CURRENT_SCHOOL_YEAR.split('-')[0])
+        current_start = int(current_school_year().split('-')[0])
         offset = current_start - start_year
         return student.grade_level - offset
     except (ValueError, IndexError):
@@ -70,7 +70,7 @@ def _build_grid(student):
         gl = _grade_for_school_year(student, school_year)
         if gl is None or gl < 9 or gl > 12:
             continue
-        is_current = (school_year == CURRENT_SCHOOL_YEAR)
+        is_current = (school_year == current_school_year())
         grid[gl]['is_historical'] = not is_current
         grid[gl]['is_current'] = is_current
 

@@ -78,6 +78,10 @@ def _compute_credits_from_grades(student_id):
 
     # Accumulate passing credits by mapped grad-requirement subjects
     earned = defaultdict(float)
+    # NOTE: `not g.is_passing` is CORRECT here, unlike in mail_merge/meeting_prep.
+    # is_passing is None for ungraded 'NM', and an ungraded course must not count
+    # toward earned credit — so folding None in with False is the intended
+    # outcome. Do not "fix" this to `is False` in a mechanical sweep.
     for g in grades:
         if not g.is_passing:
             continue
@@ -123,6 +127,10 @@ def _compute_ag_from_grades(student_id):
         return None
 
     earned = defaultdict(float)
+    # NOTE: `not g.is_passing` is CORRECT here, unlike in mail_merge/meeting_prep.
+    # is_passing is None for ungraded 'NM', and an ungraded course must not count
+    # toward earned credit — so folding None in with False is the intended
+    # outcome. Do not "fix" this to `is False` in a mechanical sweep.
     for g in grades:
         if not g.is_passing or not g.is_ag:
             continue
