@@ -78,6 +78,9 @@ if __name__ == '__main__':
         print("  The school LAN cannot see this port.")
     elif mode == 'manual':
         print(f"  Server bound to: {host}:5000 (HOST env var)")
+        if host not in ('127.0.0.1', 'localhost', '::1'):
+            print("  WARNING: bound beyond localhost. Only loopback and")
+            print("  Tailscale addresses are accepted; everything else gets 403.")
     else:
         print("  Tailscale not detected. Local-only mode.")
         print("  Open your browser to: http://127.0.0.1:5000")
@@ -87,7 +90,11 @@ if __name__ == '__main__':
     print("=" * 60)
     print()
 
-    if mode == 'tailscale':
+    # Source ACL whenever we are bound beyond loopback — NOT only in tailscale
+    # mode. HOST=0.0.0.0 selects 'manual', which used to skip this entirely and
+    # exposed every route to the whole LAN while the banner above still claimed
+    # the school LAN could not see the port.
+    if host not in ('127.0.0.1', 'localhost', '::1'):
         from flask import request as flask_request, abort
         from app.utils.networking import is_tailnet_or_localhost
 

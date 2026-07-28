@@ -16,6 +16,7 @@ from app.models.course import Department, Course, GraduationRequirement
 from app.utils.audit import log_action
 from app.utils.helpers import current_school_year
 from app.utils.roles import admin_or_sole_user_required, admin_required
+from app.utils.db_snapshot import snapshot_database
 from config import Config
 
 settings_bp = Blueprint('settings', __name__)
@@ -126,17 +127,11 @@ def audit_log():
 @admin_or_sole_user_required
 def backup():
     """Create a local backup of the database."""
-    backup_dir = Config.BACKUP_DIR
-    os.makedirs(backup_dir, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    backup_path = os.path.join(backup_dir, f'counselor_backup_{timestamp}.db')
-    db_path = os.path.join(Config.DATA_DIR if hasattr(Config, 'DATA_DIR') else 'data', 'counselor.db')
-
-    try:
-        shutil.copy2(db_path, backup_path)
+    backup_path = snapshot_database('backup')
+    if backup_path:
         log_action('backup', 'database', details=f'Backup created: {backup_path}')
         flash('Backup created successfully.', 'success')
-    except Exception:
+    else:
         flash('Backup failed. Please check disk space and try again.', 'danger')
 
     return redirect(url_for('settings.index'))

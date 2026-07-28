@@ -12,7 +12,12 @@ Flask-Login==0.6.3
 Flask-WTF==1.2.2
 WTForms==3.2.1
 Werkzeug==3.1.3
-cryptography==44.0.0
+# NOTE: `cryptography` was pinned here but never imported anywhere in the app,
+# which implied an at-rest encryption feature that does not exist. The database
+# and uploads are plaintext on disk; full-disk encryption (BitLocker/FileVault)
+# is the control that protects them, and the installers and README now say so
+# outright. Removed rather than left as a false signal. Google Workspace sync
+# pulls it in transitively when you install requirements-optional.txt.
 python-dateutil==2.9.0
 openpyxl==3.1.5
 pytz==2024.1

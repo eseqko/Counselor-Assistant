@@ -10,6 +10,7 @@ from app.models.student import Student
 from app.models.user import User
 from app.utils import google_client, google_calendar
 from app.utils.audit import log_action
+from app.utils.ratelimit import rate_limit, clamp
 from app.utils.ics import build_ical_feed
 from app.utils.scheduling import (find_available_slots, has_upcoming_booking,
                                   _fmt_time)
@@ -144,6 +145,10 @@ def public_available_slots(token):
 
 @availability_bp.route('/book/<token>/confirm', methods=['POST'])
 @csrf.exempt
+# Anonymous + csrf-exempt + persists into the counselor's calendar, so an
+# unthrottled endpoint lets one token-holder script hundreds of bookings or
+# plant text under a classmate's name.
+@rate_limit('public_booking', limit=5, window=300)
 def public_confirm_booking(token):
     """Confirm a booking from the public page."""
     user = User.query.filter_by(calendar_feed_token=token).first()
@@ -151,7 +156,7 @@ def public_confirm_booking(token):
         abort(404)
 
     data = request.get_json(silent=True) or {}
-    booker_name = data.get('name', '').strip()
+    booker_name = clamp(data.get('name'), 120)
     appointment_date = data.get('date', '').strip()
     start_time = data.get('start_time', '').strip()
     end_time = data.get('end_time', '').strip()
@@ -177,12 +182,12 @@ def public_confirm_booking(token):
     booking = Booking(
         counselor_id=user.id,
         booker_name=booker_name,
-        booker_email=data.get('email', '').strip() or None,
-        booker_phone=data.get('phone', '').strip() or None,
-        booker_relationship=data.get('relationship', 'parent'),
-        student_name=data.get('student_name', '').strip() or None,
-        meeting_type=data.get('meeting_type', 'general'),
-        notes=data.get('notes', '').strip() or None,
+        booker_email=clamp(data.get('email'), 200) or None,
+        booker_phone=clamp(data.get('phone'), 40) or None,
+        booker_relationship=clamp(data.get('relationship'), 40) or 'parent',
+        student_name=clamp(data.get('student_name'), 120) or None,
+        meeting_type=clamp(data.get('meeting_type'), 40) or 'general',
+        notes=clamp(data.get('notes'), 2000) or None,
         appointment_date=appt_date,
         start_time=start_time,
         end_time=end_time,

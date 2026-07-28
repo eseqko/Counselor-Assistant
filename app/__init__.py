@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from sqlalchemy import inspect as sqlalchemy_inspect
 from config import Config
 import os
 
@@ -16,46 +17,38 @@ csrf = CSRFProtect()
 
 
 def _add_missing_indexes(app):
-    """Create indexes on frequently-filtered columns for EXISTING databases.
+    """Create every model-declared index that a pre-existing database lacks.
 
-    db.create_all() only builds tables (and their model-declared indexes) that
-    don't exist yet, so databases created before an index was added to a model
-    never get it from create_all alone — this backfill is the migration path.
-    Names match the model-declared indexes so IF NOT EXISTS no-ops on fresh DBs.
-    The column slot may be a comma-joined list for composite indexes.
+    db.create_all() only builds tables (and their indexes) that don't exist
+    yet, so a database created before an index was added to a model never gets
+    it from create_all alone — this backfill is the migration path.
+
+    This was a hand-maintained list of 12 entries against 81 model-declared
+    indexes, which meant a new `index=True` column silently got the column and
+    no index; a comment recorded that it had already caused one production
+    issue. Sweeping db.metadata instead means adding an index to a model is now
+    all that's required — nothing here to keep in sync.
+
+    create(checkfirst=True) issues CREATE INDEX IF NOT EXISTS semantics per
+    dialect, so this is a no-op on fresh databases and on already-indexed ones.
     """
-    import sqlalchemy
-    indexes = [
-        ('ix_notes_author_id', 'notes', 'author_id'),
-        ('ix_service_records_counselor_id', 'service_records', 'counselor_id'),
-        ('ix_calendar_events_owner_id', 'calendar_events', 'owner_id'),
-        ('ix_meeting_notes_author_id', 'meeting_notes', 'author_id'),
-        # NOTE: table is 'grade_records' — a prior version targeted a
-        # nonexistent 'grades' table, so old installs ran the app's largest
-        # table with no student_id index at all.
-        ('ix_grade_records_student_id', 'grade_records', 'student_id'),
-        ('ix_attendance_student_id', 'attendance_records', 'student_id'),
-        # Composite indexes for the analytics hot paths (see app/models for the
-        # matching db.Index declarations that cover fresh installs):
-        ('ix_grade_records_year_type_quarter', 'grade_records',
-         'school_year, grade_type, quarter'),
-        ('ix_grade_records_student_year_quarter', 'grade_records',
-         'student_id, school_year, quarter'),
-        ('ix_attendance_student_date', 'attendance_records', 'student_id, date'),
-        ('ix_transcript_records_student_import', 'transcript_records',
-         'student_id, import_date'),
-        ('ix_students_postgrad_survey_token', 'students', 'postgrad_survey_token'),
-    ]
-    for idx_name, table, column in indexes:
-        try:
-            db.session.execute(sqlalchemy.text(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"
-            ))
-        except Exception as e:
-            # Table may not exist yet (fresh DB before create_all ordering
-            # changes) — log instead of hiding real failures.
-            app.logger.warning(f"Index {idx_name} not created: {e}")
+    bind = db.session.get_bind()
+    created = 0
+    for table in db.metadata.tables.values():
+        if not sqlalchemy_inspect(bind).has_table(table.name):
+            # Table itself is missing (fresh DB, create_all ordering) — its
+            # indexes come with it when it is created.
+            continue
+        for index in table.indexes:
+            try:
+                index.create(bind=bind, checkfirst=True)
+                created += 1
+            except Exception as e:
+                # Never fatal: a partially-migrated DB may lack the column the
+                # index targets. Log rather than hiding a real failure.
+                app.logger.warning(f"Index {index.name} not created: {e}")
     db.session.commit()
+    app.logger.debug(f"_add_missing_indexes: {created} indexes verified")
 
 
 def _schema_cache_path(app):

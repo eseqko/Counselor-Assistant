@@ -140,6 +140,22 @@ echo ""
 echo -e "${CYAN}============================================================${NC}"
 echo ""
 
+echo -e "${CYAN}============================================================${NC}"
+echo "  BEFORE YOU ADD REAL STUDENT DATA"
+echo -e "${CYAN}============================================================${NC}"
+echo "  Student records are stored in plain files on this machine."
+echo "  The app login does NOT protect them if the machine is lost"
+echo "  or the drive is read from another operating system."
+echo ""
+echo "  Turn on full-disk encryption now:"
+echo "    macOS:  Settings > Privacy & Security > FileVault"
+echo "    Linux:  LUKS / your distribution's disk encryption"
+echo ""
+echo "  On an unencrypted machine, a loss is a reportable FERPA"
+echo "  breach. This is a prerequisite, not a suggestion."
+echo -e "${CYAN}============================================================${NC}"
+echo ""
+
 read -p "  Launch now? (Y/n): " LAUNCH
 if [[ "$LAUNCH" != "n" && "$LAUNCH" != "N" ]]; then
     echo ""
