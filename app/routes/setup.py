@@ -119,7 +119,7 @@ def _handle_complete(form):
     # Theme
     theme = form.get('theme', '').strip()
     if theme and theme in ('light', 'dark', 'school', 'focus', 'auto', 'fiesta',
-                           'glass', 'glass-blue', 'glass-navy'):
+                           'glass', 'glass-blue', 'glass-emerald'):
         user.theme_preference = theme
 
     # Never finish setup while the well-known default password is still active.

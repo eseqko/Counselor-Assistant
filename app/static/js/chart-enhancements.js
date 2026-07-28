@@ -135,4 +135,30 @@
         if (s.angleLines) s.angleLines.color = borderColor;
         if (s.pointLabels) s.pointLabels.color = textColor;
     });
+
+    /* ── 5. Shared categorical palette ────────────────────────────────────
+       One fixed-order 8-hue palette for identity encodings (donut slices,
+       multi-series charts), stepped per light/dark surface and validated for
+       adjacent-pair colorblind separation + contrast against both the white
+       card surface and the dark/glass panel (#1C1F2E depth). Fixed order is
+       the CVD-safety mechanism — assign slots in order, never shuffle or
+       cycle; past 8 series, fold the tail into "Other" server-side.
+       Mode is picked from the effective --bg luminance so every theme
+       (including future ones) gets the right steps without a lookup table. */
+    function _lum(hex) {
+        var m = /^#([0-9a-f]{6})$/i.exec((hex || '').trim());
+        if (!m) return null;
+        var n = parseInt(m[1], 16);
+        return (0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255;
+    }
+    var _bgLum = _lum(tok('--bg', '#ffffff'));
+    var _theme = document.documentElement.dataset.theme || 'light';
+    var _isDark = (_bgLum !== null) ? (_bgLum < 0.45)
+                : (_theme === 'dark' || _theme.indexOf('glass') === 0);
+    window.chartPalette = _isDark
+        ? ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+        : ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+    /* Surface color for slice/segment separators (the "gap" ring between
+       donut arcs). Falls back to the old hardcoded white on light themes. */
+    window.chartSurface = tok('--surface', _isDark ? '#1C1F2E' : '#ffffff');
 })();
