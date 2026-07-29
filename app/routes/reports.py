@@ -913,6 +913,96 @@ def _compute_metric(students_in_cohort, metric):
     return 0
 
 
+# ── Cohort concentration in the master schedule ──────────────────
+
+# Cohorts worth asking "are these students clustered?" about. Reuses
+# _cohort_key so a cohort means the same thing here as in the ELPAC report,
+# plus the boolean program flags that only make sense as a yes/no split.
+_CONCENTRATION_COHORTS = [
+    ('el_status', 'EL Status (Newcomer / LTEL / RFEP / EO)'),
+    ('grade_level', 'Grade Level'),
+    ('years_in_us_schools', 'Years in US Schools'),
+    ('iep_status', 'IEP'),
+    ('section_504', '504 Plan'),
+    ('gender', 'Gender'),
+    ('ethnicity', 'Ethnicity'),
+]
+
+_CONCENTRATION_DIMENSIONS = [
+    ('period', 'Period'),
+    ('teacher', 'Teacher'),
+    ('course', 'Course'),
+    ('advisory', 'Advisory Section'),
+]
+
+_TERM_OPTIONS = [('all', 'Any term'), ('Q1', 'Q1'), ('Q2', 'Q2'),
+                 ('Q3', 'Q3'), ('Q4', 'Q4'), ('YR', 'Year-long')]
+
+
+def _concentration_cohort_key(student, dim):
+    """Cohort label, extending _cohort_key with the boolean program flags."""
+    if dim == 'iep_status':
+        return 'IEP' if student.iep_status else 'No IEP'
+    if dim == 'section_504':
+        return '504' if student.section_504 else 'No 504'
+    return _cohort_key(student, dim)
+
+
+@reports_bp.route('/cohort-concentration')
+@login_required
+def cohort_concentration():
+    """Where a cohort sits in the master schedule."""
+    from app.models.schedule import ScheduleEntry
+    from app.utils.cohort_concentration import build_concentration, chart_payload
+
+    cohort_dim = request.args.get('cohort', 'el_status')
+    dimension = request.args.get('dimension', 'period')
+    term = request.args.get('term', 'all')
+    school_year = request.args.get('school_year') or current_school_year()
+
+    if cohort_dim not in {k for k, _ in _CONCENTRATION_COHORTS}:
+        cohort_dim = 'el_status'
+    if dimension not in {k for k, _ in _CONCENTRATION_DIMENSIONS}:
+        dimension = 'period'
+    if term not in {k for k, _ in _TERM_OPTIONS}:
+        term = 'all'
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+    student_ids = [s.id for s in students]
+
+    entries = []
+    years = []
+    if student_ids:
+        years = sorted({y for (y,) in db.session.query(
+            ScheduleEntry.school_year).filter(
+                ScheduleEntry.student_id.in_(student_ids)).distinct().all() if y},
+            reverse=True)
+        if years and school_year not in years:
+            school_year = years[0]
+        entries = ScheduleEntry.query.filter(
+            ScheduleEntry.student_id.in_(student_ids),
+            ScheduleEntry.school_year == school_year,
+        ).all()
+
+    cohort_of = {s.id: _concentration_cohort_key(s, cohort_dim) for s in students}
+    result = build_concentration(students, entries, cohort_of, dimension, term=term)
+
+    log_action('view', 'report',
+               details=f'Cohort concentration: {cohort_dim} by {dimension}')
+
+    return render_template('reports/cohort_concentration.html',
+        cohort_options=_CONCENTRATION_COHORTS,
+        dimension_options=_CONCENTRATION_DIMENSIONS,
+        term_options=_TERM_OPTIONS,
+        cohort_dim=cohort_dim, dimension=dimension, term=term,
+        school_year=school_year, years=years,
+        result=result,
+        chart=chart_payload(result),
+        has_schedule_data=bool(entries),
+    )
+
+
 @reports_bp.route('/elpac')
 @login_required
 def elpac_cohorts():

@@ -116,6 +116,18 @@ def _get_paths(ids):
     ]
 
 
+def test_cohort_concentration_only_counts_your_own_caseload(app, two_counselors):
+    """The report aggregates rather than showing records by id, so the leak it
+    could produce is counting another counselor's students into your slices."""
+    client, ids = two_counselors
+    r = client.get('/reports/cohort-concentration')
+    assert r.status_code == 200
+    # Counselor B has no students at all, so every slice must be empty —
+    # counselor A's student must not appear in B's baseline.
+    assert b'Import Schedules' in r.data or b'0 students' in r.data
+    assert b'Ann' not in r.data
+
+
 def _post_paths(ids):
     return [
         f'/groups/{ids["group"]}/delete',
