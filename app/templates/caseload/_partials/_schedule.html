@@ -25,7 +25,8 @@
         {% if a.completeness.non_credit_entries %}
         <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px;">
             Counted as classes but earning no credit:
-            {% for e in a.completeness.non_credit_entries %}{{ e.course_title }}{{ ', ' if not loop.last }}{% endfor %}
+            {# one entry per quarter, so show each placement once #}
+            {% for title in a.completeness.non_credit_entries|map(attribute='course_title')|unique|sort %}{{ title }}{{ ', ' if not loop.last }}{% endfor %}
         </div>
         {% endif %}
 
