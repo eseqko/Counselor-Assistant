@@ -8,12 +8,13 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from app import db, csrf
 from app.models.student import Student, Tag
+from app.models.schedule import ScheduleEntry
 from app.models.rollover import RolloverSnapshot
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
 from app.utils.security import xlsx_safe
 from app.utils.db_snapshot import snapshot_database
-from app.utils.helpers import parse_date
+from app.utils.helpers import parse_date, current_school_year
 from app.utils.roles import owned_or_404
 
 
@@ -268,8 +269,36 @@ def view_student(id):
         prev_by_template[r.template_id] = r
     screenings_with_delta.reverse()             # newest first for display
 
+    # Current-year schedule, grouped by period for display. Non-class rows (a
+    # "Vice Principal" assignment) and advisory are kept but excluded from the
+    # in-progress credit total via ScheduleEntry.counts_for_credit.
+    schedule_year = current_school_year()
+    sched = ScheduleEntry.query.filter_by(
+        student_id=student.id, school_year=schedule_year
+    ).order_by(ScheduleEntry.period, ScheduleEntry.term).all()
+    if not sched:
+        # Fall back to whatever year we do have, so an off-cycle import still shows.
+        latest = ScheduleEntry.query.filter_by(student_id=student.id).order_by(
+            ScheduleEntry.school_year.desc()).first()
+        if latest:
+            schedule_year = latest.school_year
+            sched = ScheduleEntry.query.filter_by(
+                student_id=student.id, school_year=schedule_year
+            ).order_by(ScheduleEntry.period, ScheduleEntry.term).all()
+
+    schedule_by_period = []
+    for entry in sched:
+        if schedule_by_period and schedule_by_period[-1][0] == entry.period:
+            schedule_by_period[-1][1].append(entry)
+        else:
+            schedule_by_period.append((entry.period, [entry]))
+    schedule_credits = sum(e.credits or 0 for e in sched if e.counts_for_credit) or None
+
     return render_template('caseload/view.html',
         student=student, notes=notes,
+        schedule_by_period=schedule_by_period,
+        schedule_year=schedule_year,
+        schedule_credits=schedule_credits,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,

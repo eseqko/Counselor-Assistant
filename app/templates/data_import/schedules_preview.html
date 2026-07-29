@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Preview Schedules{% endblock %}
+{% block page_title %}Preview Schedule Import{% endblock %}
+{% block content %}
+
+<form method="POST" action="{{ url_for('data_import.schedules_confirm') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+<div class="card">
+    <div class="card-header">
+        Ready to import
+        <span class="badge badge-success">{{ matched|length }} rows</span>
+        {% if school_years %}<span class="badge badge-info">{{ school_years|join(', ') }}</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <p style="font-size:0.86rem;color:var(--text-muted);margin-bottom:12px;">
+            Re-importing <strong>replaces</strong> each student's existing schedule for the
+            same school year, so this is safe to run again whenever a schedule changes.
+            A database snapshot is taken automatically before anything is written.
+        </p>
+
+        {% if needs_student_pick %}
+        <div class="alert alert-warning" style="font-size:0.86rem;">
+            <strong>No student name or ID was readable on this file.</strong>
+            That's expected if the printout was redacted. Pick the student it belongs to:
+            <select name="manual_student_id" class="form-control" style="margin-top:8px;max-width:360px;" required>
+                <option value="">-- Choose student --</option>
+                {% for s in caseload %}<option value="{{ s.id }}">{{ s.display_name }}</option>{% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        {% if missing_credits %}
+        <div class="alert alert-info" style="font-size:0.86rem;">
+            <strong>{{ missing_credits|length }} course(s) have no credit value yet</strong>
+            &mdash; they aren't in your course catalog:
+            <span style="font-family:ui-monospace,monospace;">{{ missing_credits|join(', ') }}</span>.
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <label style="font-size:0.86rem;">Credits per course row:</label>
+                <input type="number" name="default_credits" step="0.5" min="0" max="20"
+                       placeholder="e.g. 5" class="form-control" style="max-width:120px;">
+                <span style="font-size:0.8rem;color:var(--text-muted);">
+                    Saved to the catalog, so you'll only be asked once.
+                    Leave blank to fill in later.
+                </span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        <table>
+            <thead><tr>
+                <th>Student</th><th>Per</th><th>Term</th><th>Course ID</th>
+                <th>Course</th><th>Teacher</th><th>Room</th><th>Credits</th>
+            </tr></thead>
+            <tbody>
+            {% for r in matched %}
+                <tr>
+                    <td style="font-size:0.84rem;">
+                        {% set s = students.get(r.student_id) %}
+                        {{ s.display_name if s else r.student_name or r.student_ref }}
+                    </td>
+                    <td>{{ r.period if r.period is not none else '-' }}</td>
+                    <td><span class="badge badge-info">{{ r.term }}</span></td>
+                    <td style="font-family:ui-monospace,monospace;font-size:0.8rem;">{{ r.course_number }}</td>
+                    <td style="font-size:0.84rem;">
+                        {{ r.course_title }}
+                        {% if r.is_advisory %}<span class="badge badge-success">Advisory</span>{% endif %}
+                        {% if r.is_non_class %}<span class="badge badge-warning">Not a class</span>{% endif %}
+                    </td>
+                    <td style="font-size:0.84rem;">{{ r.teacher_name or '-' }}</td>
+                    <td style="font-size:0.84rem;">{{ r.room or '-' }}</td>
+                    <td>{% if r.is_non_class or r.is_advisory %}&mdash;
+                        {% elif r.credits is not none %}{{ r.credits }}
+                        {% else %}<span style="color:var(--warning);">needs value</span>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            {% if not matched %}
+                <tr><td colspan="8"><div class="empty-state"><p>No rows matched a student on your caseload.</p></div></td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if unmatched %}
+<div class="card">
+    <div class="card-header">
+        Not matched to your caseload
+        <span class="badge badge-warning">{{ unmatched|length }} student(s)</span>
+    </div>
+    <div class="card-body">
+        <p style="font-size:0.86rem;color:var(--text-muted);">
+            These rows don't correspond to a student assigned to you, so they will be
+            skipped. Nothing is created &mdash; a schedule attached to the wrong student
+            is worse than one that's missing.
+        </p>
+        <ul style="font-size:0.86rem;">
+            {% for who, rows in unmatched.items() %}
+            <li><strong>{{ who }}</strong> &mdash; {{ rows|length }} row(s)</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+<div style="display:flex;gap:8px;margin-bottom:24px;">
+    <button type="submit" class="btn btn-primary" {{ 'disabled' if not matched and not needs_student_pick }}>
+        Import {{ matched|length }} rows
+    </button>
+    <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-outline">Choose a different file</a>
+</div>
+</form>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% if schedule_by_period %}
+<div class="card">
+    <div class="card-header">
+        Class Schedule
+        <span style="font-size:0.8rem;font-weight:400;color:var(--text-muted);">
+            {{ schedule_year }}
+            {% if schedule_credits %}&middot; {{ schedule_credits }} credits in progress{% endif %}
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr>
+                <th style="width:1%;">Per</th><th>Course</th><th>Teacher</th>
+                <th>Room</th><th style="width:1%;">Term</th><th style="width:1%;">Credits</th>
+            </tr></thead>
+            <tbody>
+            {% for period, entries in schedule_by_period %}
+                {% for e in entries %}
+                <tr>
+                    {% if loop.first %}
+                    <td rowspan="{{ entries|length }}" style="font-weight:700;vertical-align:middle;">
+                        {{ period if period is not none else '-' }}
+                    </td>
+                    {% endif %}
+                    <td style="font-size:0.86rem;">
+                        {{ e.course_title }}
+                        {% if e.is_advisory %}<span class="badge badge-success">Advisory</span>{% endif %}
+                        {% if e.is_non_class %}<span class="badge badge-warning">Not a class</span>{% endif %}
+                        <div style="font-size:0.74rem;color:var(--text-muted);font-family:ui-monospace,monospace;">
+                            {{ e.course_number }}{% if e.section_id %} &middot; {{ e.section_id }}{% endif %}
+                        </div>
+                    </td>
+                    <td style="font-size:0.86rem;">{{ e.teacher_name or '-' }}</td>
+                    <td style="font-size:0.86rem;">{{ e.room or '-' }}</td>
+                    <td><span class="badge badge-info">{{ e.term }}</span></td>
+                    <td style="font-size:0.86rem;">
+                        {% if e.counts_for_credit %}
+                            {% if e.credits is not none %}{{ e.credits }}
+                            {% else %}<span style="color:var(--warning);">&mdash;</span>{% endif %}
+                        {% else %}&mdash;{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-header">Class Schedule</div>
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No schedule on file for {{ student.first_name }}.</p>
+            <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-sm btn-primary">
+                Import Schedules
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}

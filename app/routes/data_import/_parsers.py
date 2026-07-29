@@ -10,43 +10,37 @@ def parse_upload_file(file):
 
     Returns (None, None) on error. header_row is a list of strings
     (the first row), data_rows is a list-of-lists for the remaining rows.
+
+    Format is detected from the file's MAGIC BYTES, not its extension.
+    Synergy exports legacy BIFF .xls, which openpyxl cannot open at all (it
+    raises InvalidFileException telling you to use xlrd) — and it names the
+    file .XLS regardless of what's inside. This previously accepted .xls by
+    extension and then handed it to openpyxl, so every real Synergy .xls
+    upload failed with an unhelpful error.
     """
-    filename = file.filename.lower()
-
-    if filename.endswith('.csv'):
-        try:
-            text = file.read().decode('utf-8-sig')
-            reader = csv.reader(text.splitlines())
-            rows = list(reader)
-            if rows:
-                return rows[0], rows[1:]
-            return [], []
-        except Exception as e:
-            flash(f'Could not read CSV: {str(e)}', 'danger')
-            return None, None
-
-    elif filename.endswith(('.xlsx', '.xls')):
-        if not HAS_OPENPYXL:
-            flash('Excel support requires openpyxl.', 'danger')
-            return None, None
-        try:
-            wb = load_workbook(file, data_only=True)
-            ws = wb.active
-            header = []
-            rows = []
-            for idx, row in enumerate(ws.iter_rows(values_only=True)):
-                str_row = [str(c) if c is not None else '' for c in row]
-                if idx == 0:
-                    header = str_row
-                else:
-                    rows.append(str_row)
-            return header, rows
-        except Exception as e:
-            flash(f'Could not read Excel file: {str(e)}', 'danger')
-            return None, None
-    else:
-        flash('Please upload a .csv or .xlsx file.', 'danger')
+    filename = (file.filename or '').lower()
+    if not filename.endswith(('.csv', '.xlsx', '.xls', '.txt')):
+        flash('Please upload a .csv, .xlsx or .xls file.', 'danger')
         return None, None
+
+    try:
+        from app.utils.schedule_parser import read_tabular
+        header, rows = read_tabular(file)
+    except ValueError as e:
+        flash(str(e), 'danger')
+        return None, None
+    except Exception as e:
+        flash(f'Could not read that file: {e}', 'danger')
+        return None, None
+
+    def as_text(v):
+        if v is None:
+            return ''
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))     # keep 5 as "5", not "5.0"
+        return str(v)
+
+    return [as_text(h) for h in header], [[as_text(c) for c in r] for r in rows]
 
 
 # ── Grade import helpers ─────────────────────────────────────────

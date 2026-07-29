@@ -94,6 +94,29 @@
     </div>
 </div>
 
+<!-- Schedules -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Class Schedules</div>
+    <div class="card-body">
+        {{ import_badge(last_imports.get('schedules')) }}
+        <p style="font-size:0.9rem;margin-bottom:12px;">
+            Import the schedules students get on the first day. Powers the schedule on
+            each student's Academics tab, credits in progress, which staff teach your
+            students, and grouping by advisory.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+            <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-primary">Import Schedules</a>
+        </div>
+        <div style="font-size:0.82rem;color:var(--gray);">
+            <strong>Best:</strong> Synergy <code>U-SCH100</code> export (.xls, .xlsx, .csv) &mdash;
+            whole caseload in one file<br>
+            <strong>Also works:</strong> the printed first-day schedule PDF, one student per page<br>
+            <strong>Re-importing</strong> replaces that student's schedule for the same year,
+            so run it again whenever a schedule changes
+        </div>
+    </div>
+</div>
+
 <!-- ELPAC -->
 <div class="card" style="margin-top:20px;">
     <div class="card-header">ELPAC Scores (English Language Proficiency)</div>
