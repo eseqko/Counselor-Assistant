@@ -1003,6 +1003,67 @@ def cohort_concentration():
     )
 
 
+@reports_bp.route('/outcomes-by-section')
+@login_required
+def outcomes_by_section():
+    """D/F rates for the counselor's own students, grouped by section."""
+    from app.models.schedule import ScheduleEntry
+    from app.utils.grade_outcomes import build_section_outcomes, chart_payload
+
+    dimension = request.args.get('dimension', 'teacher')
+    cohort_dim = request.args.get('cohort', 'el_status')
+    cohort_filter = request.args.get('cohort_value', '')
+    school_year = request.args.get('school_year') or current_school_year()
+
+    if dimension not in {'teacher', 'period', 'course'}:
+        dimension = 'teacher'
+    if cohort_dim not in {k for k, _ in _CONCENTRATION_COHORTS}:
+        cohort_dim = 'el_status'
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+    student_ids = [s.id for s in students]
+
+    entries, grades, years = [], [], []
+    if student_ids:
+        years = sorted({y for (y,) in db.session.query(
+            ScheduleEntry.school_year).filter(
+                ScheduleEntry.student_id.in_(student_ids)).distinct().all() if y},
+            reverse=True)
+        if years and school_year not in years:
+            school_year = years[0]
+        entries = ScheduleEntry.query.filter(
+            ScheduleEntry.student_id.in_(student_ids),
+            ScheduleEntry.school_year == school_year).all()
+        grades = GradeRecord.query.filter(
+            GradeRecord.student_id.in_(student_ids),
+            GradeRecord.school_year == school_year).all()
+
+    cohort_of = {s.id: _concentration_cohort_key(s, cohort_dim) for s in students}
+    cohort_values = sorted(set(cohort_of.values()))
+    if cohort_filter not in cohort_values:
+        cohort_filter = ''
+
+    result = build_section_outcomes(
+        entries, grades, dimension=dimension,
+        cohort_of=cohort_of, cohort_filter=cohort_filter or None)
+
+    log_action('view', 'report',
+               details=f'D/F outcomes by {dimension}'
+                       + (f' for {cohort_filter}' if cohort_filter else ''))
+
+    return render_template('reports/outcomes_by_section.html',
+        dimension=dimension,
+        dimension_options=[('teacher', 'Teacher'), ('period', 'Period'),
+                           ('course', 'Course')],
+        cohort_options=_CONCENTRATION_COHORTS,
+        cohort_dim=cohort_dim, cohort_filter=cohort_filter,
+        cohort_values=cohort_values,
+        school_year=school_year, years=years,
+        result=result, chart=chart_payload(result),
+        has_data=bool(entries and grades))
+
+
 @reports_bp.route('/elpac')
 @login_required
 def elpac_cohorts():

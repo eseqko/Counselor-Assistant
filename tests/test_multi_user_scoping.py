@@ -116,6 +116,16 @@ def _get_paths(ids):
     ]
 
 
+def test_outcomes_by_section_only_counts_your_own_caseload(app, two_counselors):
+    """Names teachers alongside failure rates, so leaking another counselor's
+    students into the denominator would misattribute real outcomes."""
+    client, ids = two_counselors
+    r = client.get('/reports/outcomes-by-section')
+    assert r.status_code == 200
+    assert b'Ann' not in r.data
+    assert b'Confidential' not in r.data
+
+
 def test_cohort_concentration_only_counts_your_own_caseload(app, two_counselors):
     """The report aggregates rather than showing records by id, so the leak it
     could produce is counting another counselor's students into your slices."""

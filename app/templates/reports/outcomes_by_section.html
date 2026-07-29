@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Outcomes by Section{% endblock %}
+{% block page_title %}D/F Outcomes by Section{% endblock %}
+{% block content %}
+
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="padding:14px;">
+        <form method="GET" style="display:flex;flex-wrap:wrap;gap:14px;align-items:end;">
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Group by</label>
+                <select name="dimension" onchange="this.form.submit()">
+                    {% for k, label in dimension_options %}
+                    <option value="{{ k }}" {{ 'selected' if dimension == k }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Cohort</label>
+                <select name="cohort" onchange="this.form.submit()">
+                    {% for k, label in cohort_options %}
+                    <option value="{{ k }}" {{ 'selected' if cohort_dim == k }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Limit to</label>
+                <select name="cohort_value" onchange="this.form.submit()">
+                    <option value="">All my students</option>
+                    {% for v in cohort_values %}
+                    <option value="{{ v }}" {{ 'selected' if cohort_filter == v }}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if years %}
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">School year</label>
+                <select name="school_year" onchange="this.form.submit()">
+                    {% for y in years %}<option value="{{ y }}" {{ 'selected' if school_year == y }}>{{ y }}</option>{% endfor %}
+                </select>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if not has_data %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>This needs both class schedules and grades imported for {{ school_year }}.</p>
+            <a href="{{ url_for('data_import.index') }}" class="btn btn-primary">Go to Data Import</a>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<div class="card" style="border-left:3px solid var(--primary);">
+    <div class="card-body">
+        <div style="font-size:0.88rem;margin-bottom:8px;">
+            Across every section, <strong>{{ result.overall_failing }}</strong> of
+            <strong>{{ result.overall_students }}</strong> of your students are
+            carrying a D or F &mdash;
+            <strong>{{ (result.overall_rate * 100)|round|int }}%</strong>.
+            {% if cohort_filter %}Limited to <strong>{{ cohort_filter }}</strong>.{% endif %}
+        </div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">
+            This counts <strong>only your caseload</strong> &mdash; usually a handful of
+            students in any one section &mdash; so it shows where your students need
+            support, and cannot describe how a section is doing overall or how anyone
+            teaches. Sections with fewer than 5 of your students are listed but never
+            ranked: one D among three students reads as 33% and means nothing.
+        </p>
+    </div>
+</div>
+
+{% if chart.labels %}
+<div class="card">
+    <div class="card-header">Highest D/F rate among your students</div>
+    <div class="card-body">
+        <div style="height:{{ [chart.labels|length * 40 + 60, 200]|max }}px;">
+            <canvas id="dfChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">Detail</div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr>
+                <th>{{ dimension_options|selectattr('0','equalto',dimension)|map(attribute='1')|first }}</th>
+                <th style="width:1%;">Your students</th>
+                <th style="width:1%;">With a D/F</th>
+                <th style="width:1%;">Rate</th>
+            </tr></thead>
+            <tbody>
+            {% for row in result.rows %}
+                <tr {% if row.small_sample %}style="opacity:0.65;"{% endif %}>
+                    <td style="font-size:0.86rem;font-weight:600;">
+                        {{ row.label }}
+                        {% if row.small_sample %}
+                        <span class="badge badge-info" title="Too few of your students to rank">too few to rank</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.students }}</td>
+                    <td>{{ row.failing }}</td>
+                    <td style="font-size:0.86rem;
+                        {% if not row.small_sample and row.rate >= 0.3 %}color:var(--danger);font-weight:700;{% endif %}">
+                        {{ (row.rate * 100)|round|int }}%
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if not result.rows %}
+                <tr><td colspan="4"><div class="empty-state"><p>No graded courses to report yet.</p></div></td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+            Each student counts once per section, using their most recent graded term
+            &mdash; a D pulled up to a C counts as a C. Courses not yet graded are left
+            out of both the count and the rate rather than assumed either way.
+            {% if result.suppressed %}
+            {{ result.suppressed }} section(s) fell below the ranking threshold.
+            {% endif %}
+        </p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-enhancements.js', v=static_v('js/chart-enhancements.js')) }}"></script>
+<script>
+(function () {
+    var el = document.getElementById('dfChart');
+    if (!el) return;
+    // `|tojson` emits a JS object literal already — no JSON.parse.
+    var chart = {{ chart|tojson }};
+    var palette = window.chartPalette || ['#2a78d6'];
+    new Chart(el, {
+        type: 'bar',
+        data: {
+            labels: chart.labels,
+            datasets: [{
+                label: '% of your students with a D or F',
+                data: chart.rates,
+                backgroundColor: palette[7] || '#e34948',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { beginAtZero: true, max: 100,
+                     title: { display: true, text: '% with a D or F' } },
+                y: { grid: { display: false } }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            var n = chart.students[ctx.dataIndex];
+                            return ctx.parsed.x + '% of ' + n + ' student' + (n === 1 ? '' : 's');
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}
