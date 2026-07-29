@@ -9,6 +9,9 @@ Both file types funnel through app/utils/schedule_parser, which normalizes them
 to the same row shape, so everything below is format-agnostic.
 """
 import json
+import os
+import secrets
+import time
 from collections import defaultdict
 
 from flask import (render_template, request, redirect, url_for, flash, session)
@@ -23,12 +26,75 @@ from app.routes.data_import import data_import_bp
 from app.utils.audit import log_action
 from app.utils.db_snapshot import snapshot_database
 from app.utils.schedule_parser import parse_schedule_file
+from config import DATA_DIR
 
-# Preview payload lives in the session between the two requests; a caseload of
-# ~200 students is a few hundred KB of JSON, well within a cookie-backed
-# session's practical limit only if we keep it lean, so we store the parsed
-# rows rather than the raw file.
-PREVIEW_KEY = 'schedule_preview'
+# The preview payload is staged in a FILE between the two requests, with only a
+# short token kept in the session.
+#
+# It used to live in the session itself, which silently broke EVERY import:
+# Flask's default session is a signed COOKIE capped at ~4KB, and a single
+# student's 18 schedule rows serialise to ~6KB. Werkzeug refuses to set an
+# oversized cookie without raising, so the key simply never came back and the
+# confirm step always reported "That preview expired". A 200-student import is
+# ~1.3MB, three hundred times the limit.
+PREVIEW_KEY = 'schedule_preview_token'
+PREVIEW_TTL_SECONDS = 3600
+
+
+def _preview_dir():
+    path = os.path.join(DATA_DIR, 'tmp')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _preview_path(token):
+    # Tokens are generated here, never user-supplied, but constrain the name
+    # anyway so a tampered session value can't escape the directory.
+    safe = ''.join(c for c in (token or '') if c.isalnum() or c in '-_')
+    if not safe:
+        return None
+    return os.path.join(_preview_dir(), f'schedule_preview_{safe}.json')
+
+
+def _purge_stale_previews():
+    """Drop abandoned preview files so they don't accumulate."""
+    now = time.time()
+    try:
+        for name in os.listdir(_preview_dir()):
+            if not name.startswith('schedule_preview_'):
+                continue
+            full = os.path.join(_preview_dir(), name)
+            if now - os.path.getmtime(full) > PREVIEW_TTL_SECONDS:
+                os.remove(full)
+    except OSError:
+        pass
+
+
+def _stash_preview(payload):
+    """Write the parsed rows aside and return the token that retrieves them."""
+    _purge_stale_previews()
+    token = secrets.token_urlsafe(16)
+    with open(_preview_path(token), 'w', encoding='utf-8') as fh:
+        json.dump(payload, fh)
+    return token
+
+
+def _take_preview(token):
+    """Read and consume a staged preview. Returns None if it's gone."""
+    path = _preview_path(token)
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding='utf-8') as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    return data
 
 
 def _student_lookup():
@@ -141,9 +207,10 @@ def schedules_upload():
         not r['student_ref'] and not r['student_name']
         for rows in unmatched.values() for r in rows)
 
-    session[PREVIEW_KEY] = json.dumps({'matched': matched,
-                                       'unmatched': [r for rows in unmatched.values()
-                                                     for r in rows]})
+    session[PREVIEW_KEY] = _stash_preview({
+        'matched': matched,
+        'unmatched': [r for rows in unmatched.values() for r in rows],
+    })
 
     names = {m['student_id'] for m in matched}
     students = {s.id: s for s in Student.query.filter(Student.id.in_(names)).all()} if names else {}
@@ -167,12 +234,11 @@ def schedules_upload():
 @login_required
 def schedules_confirm():
     """Step 2 — commit the previewed rows."""
-    payload = session.pop(PREVIEW_KEY, None)
-    if not payload:
-        flash('That preview expired. Please upload the file again.', 'warning')
+    data = _take_preview(session.pop(PREVIEW_KEY, None))
+    if not data:
+        flash('That preview is no longer available. Please upload the file again.',
+              'warning')
         return redirect(url_for('data_import.schedules_upload'))
-
-    data = json.loads(payload)
     rows = data.get('matched', [])
 
     # The counselor may assign a single-student file by hand when the printout

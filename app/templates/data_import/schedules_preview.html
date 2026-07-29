@@ -32,19 +32,28 @@
 
         {% if missing_credits %}
         <div class="alert alert-info" style="font-size:0.86rem;">
-            <strong>{{ missing_credits|length }} course(s) have no credit value yet</strong>
-            &mdash; they aren't in your course catalog:
-            <span style="font-family:ui-monospace,monospace;">{{ missing_credits|join(', ') }}</span>.
+            <strong>{{ missing_credits|length }} course(s) aren't in your course catalog yet</strong>,
+            so there's no credit value on file for them.
             <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <label style="font-size:0.86rem;">Credits per course row:</label>
-                <input type="number" name="default_credits" step="0.5" min="0" max="20"
-                       value="5" class="form-control" style="max-width:120px;">
+                <label style="font-size:0.86rem;font-weight:600;">Credits per course:</label>
+                <select name="default_credits" id="default-credits" class="form-control"
+                        style="max-width:200px;" onchange="applyCredits(this.value)">
+                    <option value="5" selected>5 &mdash; standard (80/year)</option>
+                    <option value="2.5">2.5 &mdash; half course</option>
+                    <option value="10">10 &mdash; full-year course</option>
+                    <option value="0">0 &mdash; no credit</option>
+                </select>
                 <span style="font-size:0.8rem;color:var(--text-muted);">
-                    5 per row is the JUHSD block value (4 classes &times; 4 quarters =
-                    80 credits/year). Saved to the catalog, so you're only asked once
-                    per course. Clear it to fill in later instead.
+                    Applied to all {{ missing_credits|length }} and saved to the catalog,
+                    so you're only asked once per course.
                 </span>
             </div>
+            <details style="margin-top:8px;">
+                <summary style="cursor:pointer;font-size:0.82rem;">Which courses?</summary>
+                <div style="font-family:ui-monospace,monospace;font-size:0.78rem;margin-top:4px;">
+                    {{ missing_credits|join(', ') }}
+                </div>
+            </details>
         </div>
         {% endif %}
     </div>
@@ -74,7 +83,8 @@
                     <td style="font-size:0.84rem;">{{ r.room or '-' }}</td>
                     <td>{% if r.is_non_class or r.is_advisory %}&mdash;
                         {% elif r.credits is not none %}{{ r.credits }}
-                        {% else %}<span style="color:var(--warning);">needs value</span>{% endif %}</td>
+                        {% else %}<span class="pending-credit" style="color:var(--primary);">5</span>
+                        {% endif %}</td>
                 </tr>
             {% endfor %}
             {% if not matched %}
@@ -113,4 +123,15 @@
     <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-outline">Choose a different file</a>
 </div>
 </form>
+
+<script>
+// Keep the per-row preview in step with the dropdown, so the number you see in
+// the table is the number that gets saved.
+function applyCredits(value) {
+    var cells = document.querySelectorAll('.pending-credit');
+    for (var i = 0; i < cells.length; i++) {
+        cells[i].textContent = value;
+    }
+}
+</script>
 {% endblock %}

@@ -4,6 +4,7 @@ The rule this file protects: a schedule attached to the WRONG student is worse
 than one that's missing, so an unmatched row is reported, never guessed.
 """
 import io
+import os
 from pathlib import Path
 
 import pytest
@@ -261,6 +262,76 @@ def test_import_routes_require_login(app):
     anon = app.test_client()
     assert anon.get('/data-import/schedules').status_code in (302, 401)
     assert anon.post('/data-import/schedules/confirm').status_code in (302, 401)
+
+
+def test_preview_survives_a_payload_larger_than_a_session_cookie(app, sched_env):
+    """The bug that broke every single import.
+
+    The preview used to live in the session, which Flask backs with a signed
+    COOKIE capped at ~4KB. One student's 18 schedule rows serialise to ~6KB, so
+    Werkzeug silently declined to set the cookie and the confirm step always
+    reported "That preview expired" — the user could never import anything.
+    Staged server-side now, with only a token in the session.
+    """
+    import json as _json
+    from app.routes.data_import.schedules import PREVIEW_KEY
+
+    client, ids = sched_env
+    r = client.post('/data-import/schedules',
+                    data={'files': (_workbook(perm_id='SCHED-1'), 's.xlsx')},
+                    content_type='multipart/form-data')
+    assert r.status_code == 200
+
+    with client.session_transaction() as sess:
+        token = sess.get(PREVIEW_KEY)
+    assert token, 'nothing was staged'
+    assert len(token) < 200, 'the payload itself is back in the session'
+
+    confirm = client.post('/data-import/schedules/confirm',
+                          data={'default_credits': '5'}, follow_redirects=True)
+    assert b'no longer available' not in confirm.data
+    with app.app_context():
+        assert ScheduleEntry.query.filter_by(student_id=ids['mine']).count() == 4
+
+
+@pytest.mark.skipif(not SAMPLE_XLS.exists(), reason='sample .xls absent')
+def test_real_sized_payload_would_not_fit_in_a_cookie(app):
+    """Guards the reasoning, not just the behaviour: if this ever fits in 4KB
+    the staging indirection could be dropped — it does not."""
+    import json as _json
+    from app.utils.schedule_parser import parse_schedule_file
+    with open(SAMPLE_XLS, 'rb') as f:
+        rows = parse_schedule_file(f, 'x.xls')
+    payload = _json.dumps([r.__dict__ for r in rows], default=str)
+    assert len(payload) > 4093, 'one student now fits in a cookie; re-check staging'
+
+
+def test_stale_preview_files_are_purged(app, tmp_path, monkeypatch):
+    import time as _time
+    from app.routes.data_import import schedules as mod
+
+    monkeypatch.setattr(mod, '_preview_dir', lambda: str(tmp_path))
+    token = mod._stash_preview({'matched': [], 'unmatched': []})
+    stale = tmp_path / 'schedule_preview_old.json'
+    stale.write_text('{}')
+    os.utime(stale, (_time.time() - mod.PREVIEW_TTL_SECONDS - 60,) * 2)
+
+    mod._purge_stale_previews()
+    assert not stale.exists(), 'abandoned preview was not cleaned up'
+    assert mod._take_preview(token) is not None, 'a fresh preview was purged'
+
+
+def test_preview_is_consumed_so_it_cannot_double_import(app, sched_env):
+    client, ids = sched_env
+    client.post('/data-import/schedules',
+                data={'files': (_workbook(perm_id='SCHED-1'), 's.xlsx')},
+                content_type='multipart/form-data')
+    client.post('/data-import/schedules/confirm', data={'default_credits': '5'})
+    again = client.post('/data-import/schedules/confirm',
+                        data={'default_credits': '5'}, follow_redirects=True)
+    assert b'no longer available' in again.data
+    with app.app_context():
+        assert ScheduleEntry.query.filter_by(student_id=ids['mine']).count() == 4
 
 
 def test_expired_preview_does_not_commit(app, sched_env):

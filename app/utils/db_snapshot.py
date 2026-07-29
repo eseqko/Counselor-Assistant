@@ -7,13 +7,18 @@ import os
 import shutil
 from datetime import datetime, timezone
 
-from config import Config
+from config import Config, DATA_DIR
 
 
 def db_path():
-    """Absolute path to the live SQLite database file."""
-    data_dir = Config.DATA_DIR if hasattr(Config, 'DATA_DIR') else 'data'
-    return os.path.join(data_dir, 'counselor.db')
+    """Absolute path to the live SQLite database file.
+
+    DATA_DIR is a MODULE-level name in config.py, not a Config attribute, so
+    the previous `Config.DATA_DIR if hasattr(...) else 'data'` always took the
+    fallback and resolved relative to the working directory — snapshots landed
+    somewhere other than the configured data directory.
+    """
+    return os.path.join(DATA_DIR, 'counselor.db')
 
 
 def snapshot_database(label='backup'):
