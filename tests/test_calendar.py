@@ -35,10 +35,15 @@ def test_semester_name():
 def test_expected_progress_grade_and_quarter():
     assert expected_progress(8) is None          # middle school: no HS baseline
     assert expected_progress(13) is None
-    assert expected_progress(10, quarter=4)['credits_expected'] == 90
-    assert expected_progress(12, quarter=4)['credits_expected'] == 191
-    # Q1 expectation is much lower than year-end
-    assert expected_progress(10, quarter=1)['credits_expected'] < 60
+    # Benchmarks derive from the school's earning capacity (80/yr by default),
+    # capped at the 225-credit requirement. These were 90 and 191 when the
+    # curve assumed ~55/yr — and 191 at the end of senior year meant a student
+    # could clear every benchmark and still be short of graduating.
+    assert expected_progress(10, quarter=4)['credits_expected'] == 160
+    assert expected_progress(12, quarter=4)['credits_expected'] == 225
+    # Q1 expectation is lower than year-end within the same grade
+    assert (expected_progress(10, quarter=1)['credits_expected']
+            < expected_progress(10, quarter=4)['credits_expected'])
 
 
 def test_projected_credits():
@@ -47,10 +52,13 @@ def test_projected_credits():
 
 
 def test_pace_label_wip_aware():
-    # 60 completed + 15 WIP at Q3 grade 10 projects on pace
-    assert pace_label(60, 15, 10, quarter=3) == 'on pace'
+    # Grade 10 Q3 expects 140 credits at an 80/yr pace.
+    # 120 completed + 20 WIP projects exactly on pace.
+    assert pace_label(120, 20, 10, quarter=3) == 'on pace'
     # without the WIP cushion, behind
-    assert pace_label(60, 0, 10, quarter=3) in ('behind pace', 'slightly behind pace')
+    assert pace_label(120, 0, 10, quarter=3) in ('behind pace', 'slightly behind pace')
+    # Half-pace is now caught instead of reading as fine.
+    assert pace_label(60, 15, 10, quarter=3) == 'critically behind pace' 
     # all-zero is "unknown" (data not posted yet), never "critically behind"
     assert pace_label(0, 0, 9, quarter=1) == 'pace unknown'
     # fresh 9th grader with a full WIP load is fine

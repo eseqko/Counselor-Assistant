@@ -83,6 +83,55 @@
     </div>
 </div>
 
+
+<!-- Graduation requirements -->
+<div class="card">
+    <div class="card-header">Graduation Requirements</div>
+    <div class="card-body">
+        <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:12px;">
+            These two numbers drive every credit-risk flag &mdash; the Action Plan banner,
+            the graduation dashboard and the early-warning report. Benchmarks tuned for a
+            6-period day (~60 credits/year) are actively misleading on an accelerated
+            block, so set them to match your school.
+        </p>
+        <form method="POST" action="{{ url_for('settings.graduation_policy') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Credits required to graduate</label>
+                    <input type="number" name="credits_required" step="1" min="1" max="1000"
+                           class="form-control" value="{{ grad_policy.required|int }}">
+                </div>
+                <div class="form-group">
+                    <label>Credits earnable per year</label>
+                    <input type="number" name="credits_per_year" step="1" min="1" max="500"
+                           class="form-control" value="{{ grad_policy.per_year|int }}">
+                    <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">
+                        Classes per term &times; terms per year &times; credits per class.
+                    </div>
+                </div>
+            </div>
+
+            <div style="background:var(--bg);border-radius:6px;padding:10px 12px;
+                        font-size:0.82rem;margin-bottom:12px;">
+                <strong>With these settings, a student should have:</strong>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;">
+                    {% for g, credits in grad_benchmarks %}
+                    <span>End of grade {{ g }}: <strong>{{ credits }}</strong></span>
+                    {% endfor %}
+                </div>
+                <div style="color:var(--text-muted);margin-top:6px;">
+                    Capped at the requirement &mdash; never expects more credits than it
+                    takes to graduate. A student is also flagged when the requirement
+                    becomes mathematically unreachable in the years they have left.
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">Save Requirements</button>
+        </form>
+    </div>
+</div>
+
 <!-- Appearance / Theme Picker -->
 <div class="card">
     <div class="card-header">Appearance</div>

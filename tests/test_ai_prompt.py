@@ -9,11 +9,16 @@ def _prompt_for(app, as_demo_user, sid):
 
 
 def test_tenth_grader_on_pace(app, as_demo_user, make_student):
-    sid = make_student(grade=10, completed=60, wip=15, quarter='10-Q3', ag_met=1)
+    # Grade 10 Q3 expects 140 credits at the school's 80/yr pace (4 classes x
+    # 4 quarters x 5 credits). Previously this fixture used 60+15 and asserted
+    # "on pace" against a ~55/yr benchmark of 76 — under the real pace that
+    # student cannot reach 225 in the two years left, so the numbers here now
+    # describe a genuinely on-pace student.
+    sid = make_student(grade=10, completed=120, wip=20, quarter='10-Q3', ag_met=1)
     p = _prompt_for(app, as_demo_user, sid)
     assert '10th grader' in p
-    assert 'EXPECTED BY THIS POINT: ~76/225' in p
-    assert '60 completed + 15 WIP (projected 75)' in p
+    assert 'EXPECTED BY THIS POINT: ~140/225' in p
+    assert '120 completed + 20 WIP (projected 140)' in p
     assert 'on pace' in p
     assert 'Spring semester' in p          # Q3 -> Spring
     assert 'Graduation Progress' in p      # grades <=10 framing

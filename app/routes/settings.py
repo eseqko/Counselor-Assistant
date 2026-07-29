@@ -58,7 +58,13 @@ def _cleanup_duplicate_notes():
 @settings_bp.route('/')
 @login_required
 def index():
-    return render_template('settings/index.html')
+    from app.routes.graduation import get_grad_policy, expected_credits_by_end_of
+    policy = get_grad_policy()
+    benchmarks = [(g, int(expected_credits_by_end_of(g, policy['required'],
+                                                     policy['per_year'])))
+                  for g in (9, 10, 11, 12)]
+    return render_template('settings/index.html',
+                           grad_policy=policy, grad_benchmarks=benchmarks)
 
 
 @settings_bp.route('/api/theme', methods=['POST'])
@@ -181,6 +187,43 @@ def regenerate_token(surface):
     flash(f'{labels[surface]} link regenerated. The previous link no longer works'
           + (' — re-add the feed in your calendar app.' if surface == 'ical' else '.'),
           'success')
+    return redirect(url_for('settings.index'))
+
+
+@settings_bp.route('/graduation-policy', methods=['POST'])
+@login_required
+def graduation_policy():
+    """Save the school's credit requirement and annual earning capacity.
+
+    These two numbers drive every credit-risk flag in the app, so they are a
+    setting rather than a constant: a school on a 6-period day earns ~60/year
+    while JUHSD's accelerated block earns 80, and benchmarks tuned for one are
+    actively misleading on the other.
+    """
+    from app.utils.school_config import merge_school_config
+
+    def _num(field, lo, hi):
+        raw = (request.form.get(field) or '').strip()
+        try:
+            val = float(raw)
+        except ValueError:
+            return None
+        return val if lo <= val <= hi else None
+
+    required = _num('credits_required', 1, 1000)
+    per_year = _num('credits_per_year', 1, 500)
+    if required is None or per_year is None:
+        flash('Enter a credit requirement and a per-year value as numbers.', 'danger')
+        return redirect(url_for('settings.index'))
+
+    merge_school_config(current_user, {
+        'credits_required': required,
+        'credits_per_year': per_year,
+    })
+    log_action('update', 'school_config',
+               details=f'Graduation policy: {required} required, {per_year}/year')
+    flash(f'Saved: {required:g} credits to graduate, {per_year:g} earnable per year. '
+          'Credit-risk levels across the app now use these.', 'success')
     return redirect(url_for('settings.index'))
 
 
