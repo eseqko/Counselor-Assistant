@@ -5,6 +5,8 @@ from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
 from app.models.elpac import ELPACScore
 from app.models.import_log import ImportLog
+from app.models.schedule import ScheduleEntry
+from app.models.student import Student
 from app.utils.caseload import caseload_student_ids
 from app.routes.data_import import data_import_bp
 
@@ -20,10 +22,14 @@ def index():
         GradeRecord.student_id.in_(student_ids)).count() if student_ids else 0
     elpac_count = ELPACScore.query.filter(
         ELPACScore.student_id.in_(student_ids)).count() if student_ids else 0
+    schedule_count = ScheduleEntry.query.filter(
+        ScheduleEntry.student_id.in_(student_ids)).count() if student_ids else 0
+    student_count = len(student_ids)
 
-    # Last import per type
+    # Last import per type. 'schedules' was missing here, so that card could
+    # never show a badge no matter how many times it had been imported.
     last_imports = {}
-    for itype in ('attendance', 'grades', 'student_update', 'elpac'):
+    for itype in ('attendance', 'grades', 'student_update', 'elpac', 'schedules'):
         log = ImportLog.query.filter_by(
             user_id=current_user.id, import_type=itype
         ).order_by(ImportLog.imported_at.desc()).first()
@@ -34,4 +40,6 @@ def index():
                            attendance_count=attendance_count,
                            grade_count=grade_count,
                            elpac_count=elpac_count,
+                           schedule_count=schedule_count,
+                           student_count=student_count,
                            last_imports=last_imports)
