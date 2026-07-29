@@ -294,11 +294,29 @@ def view_student(id):
             schedule_by_period.append((entry.period, [entry]))
     schedule_credits = sum(e.credits or 0 for e in sched if e.counts_for_credit) or None
 
+    # Schedule health: a full 4x4 year is 8 semester-length classes with no
+    # hole in the period x quarter grid, and every prerequisite met by a course
+    # completed STRICTLY EARLIER on the timeline — which on a block schedule
+    # includes an earlier quarter of the same year.
+    schedule_analysis = None
+    if sched:
+        from app.models.course import Course
+        from app.models.grade import GradeRecord
+        from app.utils.schedule_analysis import analyze_student_schedule
+        numbers = {str(e.course_number).strip() for e in sched if e.course_number}
+        courses_by_number = {
+            c.course_number: c for c in Course.query.filter(
+                Course.course_number.in_(numbers)).all()} if numbers else {}
+        grade_history = GradeRecord.query.filter_by(student_id=student.id).all()
+        schedule_analysis = analyze_student_schedule(
+            sched, grade_history, courses_by_number)
+
     return render_template('caseload/view.html',
         student=student, notes=notes,
         schedule_by_period=schedule_by_period,
         schedule_year=schedule_year,
         schedule_credits=schedule_credits,
+        schedule_analysis=schedule_analysis,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,

@@ -31,7 +31,15 @@ class Course(db.Model):
     # Requirements
     credits = db.Column(db.Float, default=1.0)
     grade_levels = db.Column(db.String(50))  # e.g., "9,10,11,12"
-    prerequisites = db.Column(db.Text)  # Course numbers, comma-separated
+    prerequisites = db.Column(db.Text)          # human prose from the catalog
+    # Machine-checkable form of `prerequisites`, parsed by app/utils/prereq.py.
+    # Carries needs_review=True when the prose names something a transcript
+    # cannot answer ("ELPAC Scores", "Counselor approval"), so the schedule
+    # analyzer can say "check by hand" instead of guessing either way.
+    prereq_rules_json = db.Column(db.Text)
+    # Department label from the shipped catalog; department_id is a separate
+    # optional FK used by the Course Catalog UI.
+    department_name = db.Column(db.String(80))  # Course numbers, comma-separated
     corequisites = db.Column(db.Text)
 
     # Classification

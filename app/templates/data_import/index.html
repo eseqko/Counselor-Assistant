@@ -106,6 +106,16 @@
         </p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
             <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-primary">Import Schedules</a>
+            <form method="POST" action="{{ url_for('data_import.seed_course_catalog') }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline">Load Course Catalog</button>
+            </form>
+        </div>
+        <div style="font-size:0.82rem;color:var(--gray);margin-bottom:12px;">
+            <strong>Load Course Catalog</strong> imports your district's course list
+            (credits, a-g, prerequisites) from the catalog already bundled with the
+            app. Do this once &mdash; it fills in credits automatically on every
+            future schedule import and switches on prerequisite checking.
         </div>
         <div style="font-size:0.82rem;color:var(--gray);">
             <strong>Best:</strong> Synergy <code>U-SCH100</code> export (.xls, .xlsx, .csv) &mdash;

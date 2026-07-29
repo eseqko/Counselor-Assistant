@@ -1,3 +1,69 @@
+{% if schedule_analysis %}
+{% set a = schedule_analysis %}
+<div class="card" style="border-left:3px solid {{ 'var(--danger)' if a.has_issues else 'var(--success)' }};">
+    <div class="card-header">
+        Schedule Check
+        {% if a.has_issues %}
+            <span class="badge badge-danger">{{ a.blocking_count + a.completeness.gaps|length }} to review</span>
+        {% else %}
+            <span class="badge badge-success">Looks good</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div style="font-size:0.88rem;margin-bottom:10px;">
+            <strong>{{ a.completeness.classes|round(1)|int if a.completeness.classes == a.completeness.classes|round(0) else a.completeness.classes }}</strong>
+            of {{ a.completeness.expected_classes }} classes
+            {% if a.completeness.gaps %}
+                &mdash; <span style="color:var(--danger);font-weight:600;">
+                {{ a.completeness.gaps|length }} empty slot{{ '' if a.completeness.gaps|length == 1 else 's' }}</span>:
+                {% for g in a.completeness.gaps %}Period {{ g.period }} {{ g.term }}{{ ', ' if not loop.last }}{% endfor %}
+            {% else %}
+                &mdash; every period filled all year
+            {% endif %}
+        </div>
+
+        {% if a.completeness.non_credit_entries %}
+        <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px;">
+            Counted as classes but earning no credit:
+            {% for e in a.completeness.non_credit_entries %}{{ e.course_title }}{{ ', ' if not loop.last }}{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if a.findings %}
+        <table style="font-size:0.85rem;">
+            <thead><tr><th style="width:1%;">Per</th><th>Course</th><th>Prerequisite</th></tr></thead>
+            <tbody>
+            {% for f in a.findings %}
+            {% set style = {'missing': ('badge-danger', 'Not met'),
+                            'low_grade': ('badge-danger', 'Grade too low'),
+                            'in_progress': ('badge-info', 'In progress'),
+                            'review': ('badge-warning', 'Check by hand'),
+                            'advisory': ('badge-info', 'Recommended')} %}
+            <tr>
+                <td>{{ f.period }}</td>
+                <td>{{ f.course_title }} <span style="color:var(--text-muted);">({{ f.term }})</span></td>
+                <td>
+                    <span class="badge {{ style[f.status][0] }}">{{ style[f.status][1] }}</span>
+                    {{ f.detail or f.requirement }}
+                    {% if f.status == 'in_progress' %}
+                    <div style="font-size:0.78rem;color:var(--text-muted);">
+                        Taken earlier this year &mdash; re-check at the semester break.
+                    </div>
+                    {% elif f.status == 'review' %}
+                    <div style="font-size:0.78rem;color:var(--text-muted);">
+                        Not something a transcript can answer.
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% if schedule_by_period %}
 <div class="card">
     <div class="card-header">

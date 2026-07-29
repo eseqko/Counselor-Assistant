@@ -280,3 +280,32 @@ def _parse_iso(value):
         return _date.fromisoformat(value)
     except (ValueError, TypeError):
         return None
+
+
+@data_import_bp.route('/course-catalog/seed', methods=['POST'])
+@login_required
+def seed_course_catalog():
+    """Load the district catalog shipped with the app into the Course table.
+
+    It already sits in app/static/course_catalog/index.html as display data for
+    the Catalog Wiki — 126 courses with codes, credits, a-g and prerequisite
+    prose — but nothing reads it. Importing gives schedule imports their credit
+    values and gives the schedule checker prerequisites it can actually
+    evaluate. Existing rows are never clobbered: a credit value you corrected
+    by hand outranks the shipped file.
+    """
+    from app.models.course import Course
+    from app.utils.catalog_seed import seed_courses
+
+    try:
+        created, updated, skipped = seed_courses(db, Course)
+    except Exception as e:
+        flash(f'Could not read the course catalog: {e}', 'danger')
+        return redirect(url_for('data_import.index'))
+
+    log_action('import', 'course',
+               details=f'Seeded catalog: {created} created, {updated} updated')
+    flash(f'Course catalog loaded — {created} new course(s), {updated} updated, '
+          f'{skipped} already up to date. Schedule imports will now fill in '
+          'credits automatically and prerequisites can be checked.', 'success')
+    return redirect(url_for('data_import.index'))
