@@ -65,6 +65,50 @@
 </div>
 {% endif %}
 
+{% if course_outcomes and course_outcomes.courses %}
+<div class="card" style="border-left:3px solid {{ 'var(--danger)' if course_outcomes.failing_count else 'var(--success)' }};">
+    <div class="card-header">
+        Course Grades
+        <span style="font-size:0.8rem;font-weight:400;color:var(--text-muted);">{{ schedule_year }}</span>
+        {% if course_outcomes.failing_count %}
+            <span class="badge badge-danger">{{ course_outcomes.failing_count }} at D or F</span>
+        {% else %}
+            <span class="badge badge-success">No D/F</span>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr>
+                <th style="width:1%;">Per</th><th>Course</th><th>Teacher</th><th style="width:1%;">Grade</th>
+            </tr></thead>
+            <tbody>
+            {% for c in course_outcomes.courses %}
+                <tr {% if c.failing %}style="background:rgba(239,68,68,0.08);"{% endif %}>
+                    <td>{{ c.period if c.period is not none else '-' }}</td>
+                    <td style="font-size:0.86rem;">{{ c.course_title }}</td>
+                    <td style="font-size:0.86rem;">{{ c.teacher or '-' }}</td>
+                    <td style="font-size:0.86rem;font-weight:700;
+                        {% if c.failing %}color:var(--danger);{% elif not c.graded %}color:var(--text-muted);{% endif %}">
+                        {% if c.graded %}{{ c.letter }}{% else %}&mdash;{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+            Most recent graded term per course &mdash; a D pulled up to a C shows the C.
+            A dash means the course isn't graded yet.
+            {% if course_outcomes.failing_count %}
+            See <a href="{{ url_for('reports.outcomes_by_section') }}">Outcomes by Section</a>
+            for how your whole caseload is doing in these teachers' sections.
+            {% endif %}
+        </p>
+    </div>
+</div>
+{% endif %}
+
 {% if schedule_by_period %}
 <div class="card">
     <div class="card-header">

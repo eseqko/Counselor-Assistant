@@ -10,7 +10,7 @@ import pytest
 
 from app.utils.grade_outcomes import (
     MIN_SECTION_STUDENTS, build_section_outcomes, chart_payload, has_signal,
-    is_failing, latest_grade_per_course,
+    is_failing, latest_grade_per_course, student_course_outcomes,
 )
 
 YEAR = '2026-2027'
@@ -193,3 +193,52 @@ def test_chart_only_includes_rankable_sections():
     big_e, big_g = section('Big', 8, failing=2, start=200)
     chart = chart_payload(build_section_outcomes(small_e + big_e, small_g + big_g))
     assert chart['labels'] == ['Big']
+
+
+# ── per-student course outcomes (profile view) ──
+
+def test_student_outcomes_flag_failing_courses():
+    entries = [entry(1, 'C1', title='Math', period=1),
+               entry(1, 'C2', title='English', period=2)]
+    grades = [grade(1, 'C1', 'F'), grade(1, 'C2', 'B')]
+    out = student_course_outcomes(entries, grades)
+    assert out['failing_count'] == 1
+    # Failing course is listed first.
+    assert out['courses'][0]['course_title'] == 'Math'
+    assert out['courses'][0]['failing'] is True
+    assert out['courses'][1]['failing'] is False
+
+
+def test_student_outcomes_collapse_semester_pairs():
+    """A course split into [S1]/[S2] is one course to the counselor."""
+    entries = [entry(1, '25248', title='Fashion Design CP [S1]', period=1),
+               entry(1, '25248', title='Fashion Design CP [S1]', period=1)]
+    grades = [grade(1, '25248', 'D')]
+    out = student_course_outcomes(entries, grades)
+    assert len(out['courses']) == 1
+
+
+def test_student_outcomes_show_ungraded_without_counting_them():
+    entries = [entry(1, 'C1', title='Chem', period=1)]
+    grades = [grade(1, 'C1', 'NM')]
+    out = student_course_outcomes(entries, grades)
+    assert out['failing_count'] == 0
+    assert out['courses'][0]['graded'] is False
+    assert out['courses'][0]['failing'] is False
+
+
+def test_student_outcomes_use_latest_graded_term():
+    entries = [entry(1, 'C1', title='Math', period=1)]
+    grades = [grade(1, 'C1', 'F', quarter=1), grade(1, 'C1', 'C', quarter=3)]
+    out = student_course_outcomes(entries, grades)
+    assert out['courses'][0]['letter'] == 'C'
+    assert out['failing_count'] == 0
+
+
+def test_student_outcomes_exclude_advisory_and_admin():
+    entries = [entry(1, '0001', title='Advisory Period', advisory=True),
+               entry(1, '28436', title='Vice Principal', non_class=True)]
+    grades = [grade(1, '0001', 'F'), grade(1, '28436', 'F')]
+    out = student_course_outcomes(entries, grades)
+    assert out['courses'] == []
+    assert out['failing_count'] == 0

@@ -152,3 +152,53 @@ def chart_payload(result, limit=12):
         'rates': [round(r['rate'] * 100, 1) for r in rows],
         'students': [r['students'] for r in rows],
     }
+
+
+def student_course_outcomes(entries, grade_records):
+    """One student's current courses with the grade that represents where they
+    stand, and whether it's a D/F.
+
+    The per-student counterpart of the section report: instead of "which
+    sections are my students struggling in", this answers "which of THIS
+    student's classes are they earning a D or F in, and who teaches them".
+
+    ``entries``       — the student's ScheduleEntry rows for one year.
+    ``grade_records`` — that student's GradeRecord rows (any span).
+
+    Returns {'courses': [...], 'failing_count': int}. Ordered worst-first so a
+    struggling course leads. Non-class/advisory rows and courses with no signal
+    yet (ungraded) are omitted from the failing count but still listed, so the
+    counselor sees the full picture with the concern surfaced.
+    """
+    grades = latest_grade_per_course(grade_records)
+
+    seen = set()
+    courses = []
+    for e in entries:
+        if e.is_non_class or e.is_advisory or not e.course_number:
+            continue
+        number = str(e.course_number).strip()
+        if number in seen:
+            continue                       # collapse the [S1]/[S2] pair
+        seen.add(number)
+        letter = grades.get((e.student_id, number))
+        courses.append({
+            'course_number': number,
+            'course_title': e.course_title,
+            'teacher': e.teacher_name or '',
+            'period': e.period,
+            'letter': letter,
+            'graded': has_signal(letter),
+            'failing': is_failing(letter),
+        })
+
+    # Failing first, then ungraded, then passing; period order within each.
+    def _rank(c):
+        tier = 0 if c['failing'] else (1 if not c['graded'] else 2)
+        return (tier, c['period'] if c['period'] is not None else 99)
+    courses.sort(key=_rank)
+
+    return {
+        'courses': courses,
+        'failing_count': sum(1 for c in courses if c['failing']),
+    }

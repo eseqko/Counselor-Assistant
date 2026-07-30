@@ -343,6 +343,26 @@ def create_app(config_class=Config):
         cfg = get_school_config(current_user)
         return {'school_config': cfg or None}
 
+    # Portable "no leading zero" date formatting. `%-d`/`%-m`/`%-I` are POSIX
+    # strftime extensions that raise ValueError on Windows — where this app
+    # actually runs — so any template using them 500s in production while
+    # passing every test on Linux/CI. This filter emulates them portably.
+    @app.template_filter('smartdate')
+    def smartdate(value, fmt='%b %-d, %Y'):
+        if value is None:
+            return ''
+        # Substitute the POSIX-only directives with the literal number BEFORE
+        # calling strftime. Day (1-31), month (1-12) and 12-hour (1-12) never
+        # contain a '%', so injecting them as literals is safe.
+        fmt = (fmt.replace('%-d', str(value.day))
+                  .replace('%-m', str(value.month)))
+        if hasattr(value, 'hour'):
+            fmt = fmt.replace('%-I', str((value.hour % 12) or 12))
+        try:
+            return value.strftime(fmt)
+        except (ValueError, AttributeError):
+            return str(value)
+
     # Cache-bust static assets by file mtime so browsers refetch on change.
     @app.context_processor
     def inject_static_version():

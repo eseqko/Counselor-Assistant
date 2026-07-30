@@ -299,10 +299,12 @@ def view_student(id):
     # completed STRICTLY EARLIER on the timeline — which on a block schedule
     # includes an earlier quarter of the same year.
     schedule_analysis = None
+    course_outcomes = None
     if sched:
         from app.models.course import Course
         from app.models.grade import GradeRecord
         from app.utils.schedule_analysis import analyze_student_schedule
+        from app.utils.grade_outcomes import student_course_outcomes
         numbers = {str(e.course_number).strip() for e in sched if e.course_number}
         courses_by_number = {
             c.course_number: c for c in Course.query.filter(
@@ -310,6 +312,11 @@ def view_student(id):
         grade_history = GradeRecord.query.filter_by(student_id=student.id).all()
         schedule_analysis = analyze_student_schedule(
             sched, grade_history, courses_by_number)
+        # This student's own D/F courses this year — the per-student counterpart
+        # of the caseload-wide "Outcomes by Section" report. Grades are matched
+        # to the SAME year as the schedule so a prior-year D doesn't surface.
+        current_grades = [g for g in grade_history if g.school_year == schedule_year]
+        course_outcomes = student_course_outcomes(sched, current_grades)
 
     return render_template('caseload/view.html',
         student=student, notes=notes,
@@ -317,6 +324,7 @@ def view_student(id):
         schedule_year=schedule_year,
         schedule_credits=schedule_credits,
         schedule_analysis=schedule_analysis,
+        course_outcomes=course_outcomes,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,
