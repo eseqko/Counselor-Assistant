@@ -149,6 +149,26 @@
         activate(initial);
     }
 })();
+
+/* Arrow keys walk the caseload, following whatever the Prev/Next buttons point
+   at — so keyboard and mouse can never disagree about where "next" goes. */
+(function() {
+    document.addEventListener('keydown', function(e) {
+        // Never hijack a keystroke meant for a field, a shortcut, or an editor.
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+        const el = document.activeElement;
+        if (el && (el.isContentEditable ||
+                   ['INPUT', 'TEXTAREA', 'SELECT'].indexOf(el.tagName) !== -1)) return;
+
+        let link = null;
+        if (e.key === 'ArrowLeft') link = document.getElementById('student-nav-prev');
+        else if (e.key === 'ArrowRight') link = document.getElementById('student-nav-next');
+        if (!link) return;              // absent at the ends of the list
+
+        e.preventDefault();
+        window.location.href = link.href;
+    });
+})();
 </script>
 
 {% endblock %}

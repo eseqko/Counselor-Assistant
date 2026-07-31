@@ -81,7 +81,7 @@
             <tbody>
                 {% for student in students %}
                 <tr>
-                    <td><a href="{{ url_for('caseload.view_student', id=student.id) }}" style="text-decoration:none;color:var(--primary);font-weight:600;">{{ student.full_name }}</a></td>
+                    <td><a href="{{ url_for('caseload.view_student', id=student.id, **caseload_filter_args) }}" style="text-decoration:none;color:var(--primary);font-weight:600;">{{ student.full_name }}</a></td>
                     <td>{{ student.student_id_number }}</td>
                     <td>{{ student.grade_level or '-' }}</td>
                     <td>
@@ -103,7 +103,7 @@
                     <td>{% for tag in student.tags %}<span class="badge" style="background:{{ tag.color }}20;color:{{ tag.color }}">{{ tag.name }}</span> {% endfor %}</td>
                     <td>
                         <div class="btn-group">
-                            <a href="{{ url_for('caseload.view_student', id=student.id) }}" class="btn btn-sm btn-outline">View</a>
+                            <a href="{{ url_for('caseload.view_student', id=student.id, **caseload_filter_args) }}" class="btn btn-sm btn-outline">View</a>
                             <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-sm btn-outline">+ Note</a>
                         </div>
                     </td>

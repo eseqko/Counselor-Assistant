@@ -50,22 +50,39 @@ VALID_EL_STATUSES = {'Newcomer', 'LTEL', 'RFEP', 'EO', ''}
 VALID_EL_LEVELS = {'EL 1', 'EL 2', 'EL 3', ''}
 
 
-@caseload_bp.route('/')
-@login_required
-def index():
-    search = request.args.get('search', '').strip()
-    grade = request.args.get('grade', '')
-    status = request.args.get('status', 'active')
-    tag_filter = request.args.get('tag', '')
-    el_filter = request.args.get('el_status', '')
+# Query-string keys that define "which students am I looking at". Carried from
+# the caseload list into the profile so prev/next can walk the same filtered set
+# the counselor is actually working from.
+CASELOAD_FILTER_KEYS = ('search', 'grade', 'status', 'tag', 'el_status')
 
-    # Exclude the per-user Sample Student (screener test vehicle) from the roster.
-    query = Student.query.filter_by(assigned_counselor_id=current_user.id).filter(
+
+def caseload_base_query(user):
+    """Every student on ``user``'s caseload, before any filter.
+
+    Excludes the per-user Sample Student (screener test vehicle) from the roster.
+    """
+    return Student.query.filter_by(assigned_counselor_id=user.id).filter(
         Student.is_sample == False)
+
+
+def apply_caseload_filters(query, args):
+    """Apply the caseload list's filters to ``query``.
+
+    Single source of truth: the list page and the profile's prev/next both go
+    through here, so they can never disagree about which students are "in" the
+    current view. ``args`` is any mapping (request.args or a plain dict).
+    """
+    status = args.get('status', 'active')
+    grade = (args.get('grade') or '').strip()
+    search = (args.get('search') or '').strip()
+    tag_filter = (args.get('tag') or '').strip()
+    el_filter = (args.get('el_status') or '').strip()
 
     if status:
         query = query.filter_by(status=status)
-    if grade:
+    # Guarded cast: a hand-edited or stale ?grade=x used to raise ValueError and
+    # 500 the page. Now an unusable value simply doesn't filter.
+    if grade.isdigit():
         query = query.filter_by(grade_level=int(grade))
     if search:
         query = query.filter(
@@ -79,17 +96,91 @@ def index():
         query = query.filter(Student.tags.any(Tag.name == tag_filter))
     if el_filter:
         query = query.filter_by(el_status=el_filter)
+    return query
+
+
+def caseload_order(query):
+    """The canonical caseload ordering.
+
+    ``Student.id`` is a tiebreaker, not decoration: without it two students
+    sharing a first+last name order arbitrarily, so the list and prev/next could
+    disagree and a "Next" could bounce back to the student you just left.
+    """
+    return query.order_by(Student.last_name, Student.first_name, Student.id)
+
+
+def filtered_caseload_ids(user, args):
+    """Student ids for ``user``, filtered by ``args``, in list order."""
+    query = caseload_order(apply_caseload_filters(caseload_base_query(user), args))
+    return [row[0] for row in query.with_entities(Student.id).all()]
+
+
+def active_filter_args(args):
+    """Just the filter keys actually present, for round-tripping into links."""
+    return {k: v for k in CASELOAD_FILTER_KEYS if (v := (args.get(k) or '').strip())}
+
+
+def _build_student_nav(student_id, args):
+    """Prev/next position for one student within the filtered caseload.
+
+    The ids come only from the current user's own caseload, so navigation can
+    never surface another counselor's student regardless of what filter values
+    are in the URL — and view_student still owned_or_404s on arrival.
+
+    When the student ISN'T in the active filter (a stale link, or a filter that
+    no longer matches them), prev/next fall back to the unfiltered caseload so
+    the counselor is never stranded with two dead buttons. The position counter
+    is suppressed in that case, because "3 of 12" would be a lie about a set the
+    student isn't part of.
+    """
+    filters = active_filter_args(args)
+    ordered = filtered_caseload_ids(current_user, args)
+    in_filter = student_id in ordered
+
+    if not in_filter:
+        filters = {}
+        ordered = filtered_caseload_ids(current_user, {})
+
+    try:
+        i = ordered.index(student_id)
+    except ValueError:
+        i = None
+
+    return {
+        'filters': filters,
+        'prev_id': ordered[i - 1] if i not in (None, 0) else None,
+        'next_id': (ordered[i + 1]
+                    if i is not None and i < len(ordered) - 1 else None),
+        'position': (i + 1) if (in_filter and i is not None) else None,
+        'total': len(ordered) if in_filter else None,
+        'filtered': bool(filters),
+    }
+
+
+@caseload_bp.route('/')
+@login_required
+def index():
+    search = request.args.get('search', '').strip()
+    grade = request.args.get('grade', '')
+    status = request.args.get('status', 'active')
+    tag_filter = request.args.get('tag', '')
+    el_filter = request.args.get('el_status', '')
+
+    query = apply_caseload_filters(caseload_base_query(current_user), request.args)
 
     page = request.args.get('page', 1, type=int)
-    pagination = query.order_by(
-        Student.last_name, Student.first_name
-    ).paginate(page=max(1, page), per_page=50, error_out=False)
+    pagination = caseload_order(query).paginate(
+        page=max(1, page), per_page=50, error_out=False)
     tags = Tag.query.order_by(Tag.name).all()
 
     return render_template('caseload/index.html',
         students=pagination.items, pagination=pagination,
         search=search, grade=grade,
-        status=status, tag_filter=tag_filter, el_filter=el_filter, tags=tags)
+        status=status, tag_filter=tag_filter, el_filter=el_filter, tags=tags,
+        # Round-tripped into each student link so opening a profile keeps the
+        # filter, and prev/next walks the same set. `page` is deliberately
+        # dropped — the profile navigates by position, not by page.
+        caseload_filter_args=active_filter_args(request.args))
 
 
 @caseload_bp.route('/add', methods=['GET', 'POST'])
@@ -171,6 +262,8 @@ def view_student(id):
     log_action('view', 'student', student.id)
     notes = student.notes.limit(10).all()
     latest_transcript = student.transcript_records.first()
+
+    student_nav = _build_student_nav(id, request.args)
 
     uses_state_min = student.uses_state_minimum
     total_required = STATE_MIN_TOTAL if uses_state_min else TOTAL_REQUIRED
@@ -320,6 +413,7 @@ def view_student(id):
 
     return render_template('caseload/view.html',
         student=student, notes=notes,
+        student_nav=student_nav,
         schedule_by_period=schedule_by_period,
         schedule_year=schedule_year,
         schedule_credits=schedule_credits,

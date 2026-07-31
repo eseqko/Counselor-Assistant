@@ -35,7 +35,41 @@
             {% endif %}
         </div>
     </div>
-    <div style="margin-left:auto;">
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        {% if student_nav %}
+        {# Walk the caseload without going back to the list. The filter the
+           counselor was working from rides along in the query string, so
+           "Next" stays inside e.g. Grade 11 / Active. #}
+        <div style="display:flex;align-items:center;gap:4px;" id="student-nav">
+            {% if student_nav.prev_id %}
+            <a class="btn btn-sm btn-outline" id="student-nav-prev"
+               href="{{ url_for('caseload.view_student', id=student_nav.prev_id, **student_nav.filters) }}"
+               title="Previous student (&larr;)">&lsaquo; Prev</a>
+            {% else %}
+            <span class="btn btn-sm btn-outline" aria-disabled="true"
+                  style="opacity:0.4;cursor:default;"
+                  title="First student in this list">&lsaquo; Prev</span>
+            {% endif %}
+
+            {% if student_nav.position %}
+            <span style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;padding:0 4px;"
+                  title="Position in your {{ 'filtered ' if student_nav.filtered }}caseload">
+                {{ student_nav.position }} of {{ student_nav.total }}
+            </span>
+            {% endif %}
+
+            {% if student_nav.next_id %}
+            <a class="btn btn-sm btn-outline" id="student-nav-next"
+               href="{{ url_for('caseload.view_student', id=student_nav.next_id, **student_nav.filters) }}"
+               title="Next student (&rarr;)">Next &rsaquo;</a>
+            {% else %}
+            <span class="btn btn-sm btn-outline" aria-disabled="true"
+                  style="opacity:0.4;cursor:default;"
+                  title="Last student in this list">Next &rsaquo;</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="btn-group">
             {% if current_user.synergy_base_url %}
             <button type="button" class="btn btn-sm btn-outline" id="open-synergy-btn"
