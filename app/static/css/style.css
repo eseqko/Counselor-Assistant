@@ -42,6 +42,16 @@ body {
     transition: transform 0.3s ease;
 }
 
+/* Dim layer behind the open drawer. Lives outside the media queries so it is
+   reliably hidden whenever the sidebar is in its normal in-flow position. */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+}
+
 .sidebar-header {
     padding: 22px 20px;
     text-align: center;
@@ -164,6 +174,11 @@ body {
     margin-left: var(--sidebar-width);
     flex: 1;
     min-height: 100vh;
+    /* A flex item defaults to min-width:auto, so it refuses to shrink below the
+       min-content width of what's inside it — one wide table would stretch the
+       whole page and push the layout off-screen instead of scrolling in its own
+       .table-responsive wrapper. */
+    min-width: 0;
 }
 
 .top-bar {
@@ -537,6 +552,9 @@ select.form-control {
     align-items: center;
     gap: 20px;
     margin-bottom: 24px;
+    /* Avatar + name + status badges + prev/next + the action buttons overrun a
+       narrow window; without this they overflow instead of dropping to a row. */
+    flex-wrap: wrap;
 }
 
 .profile-avatar {
@@ -581,11 +599,7 @@ select.form-control {
 
 /* Responsive */
 @media (max-width: 768px) {
-    .sidebar { transform: translateX(-100%); }
-    .sidebar.open { transform: translateX(0); z-index: 1001; }
-    .sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; }
-    .sidebar.open + .sidebar-backdrop { display: block; }
-    .main-content { margin-left: 0; }
+    /* Drawer rules live in the shared block below — they also fire in portrait. */
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .grid-2, .grid-3 { grid-template-columns: 1fr; }
     .form-row { grid-template-columns: 1fr; }
@@ -609,7 +623,29 @@ select.form-control {
     color: var(--dark);
 }
 
-@media (max-width: 768px) {
+/* ── Sidebar as a slide-out drawer ────────────────────────────────────────
+   Fires when the window is genuinely narrow, OR when it is portrait on a
+   normal-sized display. A monitor rotated to portrait gives a ~1080px
+   viewport, where the fixed 260px sidebar costs a quarter of the usable
+   width — but 1080px is far too wide to trip a phone breakpoint. Orientation
+   is the honest signal: it means "taller than wide", whatever the pixel count.
+
+   The max-width guard leaves the sidebar in place on a large portrait display
+   (e.g. 1440x2560), which has width to spare.
+
+   This is a media query rather than JS on purpose: the browser re-evaluates it
+   on every resize, so dragging the window from a landscape monitor to a
+   portrait one relays out live, with no reload. It is also self-healing — if
+   the drawer is left open and the window moves back to landscape, both
+   .sidebar.open and the backdrop simply stop applying. */
+@media (max-width: 768px), (orientation: portrait) and (max-width: 1200px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); z-index: 1001; }
+    /* General sibling, not adjacent: a <script> block sits between the sidebar
+       and the backdrop in base.html, so "+" never matched and the dim layer
+       never appeared. */
+    .sidebar.open ~ .sidebar-backdrop { display: block; }
+    .main-content { margin-left: 0; }
     .menu-toggle { display: block; }
 }
 
@@ -878,4 +914,16 @@ body::after {
 
 @media (max-width: 1024px) {
     .profile-shell { grid-template-columns: 1fr; }
+}
+
+/* Portrait: three columns squeezed into a narrow window leaves the metrics
+   column — the densest one — at its minimum. Give it the full width up top
+   where it has room, and sit the two card rails side by side underneath,
+   spending the height a rotated monitor has plenty of.
+
+   The min-width floor means no reset rule is needed: below it, the 1024px
+   single-column rule above simply takes over. */
+@media (orientation: portrait) and (min-width: 820px) {
+    .profile-shell { grid-template-columns: 1fr 1fr; }
+    .profile-col-mid { grid-column: 1 / -1; order: -1; }
 }

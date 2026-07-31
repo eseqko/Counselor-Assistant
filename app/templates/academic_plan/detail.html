@@ -9,6 +9,13 @@
 .ap-sidebar { width:300px; flex-shrink:0; display:flex; flex-direction:column; gap:16px; }
 
 .ap-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+
+/* Portrait: a 300px rail beside the 4-year grid leaves each year ~175px wide.
+   Stack the rail instead and give the grid the full width. */
+@media (orientation:portrait) and (max-width:1200px) {
+    .ap-layout { flex-direction:column; }
+    .ap-sidebar { width:auto; }
+}
 .ap-toolbar .btn { font-size:0.82rem; padding:8px 16px; }
 
 /* ── 4-year grid ── */

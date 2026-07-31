@@ -39,16 +39,13 @@
         {% if student_nav %}
         {# Walk the caseload without going back to the list. The filter the
            counselor was working from rides along in the query string, so
-           "Next" stays inside e.g. Grade 11 / Active. #}
+           "Next" stays inside e.g. Grade 11 / Active. The ends wrap, so the
+           list is a loop — the buttons only disappear for a lone student. #}
         <div style="display:flex;align-items:center;gap:4px;" id="student-nav">
             {% if student_nav.prev_id %}
             <a class="btn btn-sm btn-outline" id="student-nav-prev"
                href="{{ url_for('caseload.view_student', id=student_nav.prev_id, **student_nav.filters) }}"
                title="Previous student (&larr;)">&lsaquo; Prev</a>
-            {% else %}
-            <span class="btn btn-sm btn-outline" aria-disabled="true"
-                  style="opacity:0.4;cursor:default;"
-                  title="First student in this list">&lsaquo; Prev</span>
             {% endif %}
 
             {% if student_nav.position %}
@@ -62,10 +59,6 @@
             <a class="btn btn-sm btn-outline" id="student-nav-next"
                href="{{ url_for('caseload.view_student', id=student_nav.next_id, **student_nav.filters) }}"
                title="Next student (&rarr;)">Next &rsaquo;</a>
-            {% else %}
-            <span class="btn btn-sm btn-outline" aria-disabled="true"
-                  style="opacity:0.4;cursor:default;"
-                  title="Last student in this list">Next &rsaquo;</span>
             {% endif %}
         </div>
         {% endif %}

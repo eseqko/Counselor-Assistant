@@ -4,7 +4,7 @@
 {% block content %}
 
 <div class="filter-bar">
-    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
         <div class="form-group">
             <label>From</label>
             <input type="date" name="date_from" class="form-control" value="{{ date_from.strftime('%Y-%m-%d') }}">

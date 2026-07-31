@@ -228,15 +228,34 @@ def test_prev_and_next_walk_the_filtered_set(app, nav_env):
     assert 'el_status=LTEL' in nav.group(1)
 
 
-def test_first_student_has_no_prev_and_last_has_no_next(app, nav_env):
+def test_the_ends_wrap_around(app, nav_env):
+    """Grade 11 / LTEL is Alpha then Gamma. Prev from the first must land on
+    the last and Next from the last on the first — carrying the filter, so the
+    wrap stays inside the set the counselor is working."""
     client, ids = nav_env
+
     first = client.get(f'/caseload/{ids["a"]}?el_status=LTEL').data.decode()
-    assert 'id="student-nav-prev"' not in first
-    assert 'id="student-nav-next"' in first
+    prev = re.search(r'id="student-nav-prev"[^>]*href="([^"]+)"', first)
+    assert prev, 'first student has no Prev link — the ends did not wrap'
+    assert f'/caseload/{ids["g"]}' in prev.group(1)
+    assert 'el_status=LTEL' in prev.group(1)
 
     last = client.get(f'/caseload/{ids["g"]}?el_status=LTEL').data.decode()
-    assert 'id="student-nav-next"' not in last
-    assert 'id="student-nav-prev"' in last
+    nxt = re.search(r'id="student-nav-next"[^>]*href="([^"]+)"', last)
+    assert nxt, 'last student has no Next link — the ends did not wrap'
+    assert f'/caseload/{ids["a"]}' in nxt.group(1)
+    assert 'el_status=LTEL' in nxt.group(1)
+
+
+def test_a_single_student_caseload_renders_no_nav_links(app, nav_env):
+    """Wrapping a one-student list would point both buttons at the page you're
+    already on. Nothing to walk to means no buttons."""
+    client, ids = nav_env
+    # Grade 12 has exactly one student, so the filtered set has length 1.
+    html = client.get(f'/caseload/{ids["grade12"]}?grade=12').data.decode()
+    assert '1 of 1' in html, 'fixture no longer isolates a single student'
+    assert 'id="student-nav-prev"' not in html
+    assert 'id="student-nav-next"' not in html
 
 
 def test_position_counter_reflects_the_filtered_set(app, nav_env):
@@ -292,21 +311,23 @@ def test_profile_survives_a_junk_grade_filter(app, nav_env):
     assert client.get('/caseload/?grade=notanumber').status_code == 200
 
 
-def test_walking_next_visits_every_student_exactly_once(app, nav_env):
-    """End-to-end: follow Next from the first student and confirm the walk
-    reproduces the list order without repeats or skips."""
+def test_walking_next_laps_the_caseload_exactly_once(app, nav_env):
+    """End-to-end: follow Next from the first student for exactly one lap. The
+    walk must reproduce the list order without repeats or skips, then close the
+    loop by returning to where it started."""
     client, ids = nav_env
     with app.app_context():
         expected = filtered_caseload_ids(_user(app, ids['me']), {})
+    assert len(expected) > 1, 'fixture needs a walkable caseload'
 
     visited = [expected[0]]
     url = f'/caseload/{expected[0]}'
-    for _ in range(len(expected) + 2):        # bounded: a cycle would hang
+    for _ in range(len(expected)):            # one full lap, then stop
         html = client.get(url).data.decode()
         nav = re.search(r'id="student-nav-next"[^>]*href="([^"]+)"', html)
-        if not nav:
-            break
+        assert nav, f'Next vanished mid-walk at {url}'
         url = nav.group(1).replace('&amp;', '&')
         visited.append(int(re.search(r'/caseload/(\d+)', url).group(1)))
 
-    assert visited == expected
+    assert visited[:-1] == expected, 'walk did not reproduce the list order'
+    assert visited[-1] == expected[0], 'the lap did not wrap back to the start'

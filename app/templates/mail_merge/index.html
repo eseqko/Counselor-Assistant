@@ -9,6 +9,13 @@
 .mm-sidebar   { width:340px; flex-shrink:0; display:flex; flex-direction:column; gap:16px; }
 .mm-main      { flex:1; min-width:0; }
 
+/* Portrait: stack the 340px rail above the main pane rather than stealing a
+   third of a narrow window from it. */
+@media (orientation:portrait) and (max-width:1200px) {
+    .mm-container { flex-direction:column; }
+    .mm-sidebar   { width:auto; }
+}
+
 /* ── Cards ──────────────────────────────────────────── */
 .mm-card {
     background:var(--white); border-radius:10px;

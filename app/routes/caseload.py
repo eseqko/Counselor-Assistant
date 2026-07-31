@@ -132,6 +132,9 @@ def _build_student_nav(student_id, args):
     the counselor is never stranded with two dead buttons. The position counter
     is suppressed in that case, because "3 of 12" would be a lie about a set the
     student isn't part of.
+
+    The ends join up: Next from the last student lands on the first, Prev from
+    the first lands on the last, so the caseload walks as a loop.
     """
     filters = active_filter_args(args)
     ordered = filtered_caseload_ids(current_user, args)
@@ -146,11 +149,15 @@ def _build_student_nav(student_id, args):
     except ValueError:
         i = None
 
+    # A lone student must not link to themselves — a button that reloads the
+    # same page reads as broken. Python's negative indexing wraps prev for free.
+    n = len(ordered)
+    wraps = i is not None and n > 1
+
     return {
         'filters': filters,
-        'prev_id': ordered[i - 1] if i not in (None, 0) else None,
-        'next_id': (ordered[i + 1]
-                    if i is not None and i < len(ordered) - 1 else None),
+        'prev_id': ordered[(i - 1) % n] if wraps else None,
+        'next_id': ordered[(i + 1) % n] if wraps else None,
         'position': (i + 1) if (in_filter and i is not None) else None,
         'total': len(ordered) if in_filter else None,
         'filtered': bool(filters),
