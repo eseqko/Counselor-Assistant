@@ -15,6 +15,21 @@ var ThemeManager = (function() {
     var LEGACY = { 'glass-navy': 'glass-emerald' };
     var root = document.documentElement;
 
+    // localStorage throws in some private-browsing modes; never let a theme
+    // read take the page down with it.
+    function storageGet(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function storageSet(key, value) {
+        try { localStorage.setItem(key, value); } catch (e) {}
+    }
+
+    // True when the rendered theme is a signed-in user's stored preference
+    // rather than the anonymous default.
+    function serverSaved() {
+        return root.getAttribute('data-theme-saved') === '1';
+    }
+
     // ── Color math helpers (self-contained, no dependencies) ──
 
     function hexToHSL(hex) {
@@ -85,7 +100,7 @@ var ThemeManager = (function() {
     }
 
     function applySchoolColors() {
-        var raw = localStorage.getItem('school_config');
+        var raw = storageGet('school_config');
         if (!raw) { root.dataset.theme = 'light'; return; }
         try {
             var cfg = JSON.parse(raw);
@@ -126,7 +141,7 @@ var ThemeManager = (function() {
     function setTheme(name) {
         name = LEGACY[name] || name;
         if (VALID.indexOf(name) === -1) name = 'light';
-        localStorage.setItem('theme_preference', name);
+        storageSet('theme_preference', name);
         apply(name);
 
         // Persist to server
@@ -138,15 +153,29 @@ var ThemeManager = (function() {
     }
 
     function getTheme() {
-        var t = localStorage.getItem('theme_preference') || 'light';
-        return LEGACY[t] || t;
+        /* The inline bootstrap in base.html has already copied a signed-in
+           user's saved preference into localStorage, so on an authenticated
+           page this reads the server's value.
+
+           The fallback is the rendered data-theme rather than a hardcoded
+           'light'. That mattered: a browser with no stored preference — a new
+           machine, a cleared profile, a private window — used to be forced to
+           light even though the server had rendered the user's real theme,
+           producing a visible flash from the correct theme to the wrong one. */
+        var t = storageGet('theme_preference');
+        if (!t) t = root.getAttribute('data-theme');
+        t = LEGACY[t] || t;
+        return (t && VALID.indexOf(t) !== -1) ? t : 'light';
     }
 
     // ── Reduced motion ──
 
     function setReducedMotion(enabled) {
-        localStorage.setItem('reduced_motion', enabled ? 'true' : 'false');
+        storageSet('reduced_motion', enabled ? 'true' : 'false');
         root.dataset.reducedMotion = enabled ? 'true' : 'false';
+        // Keep the server-rendered attribute current too, or getReducedMotion()
+        // would keep reporting the value from page load until the next reload.
+        root.setAttribute('data-server-reduced-motion', enabled ? 'true' : 'false');
 
         fetch('/settings/api/theme', {
             method: 'POST',
@@ -156,7 +185,13 @@ var ThemeManager = (function() {
     }
 
     function getReducedMotion() {
-        var stored = localStorage.getItem('reduced_motion');
+        // A signed-in user's saved setting outranks this browser's memory, the
+        // same way the theme does.
+        if (serverSaved()) {
+            var attr = root.getAttribute('data-server-reduced-motion');
+            if (attr !== null) return attr === 'true';
+        }
+        var stored = storageGet('reduced_motion');
         if (stored !== null) return stored === 'true';
         return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     }

@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ user_theme|default('light') }}">
+<html lang="en" data-theme="{{ user_theme|default('light') }}"
+      {% if user_theme_saved %}data-theme-saved="1"{% endif %}
+      data-server-reduced-motion="{{ 'true' if user_reduced_motion else 'false' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,11 +30,34 @@
             localStorage.setItem('school_config', JSON.stringify(_cur));
         } catch(e){}
         {% endif %}
-        var t = localStorage.getItem('theme_preference');
+        /* Theme precedence: the signed-in user's SAVED preference wins over
+           whatever this browser remembers. The saved value comes from the
+           database, so it is right on a machine that has never opened the app
+           and on one whose localStorage went stale because the theme was
+           changed somewhere else. localStorage is only the source of truth on
+           pages with no signed-in user (login, setup, public forms), and is
+           kept in sync here so those pages inherit the last known choice. */
+        var el = document.documentElement;
+        var serverSaved = el.getAttribute('data-theme-saved') === '1';
+        var t;
+        if (serverSaved) {
+            t = el.getAttribute('data-theme');
+            try { if (t) localStorage.setItem('theme_preference', t); } catch(e){}
+        } else {
+            t = localStorage.getItem('theme_preference');
+        }
         if (t === 'glass-navy') t = 'glass-emerald';  /* retired theme alias */
         if (t === 'auto') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        if (t) document.documentElement.dataset.theme = t;
-        if (localStorage.getItem('reduced_motion') === 'true') document.documentElement.dataset.reducedMotion = 'true';
+        if (t) el.dataset.theme = t;
+
+        var rm;
+        if (serverSaved) {
+            rm = el.getAttribute('data-server-reduced-motion') === 'true';
+            try { localStorage.setItem('reduced_motion', rm ? 'true' : 'false'); } catch(e){}
+        } else {
+            rm = localStorage.getItem('reduced_motion') === 'true';
+        }
+        if (rm) el.dataset.reducedMotion = 'true';
     })();
     </script>
     <title>{% block title %}Counselor Assistant{% endblock %}</title>
