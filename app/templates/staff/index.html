@@ -31,6 +31,26 @@
 .class-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
 .class-table th { text-align:left; padding:6px 10px; color:var(--gray); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid var(--light-gray); }
 .class-table td { padding:6px 10px; border-bottom:1px solid var(--light-gray); }
+
+/* A headcount rarely answers the real question — which of MY students are in
+   there. Each class row opens to name them. */
+.class-row.has-roster { cursor:pointer; }
+.class-row.has-roster:hover { background:var(--hover-bg, rgba(127,140,141,0.08)); }
+.roster-caret { display:inline-block; color:var(--gray); font-size:0.7rem;
+                margin-right:5px; transition:transform 0.15s; }
+.class-row.open .roster-caret { transform:rotate(90deg); }
+.roster-row { display:none; }
+.roster-row.open { display:table-row; }
+.roster-row > td { background:var(--hover-bg, rgba(127,140,141,0.06)); padding:10px 12px; }
+.roster-names { display:flex; flex-wrap:wrap; gap:6px; }
+.roster-chip {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:3px 9px; border-radius:999px; text-decoration:none;
+    background:var(--surface, #fff); border:1px solid var(--border, #E8ECF0);
+    color:var(--text, var(--dark)); font-size:0.8rem; white-space:nowrap;
+}
+.roster-chip:hover { border-color:var(--primary); color:var(--primary); }
+.roster-chip .gr { color:var(--gray); font-size:0.7rem; }
 .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.74rem; font-weight:700; }
 .pill.df { background:#FCE8E8; color:var(--danger); }
 .pill.ok { background:#E8F8E8; color:var(--success); }
@@ -58,6 +78,7 @@
 </div>
 {% else %}
     {% for t in rows %}
+    {% set staff_idx = loop.index %}
     <div class="staff-card" id="staff-{{ loop.index }}">
         <div class="staff-head" onclick="document.getElementById('staff-{{ loop.index }}').classList.toggle('open')">
             <div style="flex:1;">
@@ -92,13 +113,33 @@
                 <thead><tr><th>Period</th><th>Class</th><th>My Students</th><th>D/F</th><th>Fail Rate</th></tr></thead>
                 <tbody>
                 {% for c in t.classes %}
-                    <tr>
+                    {% set rid = 'roster-%s-%s'|format(staff_idx, loop.index) %}
+                    <tr class="class-row{% if c.roster %} has-roster{% endif %}"
+                        {% if c.roster %}onclick="toggleRoster(event, '{{ rid }}')"
+                        title="Show the students you have in this class"{% endif %}>
                         <td>{{ c.period if c.period is not none else '—' }}</td>
-                        <td>{{ c.course }}</td>
+                        <td>
+                            {% if c.roster %}<span class="roster-caret">&#9656;</span>{% endif %}
+                            {{ c.course }}
+                        </td>
                         <td>{{ c.students }}</td>
                         <td>{% if c.df %}<span class="pill df">{{ c.df }}</span>{% else %}<span class="pill ok">0</span>{% endif %}</td>
                         <td>{{ c.rate }}% <span style="color:var(--gray);font-size:0.74rem;">of {{ c.total }}</span></td>
                     </tr>
+                    {% if c.roster %}
+                    <tr class="roster-row" id="{{ rid }}">
+                        <td colspan="5">
+                            <div class="roster-names">
+                                {% for s in c.roster %}
+                                <a href="{{ url_for('caseload.view_student', id=s.id) }}"
+                                   class="roster-chip" onclick="event.stopPropagation();">
+                                    {{ s.name }}{% if s.grade_level %}<span class="gr">{{ s.grade_level }}</span>{% endif %}
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
                 {% endfor %}
                 </tbody>
             </table>
@@ -106,4 +147,16 @@
     </div>
     {% endfor %}
 {% endif %}
+
+<script>
+/* Open one class row to list the students you have in it. The click is stopped
+   here so it doesn't bubble up to .staff-head and collapse the whole card. */
+function toggleRoster(event, id) {
+    event.stopPropagation();
+    var row = document.getElementById(id);
+    if (!row) return;
+    row.classList.toggle('open');
+    if (event.currentTarget) event.currentTarget.classList.toggle('open');
+}
+</script>
 {% endblock %}
