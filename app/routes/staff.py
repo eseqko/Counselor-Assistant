@@ -136,15 +136,16 @@ def index():
     # protects against legacy data).
     all_staff = Staff.query.order_by(Staff.name).all()
     staff_by_lower = {s.name.lower(): s for s in all_staff}
+    student_by_id = {s.id: s for s in students}
     seen_keys = set()
     for s in all_staff:
         seen_keys.add(s.name.lower())
         classes = by_name.get(s.name.lower(), {}).get('classes', {})
-        rows.append(_build_row(s, classes))
+        rows.append(_build_row(s, classes, student_by_id))
     for key, agg in by_name.items():
         if key and key not in seen_keys:
             placeholder = Staff(id=None, name=agg['display'] or key, title='Teacher')
-            rows.append(_build_row(placeholder, agg['classes']))
+            rows.append(_build_row(placeholder, agg['classes'], student_by_id))
 
     # Sort: people you actually have students with first (biggest student count),
     # then alphabetical for the rest.
@@ -158,14 +159,25 @@ def index():
                            has_data=bool(rows))
 
 
-def _build_row(staff, classes):
-    """Shape a staff row for the directory."""
+def _build_row(staff, classes, student_by_id=None):
+    """Shape a staff row for the directory.
+
+    ``student_by_id`` supplies the roster behind each class's headcount — the
+    counselor's question is nearly always "which of mine are in there", and a
+    bare number cannot answer it.
+    """
+    people = student_by_id or {}
     class_list, all_students, total_df, total_grades, subjects = [], set(), 0, 0, set()
     for (course, period), c in classes.items():
+        roster = sorted(
+            (people[sid] for sid in c['students'] if sid in people),
+            key=lambda s: ((s.last_name or '').lower(), (s.first_name or '').lower()))
         class_list.append({
             'course': course, 'period': period,
             'students': len(c['students']), 'df': c['df'], 'total': c['total'],
             'rate': round(c['df'] / c['total'] * 100, 1) if c['total'] else 0,
+            'roster': [{'id': s.id, 'name': s.display_name,
+                        'grade_level': s.grade_level} for s in roster],
         })
         all_students |= c['students']
         total_df += c['df']

@@ -321,9 +321,14 @@ def create_app(config_class=Config):
                 theme = 'glass-emerald'
             return {
                 'user_theme': theme,
-                'user_reduced_motion': current_user.reduced_motion or False
+                'user_reduced_motion': current_user.reduced_motion or False,
+                # Marks the rendered theme as a real stored preference rather
+                # than the anonymous default, so the client knows to trust it
+                # over whatever this particular browser happens to remember.
+                'user_theme_saved': True,
             }
-        return {'user_theme': 'light', 'user_reduced_motion': False}
+        return {'user_theme': 'light', 'user_reduced_motion': False,
+                'user_theme_saved': False}
 
     # School-config context processor — injects the SERVER copy of the school
     # identity into every template so base.html can MERGE it into the browser's

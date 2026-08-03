@@ -185,6 +185,77 @@ def test_a_graded_student_is_not_listed_twice(app, dir_env):
     assert '>D<' in fashion or 'D' in fashion
 
 
+# ── the roster behind each headcount ──
+
+def test_a_class_row_lists_the_students_in_it(app, dir_env):
+    """A headcount rarely answers the real question — which of mine are in
+    there — so each class opens to name them."""
+    client, ids = dir_env
+    html = client.get(f'/staff/?year={YEAR}').data.decode()
+    assert 'roster-chip' in html, 'no roster rendered'
+    assert 'Ana Test' in html and 'Ben Test' in html
+    # Each name links to that student's profile.
+    assert f'/caseload/{ids["a"]}' in html
+
+
+def test_the_roster_never_includes_another_counselors_student(app, dir_env):
+    """Cy sits in the same section but belongs to the other counselor."""
+    client, ids = dir_env
+    html = client.get(f'/staff/?year={YEAR}').data.decode()
+    assert 'Cy Test' not in html
+    assert f'/caseload/{ids["theirs"]}' not in html
+
+
+def test_the_roster_excludes_the_sample_student(app, dir_env):
+    client, ids = dir_env
+    html = client.get(f'/staff/?year={YEAR}').data.decode()
+    assert f'/caseload/{ids["sample"]}' not in html
+
+
+# ── prior years, once final grades exist ──
+
+def _final(student_id, year, teacher='Mar, J.', course='Algebra 1 CP', letter='B'):
+    return GradeRecord(student_id=student_id, school_year=year, quarter=4,
+                       grade_type='final', course_name=course, course_number='X1',
+                       period=2, teacher=teacher, letter_grade=letter)
+
+
+def test_a_prior_year_with_final_grades_becomes_selectable(app, dir_env):
+    """Import last year's final grades and that year joins the selector, with
+    its own classes — the schedule only covers the current year."""
+    client, ids = dir_env
+    with app.app_context():
+        db.session.add(_final(ids['a'], '2025-2026'))
+        db.session.commit()
+    html = client.get('/staff/').data.decode()
+    assert '2025-2026' in html, 'prior year missing from the selector'
+
+    prior = client.get('/staff/?year=2025-2026').data.decode()
+    assert 'Algebra 1 CP' in prior, "prior year's class not shown"
+    # And the current year's schedule-only class is not mixed in.
+    assert 'Fashion Design CP' not in prior
+
+
+def test_a_grade_with_no_teacher_recorded_creates_no_year(app, dir_env):
+    """The caveat worth knowing: the directory is keyed on the teacher name,
+    so a grade export without a Staff Name column contributes nothing here."""
+    client, ids = dir_env
+    with app.app_context():
+        db.session.add(_final(ids['a'], '2024-2025', teacher=''))
+        db.session.commit()
+    assert '2024-2025' not in client.get('/staff/').data.decode()
+
+
+def test_prior_year_df_counts_come_from_that_years_grades(app, dir_env):
+    client, ids = dir_env
+    with app.app_context():
+        db.session.add(_final(ids['a'], '2025-2026', letter='F'))
+        db.session.add(_final(ids['b'], '2025-2026', letter='A'))
+        db.session.commit()
+    html = client.get('/staff/?year=2025-2026').data.decode()
+    assert '50.0%' in html or '50%' in html, 'D/F rate not computed for the prior year'
+
+
 def test_the_year_selector_offers_a_schedule_only_year(app, dir_env):
     """Years used to come from grades alone, so a freshly imported schedule
     produced an empty selector and no default year."""
