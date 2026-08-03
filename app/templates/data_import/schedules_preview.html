@@ -19,6 +19,28 @@
             A database snapshot is taken automatically before anything is written.
         </p>
 
+        {# Section IDs are what let you tell two sections of the same course apart,
+           so say plainly whether this file carried them rather than letting the
+           counselor discover empty values after committing. #}
+        {% set with_section = matched|selectattr('section_id')|list|length %}
+        {% if with_section == matched|length and matched %}
+        <div class="alert alert-success" style="font-size:0.86rem;">
+            <strong>Section IDs captured</strong> on all {{ matched|length }} rows.
+        </div>
+        {% elif with_section %}
+        <div class="alert alert-warning" style="font-size:0.86rem;">
+            <strong>Section IDs captured on {{ with_section }} of {{ matched|length }} rows.</strong>
+            The rest will import without one.
+        </div>
+        {% elif matched %}
+        <div class="alert alert-warning" style="font-size:0.86rem;">
+            <strong>No section IDs in this file.</strong>
+            Everything else imports fine, but you won't be able to tell two sections of
+            the same course apart. Synergy's Excel export (U-SCH100) includes a
+            <em>Section ID</em> column; the printed PDF schedule does not.
+        </div>
+        {% endif %}
+
         {% if needs_student_pick %}
         <div class="alert alert-warning" style="font-size:0.86rem;">
             <strong>No student name or ID was readable on this file.</strong>
@@ -62,7 +84,7 @@
         <table>
             <thead><tr>
                 <th>Student</th><th>Per</th><th>Term</th><th>Course ID</th>
-                <th>Course</th><th>Teacher</th><th>Room</th><th>Credits</th>
+                <th>Section</th><th>Course</th><th>Teacher</th><th>Room</th><th>Credits</th>
             </tr></thead>
             <tbody>
             {% for r in matched %}
@@ -74,6 +96,10 @@
                     <td>{{ r.period if r.period is not none else '-' }}</td>
                     <td><span class="badge badge-info">{{ r.term }}</span></td>
                     <td style="font-family:ui-monospace,monospace;font-size:0.8rem;">{{ r.course_number }}</td>
+                    <td style="font-family:ui-monospace,monospace;font-size:0.8rem;">
+                        {% if r.section_id %}{{ r.section_id }}
+                        {% else %}<span style="color:var(--warning);">&mdash;</span>{% endif %}
+                    </td>
                     <td style="font-size:0.84rem;">
                         {{ r.course_title }}
                         {% if r.is_advisory %}<span class="badge badge-success">Advisory</span>{% endif %}

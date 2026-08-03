@@ -207,3 +207,45 @@ def test_both_adapters_emit_the_same_shape():
         assert all(r.school_year == '2026-2027' for r in rows)
     assert excel_rows[0].source == 'excel'
     assert pdf_rows[0].source == 'pdf'
+
+
+# ── section IDs: what distinguishes two sections of the same course ──
+
+@needs_xls
+def test_excel_captures_a_section_id_on_every_row():
+    """Section IDs are the only thing separating two sections of one course, and
+    they differ per quarter in a 4x4 block (1-019 in Q1, 1-020 in Q2). Losing
+    them silently would make the schedule un-editable at section granularity."""
+    with open(SAMPLE_XLS, 'rb') as f:
+        rows = parse_schedule_excel(f)
+    blank = [r for r in rows if not r.section_id]
+    assert not blank, f'{len(blank)} of {len(rows)} Excel rows lost their section ID'
+    # Distinct per (period, term) — not one section reused across the year.
+    assert len({r.section_id for r in rows}) > 1
+
+
+@needs_pdf
+def test_pdf_carries_no_section_id_because_the_printout_has_no_such_column():
+    """Not a parser gap to be 'fixed'. The printed Synergy schedule has exactly
+    six columns — Period, Course ID, Course Title, Teacher Name, Room, Semesters
+    — and section is not among them. Anything filling this in from the PDF would
+    be inventing data, so the importer leaves it empty and the preview says so.
+    """
+    with open(SAMPLE_PDF, 'rb') as f:
+        rows = parse_schedule_pdf(f)
+    assert rows, 'sample PDF should still parse'
+    assert all(not r.section_id for r in rows)
+    # Everything else the printout DOES carry must still arrive intact.
+    assert all(r.course_number and r.course_title and r.term for r in rows)
+
+
+@needs_xls
+@needs_pdf
+def test_the_excel_export_is_the_richer_source():
+    """Stated plainly so the guidance in the import UI stays true: prefer Excel."""
+    with open(SAMPLE_XLS, 'rb') as f:
+        excel_rows = parse_schedule_excel(f)
+    with open(SAMPLE_PDF, 'rb') as f:
+        pdf_rows = parse_schedule_pdf(f)
+    assert sum(1 for r in excel_rows if r.section_id) > sum(
+        1 for r in pdf_rows if r.section_id)
