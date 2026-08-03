@@ -21,11 +21,14 @@ from app import db
 from app.models.course import Course
 from app.models.import_log import ImportLog
 from app.models.schedule import ScheduleEntry
+from app.models.staff import Staff
 from app.models.student import Student
 from app.routes.data_import import data_import_bp
 from app.utils.audit import log_action
 from app.utils.db_snapshot import snapshot_database
 from app.utils.schedule_parser import parse_schedule_file
+from app.utils.staff_directory import (
+    apply_staff_records, derive_staff_from_schedule, summarize as summarize_staff)
 from config import DATA_DIR
 
 # The preview payload is staged in a FILE between the two requests, with only a
@@ -218,10 +221,25 @@ def schedules_upload():
                               if m['credits'] is None and not m['is_non_class']
                               and not m['is_advisory']})
 
+    # Everything this upload would actually write. When the identity was
+    # unreadable the counselor assigns the file to a student right here, so
+    # those rows import too — summarising only `matched` would show nothing at
+    # all for a redacted single-student file that is about to import fine.
+    preview_rows = matched + (
+        [r for rows in unmatched.values() for r in rows] if needs_student_pick else [])
+
+    # Who this upload would add to the staff directory, shown before committing
+    # so a name that is misspelled in the SIS is caught here rather than
+    # becoming a duplicate teacher nobody notices.
+    staff_preview = summarize_staff(
+        derive_staff_from_schedule(preview_rows),
+        [s.name for s in Staff.query.with_entities(Staff.name).all()])
+
     return render_template(
         'data_import/schedules_preview.html',
         matched=matched, unmatched=dict(unmatched), students=students,
-        missing_credits=missing_credits,
+        missing_credits=missing_credits, staff_preview=staff_preview,
+        preview_rows=preview_rows,
         needs_student_pick=needs_student_pick,
         caseload=Student.query.filter_by(
             assigned_counselor_id=current_user.id, status='active'
@@ -319,6 +337,28 @@ def schedules_confirm():
             known.add(num)
             seeded_courses += 1
 
+    # Fill the staff directory from the same upload. Without this it stays empty
+    # until the first grades land, which is exactly the stretch of the year a
+    # counselor most needs to know who teaches what. Derived fields only ever
+    # fill blanks, so anything the counselor typed survives a re-import.
+    dept_by_course = {
+        c.course_number: c.department_name
+        for c in Course.query.with_entities(
+            Course.course_number, Course.department_name).all()
+        if c.course_number and c.department_name
+    }
+    derived_staff = derive_staff_from_schedule(rows, dept_by_course)
+    existing_staff = {}
+    if derived_staff:
+        existing_staff = {
+            s.name.strip().lower(): s for s in
+            Staff.query.filter(db.func.lower(Staff.name).in_(
+                list(derived_staff.keys()))).all()
+        }
+    staff_added, staff_enriched = apply_staff_records(
+        derived_staff, existing_staff,
+        lambda **fields: db.session.add(Staff(**fields)))
+
     db.session.add(ImportLog(
         user_id=current_user.id,
         import_type='schedules',
@@ -329,11 +369,19 @@ def schedules_confirm():
     db.session.commit()
     log_action('import', 'schedule',
                details=f'Imported {added} schedule rows for {len(pairs)} student-year(s); '
-                       f'replaced {replaced}; seeded {seeded_courses} course(s)')
+                       f'replaced {replaced}; seeded {seeded_courses} course(s); '
+                       f'staff {staff_added} added, {staff_enriched} updated')
 
     msg = f'Imported {added} schedule rows for {len({p[0] for p in pairs})} student(s).'
     if seeded_courses:
         msg += f' Added {seeded_courses} new course(s) to the catalog.'
+    if staff_added or staff_enriched:
+        bits = []
+        if staff_added:
+            bits.append(f'added {staff_added}')
+        if staff_enriched:
+            bits.append(f'filled in details for {staff_enriched}')
+        msg += f' Staff directory: {" and ".join(bits)}.'
     flash(msg, 'success')
     return redirect(url_for('data_import.index'))
 

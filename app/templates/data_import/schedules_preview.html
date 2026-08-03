@@ -22,22 +22,44 @@
         {# Section IDs are what let you tell two sections of the same course apart,
            so say plainly whether this file carried them rather than letting the
            counselor discover empty values after committing. #}
-        {% set with_section = matched|selectattr('section_id')|list|length %}
-        {% if with_section == matched|length and matched %}
+        {% set rows_in = preview_rows if preview_rows is defined else matched %}
+        {% set with_section = rows_in|selectattr('section_id')|list|length %}
+        {% if with_section == rows_in|length and rows_in %}
         <div class="alert alert-success" style="font-size:0.86rem;">
-            <strong>Section IDs captured</strong> on all {{ matched|length }} rows.
+            <strong>Section IDs captured</strong> on all {{ rows_in|length }} rows.
         </div>
         {% elif with_section %}
         <div class="alert alert-warning" style="font-size:0.86rem;">
-            <strong>Section IDs captured on {{ with_section }} of {{ matched|length }} rows.</strong>
+            <strong>Section IDs captured on {{ with_section }} of {{ rows_in|length }} rows.</strong>
             The rest will import without one.
         </div>
-        {% elif matched %}
+        {% elif rows_in %}
         <div class="alert alert-warning" style="font-size:0.86rem;">
             <strong>No section IDs in this file.</strong>
             Everything else imports fine, but you won't be able to tell two sections of
             the same course apart. Synergy's Excel export (U-SCH100) includes a
             <em>Section ID</em> column; the printed PDF schedule does not.
+        </div>
+        {% endif %}
+
+        {% if staff_preview and staff_preview.total %}
+        <div class="alert alert-info" style="font-size:0.86rem;">
+            <strong>Staff directory:</strong>
+            {% if staff_preview.new_count %}
+                {{ staff_preview.new_count }} new
+                {{ 'person' if staff_preview.new_count == 1 else 'people' }} will be added
+                {%- if staff_preview.known_count %}, {{ staff_preview.known_count }} already on file{% endif %}.
+                <details style="margin-top:6px;">
+                    <summary style="cursor:pointer;font-size:0.82rem;">Who?</summary>
+                    <div style="font-size:0.82rem;margin-top:4px;">{{ staff_preview.new|join(', ') }}</div>
+                </details>
+            {% else %}
+                all {{ staff_preview.total }} already on file &mdash; any blank room,
+                department or title will be filled in.
+            {% endif %}
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:6px;">
+                Room and department are read from the schedule. Anything you've typed yourself is left alone.
+            </div>
         </div>
         {% endif %}
 

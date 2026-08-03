@@ -13,6 +13,7 @@ from openpyxl import Workbook
 from app import db
 from app.models.course import Course
 from app.models.schedule import ScheduleEntry
+from app.models.staff import Staff
 from app.models.student import Student
 from app.models.user import User
 
@@ -87,6 +88,10 @@ def sched_env(app):
         ).delete(synchronize_session=False)
         Course.query.filter(Course.course_number.in_(
             [r[0] for r in ROWS])).delete(synchronize_session=False)
+        Staff.query.filter(Staff.name.in_(
+            [r[5] for r in ROWS])).delete(synchronize_session=False)
+        Staff.query.filter(db.func.lower(Staff.name).in_(
+            [r[5].lower() for r in ROWS])).delete(synchronize_session=False)
         Student.query.filter(Student.id.in_([ids['mine'], ids['theirs']])).delete(
             synchronize_session=False)
         User.query.filter(User.id.in_([ids['me'], ids['other']])).delete(
@@ -182,6 +187,76 @@ def test_import_seeds_the_course_catalog(app, sched_env):
         assert seeded.credits == 5.0
         # An administrative row is not a course.
         assert Course.query.filter_by(course_number='28436').first() is None
+
+
+def test_import_fills_the_staff_directory(app, sched_env):
+    """The directory used to stay empty until the first grades landed. A
+    schedule knows every teacher on day one."""
+    client, ids = sched_env
+    _import(client, _workbook(perm_id='SCHED-1'), default_credits='5')
+    with app.app_context():
+        by_name = {s.name: s for s in Staff.query.all()}
+        assert {'Mar, J.', 'Sands, K.', 'Owens, E.', 'Ho, J.'} <= set(by_name)
+        assert by_name['Mar, J.'].room == 'E114'
+        assert by_name['Mar, J.'].title == 'Teacher'
+        # The administrative row states the real job.
+        assert by_name['Ho, J.'].title == 'Administrator'
+        # ...and contributes no room, since that row has none.
+        assert not by_name['Ho, J.'].room
+
+
+def test_import_does_not_overwrite_staff_details_the_counselor_typed(app, sched_env):
+    """Re-importing must be safe: a corrected room stays corrected."""
+    client, ids = sched_env
+    with app.app_context():
+        db.session.add(Staff(name='mar, j.', room='Portable 3',
+                             email='mar@example.edu'))
+        db.session.commit()
+    _import(client, _workbook(perm_id='SCHED-1'), default_credits='5')
+    with app.app_context():
+        matches = Staff.query.filter(db.func.lower(Staff.name) == 'mar, j.').all()
+        assert len(matches) == 1, 'case difference created a duplicate teacher'
+        assert matches[0].room == 'Portable 3'
+        assert matches[0].email == 'mar@example.edu'
+        # A field that WAS blank still gets filled.
+        assert matches[0].title == 'Teacher'
+
+
+def test_reimporting_the_same_schedule_adds_no_duplicate_staff(app, sched_env):
+    client, ids = sched_env
+    _import(client, _workbook(perm_id='SCHED-1'), default_credits='5')
+    with app.app_context():
+        first = Staff.query.count()
+    _import(client, _workbook(perm_id='SCHED-1'), default_credits='5')
+    with app.app_context():
+        assert Staff.query.count() == first
+
+
+def test_preview_names_the_staff_that_would_be_added(app, sched_env):
+    """Shown before committing, so a name misspelled in the SIS is caught here
+    instead of quietly becoming a second teacher."""
+    client, ids = sched_env
+    r = client.post('/data-import/schedules',
+                    data={'files': (_workbook(perm_id='SCHED-1'), 's.xlsx')},
+                    content_type='multipart/form-data')
+    html = r.data.decode()
+    assert 'Staff directory' in html
+    assert 'Mar, J.' in html and 'Ho, J.' in html
+
+
+def test_preview_summaries_cover_a_file_whose_identity_is_unreadable(app, sched_env):
+    """A redacted single-student file puts every row in `unmatched` until the
+    counselor assigns it on this very page — those rows still import, so
+    summarising only the matched ones showed nothing at all."""
+    client, ids = sched_env
+    # Neither a perm ID nor a name — the redacted printout case.
+    r = client.post('/data-import/schedules',
+                    data={'files': (_workbook(), 's.xlsx')},
+                    content_type='multipart/form-data')
+    html = r.data.decode()
+    assert 'Choose student' in html, 'fixture should hit the manual-pick path'
+    assert 'Staff directory' in html, 'staff summary vanished on the pick path'
+    assert 'Section IDs captured' in html, 'section summary vanished on the pick path'
 
 
 def test_known_catalog_credits_win_over_the_default(app, sched_env):
