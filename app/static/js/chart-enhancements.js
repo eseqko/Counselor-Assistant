@@ -73,7 +73,9 @@
     Chart.defaults.elements.line.borderWidth = 2.5;
     Chart.defaults.elements.point.radius = 3.5;
     Chart.defaults.elements.point.hoverRadius = 6;
-    Chart.defaults.elements.arc.borderWidth = 2;
+    Chart.defaults.elements.arc.borderWidth = 3;
+    Chart.defaults.elements.arc.borderAlign = 'inner';
+    Chart.defaults.elements.bar.borderSkipped = false;   // outline all four sides
 
     /* Slightly nicer default font */
     if (Chart.defaults.font) {
@@ -161,4 +163,40 @@
     /* Surface color for slice/segment separators (the "gap" ring between
        donut arcs). Falls back to the old hardcoded white on light themes. */
     window.chartSurface = tok('--surface', _isDark ? '#1C1F2E' : '#ffffff');
+
+    /* ── 6. Stained-glass leading on pie/doughnut/bar ─────────────────────
+       A dark outline between filled shapes, the way lead came separates
+       panes of stained glass. It also does real work: adjacent slices of
+       similar hue stay distinguishable, which is the failure case a
+       colorblind viewer hits most often on a donut.
+
+       This has to be a plugin rather than a defaults tweak. Most charts in
+       this app pass their own per-dataset borderColor — usually the fill
+       hue again (`borderColor: COLORS.slice(...)`) — and a dataset value
+       always beats Chart.defaults.elements.*, so defaults alone would reach
+       almost none of them. Running on beforeUpdate reapplies after any
+       chart.update() that rebuilds datasets.
+
+       Line and radar datasets are deliberately untouched: for those,
+       borderColor IS the line, so overriding it would paint every series
+       the same colour and destroy the chart. */
+    var LEAD_TYPES = ['pie', 'doughnut', 'polarArea', 'bar'];
+    var leadColor = tok('--chart-outline', _isDark ? '#0B1220' : '#1E293B');
+
+    var stainedGlass = {
+        id: 'stainedGlass',
+        beforeUpdate: function(chart) {
+            var chartType = chart.config && chart.config.type;
+            (chart.data.datasets || []).forEach(function(ds) {
+                // A mixed chart lets a dataset override the chart's own type.
+                var type = ds.type || chartType;
+                if (LEAD_TYPES.indexOf(type) === -1) return;
+                ds.borderColor = leadColor;
+                ds.hoverBorderColor = leadColor;
+                ds.borderWidth = (type === 'bar') ? 2 : 3;
+                ds.hoverBorderWidth = (type === 'bar') ? 2.5 : 4;
+            });
+        },
+    };
+    Chart.register(stainedGlass);
 })();

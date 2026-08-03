@@ -16,6 +16,10 @@
     --bg: #F5F7FA;
     --sidebar-width: 260px;
     --header-height: 60px;
+    /* Leading between filled chart shapes (pie/doughnut/bar) — the dark line
+       that gives them a stained-glass read. Themes may override; chart JS
+       falls back to a dark slate if this is ever absent. */
+    --chart-outline: #1E293B;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
