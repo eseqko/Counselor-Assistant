@@ -3,12 +3,18 @@
 {% block page_title %}Data Import{% endblock %}
 {% block content %}
 
-{% macro import_badge(log) %}
+{# Status line for a data category. Every card gets one, so the hub reads as a
+   consistent inventory rather than showing a badge only where an import happens
+   to have been logged. Three states: imported (green), data present but no
+   import recorded — e.g. loaded before import logging existed, or seeded
+   (blue), and nothing yet (grey). #}
+{% macro import_badge(log, count=None, noun='records') %}
 {% if log %}
-<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:0.76rem;color:#065f46;margin-bottom:10px;">
+<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:0.76rem;color:#065f46;margin-bottom:10px;flex-wrap:wrap;">
     <span style="color:#16a34a;">&#9679;</span>
     Last import: {{ log.imported_at.strftime('%b %d, %Y at %I:%M %p') }}
     &mdash; {{ log.records_added }} added{% if log.records_updated %}, {{ log.records_updated }} updated{% endif %}
+    {% if log.records_skipped %}, {{ log.records_skipped }} skipped{% endif %}
     {% if log.grade_type %}
     <span style="background:{% if log.grade_type == 'progress' %}#fef3c7;color:#92400e{% else %}#dbeafe;color:#1e40af{% endif %};padding:1px 6px;border-radius:4px;font-weight:600;">{{ log.grade_type|title }}</span>
     {% endif %}
@@ -18,6 +24,16 @@
     {% if log.school_year %}
     <span style="color:var(--gray);">{{ log.school_year }}</span>
     {% endif %}
+    {% if count %}<span style="color:var(--gray);">&middot; {{ '{:,}'.format(count) }} {{ noun }} on file</span>{% endif %}
+</div>
+{% elif count %}
+<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:0.76rem;color:#1e40af;margin-bottom:10px;">
+    <span style="color:#3b82f6;">&#9679;</span>
+    {{ '{:,}'.format(count) }} {{ noun }} on file &mdash; no import recorded yet
+</div>
+{% else %}
+<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:0.76rem;color:var(--text-muted);margin-bottom:10px;">
+    <span>&#9675;</span> Nothing imported yet
 </div>
 {% endif %}
 {% endmacro %}
@@ -37,6 +53,10 @@
         <div class="stat-value">{{ elpac_count or 0 }}</div>
         <div class="stat-label">ELPAC Records</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ schedule_count or 0 }}</div>
+        <div class="stat-label">Schedule Rows</div>
+    </div>
 </div>
 
 <div class="grid-2">
@@ -44,7 +64,7 @@
     <div class="card">
         <div class="card-header">Attendance Data</div>
         <div class="card-body">
-            {{ import_badge(last_imports.get('attendance')) }}
+            {{ import_badge(last_imports.get('attendance'), attendance_count, 'attendance records') }}
             <p style="font-size:0.9rem;margin-bottom:12px;">
                 Import attendance records from your SIS (Synergy, Aeries, PowerSchool, etc.) to enable early warning detection and trend analysis.
             </p>
@@ -70,7 +90,7 @@
     <div class="card">
         <div class="card-header">Grades Data</div>
         <div class="card-body">
-            {{ import_badge(last_imports.get('grades')) }}
+            {{ import_badge(last_imports.get('grades'), grade_count, 'grade records') }}
             <p style="font-size:0.9rem;margin-bottom:12px;">
                 Import quarterly or progress report grades to track academic progress, identify failing students, and compare quarter-to-quarter trends.
             </p>
@@ -94,11 +114,44 @@
     </div>
 </div>
 
+<!-- Schedules -->
+<div class="card" style="margin-top:20px;">
+    <div class="card-header">Class Schedules</div>
+    <div class="card-body">
+        {{ import_badge(last_imports.get('schedules'), schedule_count, 'schedule rows') }}
+        <p style="font-size:0.9rem;margin-bottom:12px;">
+            Import the schedules students get on the first day. Powers the schedule on
+            each student's Academics tab, credits in progress, which staff teach your
+            students, and grouping by advisory.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+            <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-primary">Import Schedules</a>
+            <form method="POST" action="{{ url_for('data_import.seed_course_catalog') }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline">Load Course Catalog</button>
+            </form>
+        </div>
+        <div style="font-size:0.82rem;color:var(--gray);margin-bottom:12px;">
+            <strong>Load Course Catalog</strong> imports your district's course list
+            (credits, a-g, prerequisites) from the catalog already bundled with the
+            app. Do this once &mdash; it fills in credits automatically on every
+            future schedule import and switches on prerequisite checking.
+        </div>
+        <div style="font-size:0.82rem;color:var(--gray);">
+            <strong>Best:</strong> Synergy <code>U-SCH100</code> export (.xls, .xlsx, .csv) &mdash;
+            whole caseload in one file<br>
+            <strong>Also works:</strong> the printed first-day schedule PDF, one student per page<br>
+            <strong>Re-importing</strong> replaces that student's schedule for the same year,
+            so run it again whenever a schedule changes
+        </div>
+    </div>
+</div>
+
 <!-- ELPAC -->
 <div class="card" style="margin-top:20px;">
     <div class="card-header">ELPAC Scores (English Language Proficiency)</div>
     <div class="card-body">
-        {{ import_badge(last_imports.get('elpac')) }}
+        {{ import_badge(last_imports.get('elpac'), elpac_count, 'ELPAC records') }}
         <p style="font-size:0.9rem;margin-bottom:12px;">
             Upload <strong>Ellevation Education</strong> CSV exports directly. The file may include
             graduates, withdrawals, and students from other counselors &mdash; only students on
@@ -128,7 +181,7 @@
 <div class="card" style="margin-top:20px;">
     <div class="card-header">Student Info &mdash; Bulk Update</div>
     <div class="card-body">
-        {{ import_badge(last_imports.get('student_update')) }}
+        {{ import_badge(last_imports.get('student_update'), student_count, 'students') }}
         <p style="font-size:0.9rem;margin-bottom:12px;">
             Download a spreadsheet pre-filled with your caseload's current data (gender, ethnicity, advisory, parent info, etc.).
             Edit any fields in Excel, then upload to update all student profiles at once.

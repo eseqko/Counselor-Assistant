@@ -124,8 +124,12 @@ def _build_prep_pack(student):
     grad = _grad_snapshot(student)
     iep504 = IEP504Record.query.filter_by(student_id=student.id).first()
 
-    # Failing courses
-    failing = [g for g in grades if not g.is_passing]
+    # Failing courses. `is_passing` is None for 'NM' (not yet graded) — a bare
+    # `not g.is_passing` swept those into the failing list, which is exactly
+    # the wrong signal on the pack printed for a parent conference, and worst
+    # at the moment it matters most: _current_grades returns the LATEST
+    # quarter, when ungraded courses are most common.
+    failing = [g for g in grades if g.is_passing is False]
 
     return {
         'student': student,

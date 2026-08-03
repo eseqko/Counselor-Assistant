@@ -19,6 +19,47 @@ GRAD_REQUIREMENTS = {
 }
 TOTAL_REQUIRED = 225
 
+# Credits a student can earn in one full year at this school. JUHSD runs an
+# accelerated block — 4 classes x 4 quarters x 5 credits = 80 — so a student on
+# full pace reaches the 225-credit requirement partway through grade 11.
+#
+# This number is the difference between a credit flag that means something and
+# one that never fires: the previous benchmarks assumed roughly 55/year, so a
+# 9th grader who had FAILED HALF their courses (40 of a possible 80) still read
+# as "on-track", and in grades 10-12 that same student never got worse than
+# "warning". Override per school in Settings -> Graduation Requirements.
+DEFAULT_CREDITS_PER_YEAR = 80
+
+
+def get_grad_policy(user=None):
+    """Return this school's {'required', 'per_year'} credit policy.
+
+    Reads the school config so a district with different numbers isn't stuck
+    with JUHSD's. Falls back to the module defaults outside a request context
+    (scripts, tests, the scale bench) so nothing here needs a logged-in user.
+    """
+    required, per_year = TOTAL_REQUIRED, DEFAULT_CREDITS_PER_YEAR
+    try:
+        if user is None:
+            from flask_login import current_user
+            user = current_user if getattr(current_user, 'is_authenticated', False) else None
+        if user is not None:
+            from app.utils.school_config import get_school_config
+            cfg = get_school_config(user)
+            required = _positive(cfg.get('credits_required'), required)
+            per_year = _positive(cfg.get('credits_per_year'), per_year)
+    except Exception:
+        pass                      # never let a config read break a grad view
+    return {'required': required, 'per_year': per_year}
+
+
+def _positive(value, fallback):
+    try:
+        n = float(value)
+        return n if n > 0 else fallback
+    except (TypeError, ValueError):
+        return fallback
+
 # California State Minimum (Ed Code 51225.3) — for AB exemption-eligible students
 # 13 year-long courses = 130 credits. No electives required at state level.
 STATE_MIN_REQUIREMENTS = {
@@ -78,6 +119,10 @@ def _compute_credits_from_grades(student_id):
 
     # Accumulate passing credits by mapped grad-requirement subjects
     earned = defaultdict(float)
+    # NOTE: `not g.is_passing` is CORRECT here, unlike in mail_merge/meeting_prep.
+    # is_passing is None for ungraded 'NM', and an ungraded course must not count
+    # toward earned credit — so folding None in with False is the intended
+    # outcome. Do not "fix" this to `is False` in a mechanical sweep.
     for g in grades:
         if not g.is_passing:
             continue
@@ -123,6 +168,10 @@ def _compute_ag_from_grades(student_id):
         return None
 
     earned = defaultdict(float)
+    # NOTE: `not g.is_passing` is CORRECT here, unlike in mail_merge/meeting_prep.
+    # is_passing is None for ungraded 'NM', and an ungraded course must not count
+    # toward earned credit — so folding None in with False is the intended
+    # outcome. Do not "fix" this to `is False` in a mechanical sweep.
     for g in grades:
         if not g.is_passing or not g.is_ag:
             continue
@@ -145,28 +194,75 @@ def _compute_ag_from_grades(student_id):
     return result
 
 
-def _risk_level(total_completed, total_required, grade_level):
-    """Compute graduation risk level based on credits and grade."""
+def expected_credits_by_end_of(grade_level, total_required=None, per_year=None):
+    """Credits a student should hold at the END of ``grade_level``.
+
+    Earning capacity x years completed, CAPPED at the graduation requirement —
+    never expect more than it takes to graduate. At JUHSD's 80/year that gives
+    80 / 160 / 225 / 225 for grades 9-12, rather than the old 34 / 90 / 146 /
+    191, whose top end was the giveaway: it expected only 85% of the credits
+    needed to graduate at the end of senior year, so a student could hit every
+    benchmark and still not graduate.
+    """
+    if not grade_level or grade_level < 9 or grade_level > 12:
+        return None
+    policy = get_grad_policy()
+    required = total_required or policy['required']
+    per_year = per_year or policy['per_year']
+    return min(per_year * (grade_level - 8), required)
+
+
+def _risk_level(total_completed, total_required, grade_level, per_year=None):
+    """Graduation risk from credits earned, against this school's real pace.
+
+    Two independent signals, worst one wins:
+
+    1. PACE — earned vs. what a student on full pace would hold by now.
+    2. FEASIBILITY — whether the requirement is still mathematically reachable:
+       earned + (per_year x years remaining) >= required. A junior 100 credits
+       in with one year and 80 credits of capacity left CANNOT finish on time,
+       and no pace ratio expresses that. This check can only make the verdict
+       worse, never better.
+    """
     if not grade_level or not total_required:
         return 'unknown'
-    # Expected progress: roughly proportional to semesters completed
-    # Grade 9 end ≈ 25%, Grade 10 end ≈ 50%, Grade 11 end ≈ 75%, Grade 12 end = 100%
-    expected_pct = {9: 0.15, 10: 0.40, 11: 0.65, 12: 0.85}
-    expected = total_required * expected_pct.get(grade_level, 0.5)
+    policy = get_grad_policy()
+    per_year = per_year or policy['per_year']
+    total_completed = total_completed or 0
+
+    expected = expected_credits_by_end_of(grade_level, total_required, per_year)
+    if not expected:
+        return 'unknown'
 
     if total_completed < expected * 0.6:
-        return 'critical'
+        level = 'critical'
     elif total_completed < expected * 0.8:
-        return 'at-risk'
+        level = 'at-risk'
     elif total_completed < expected * 0.95:
-        return 'warning'
-    return 'on-track'
+        level = 'warning'
+    else:
+        level = 'on-track'
+
+    years_left = max(0, 12 - grade_level)
+    if total_completed + per_year * years_left < total_required:
+        level = 'critical'          # cannot reach the requirement in time
+    return level
 
 
-# Cumulative end-of-grade credit benchmarks (same numbers _risk_level uses).
-_EOY_PCT = {9: 0.15, 10: 0.40, 11: 0.65, 12: 0.85}
-# Credits already accumulated entering each grade (end of previous grade).
-_SOG_PCT = {9: 0.00, 10: 0.15, 11: 0.40, 12: 0.65}
+def can_still_graduate_on_time(total_completed, grade_level,
+                               total_required=None, per_year=None):
+    """Whether the requirement is still reachable by the end of grade 12.
+
+    Exposed separately so the action plan can say "needs a credit-recovery
+    plan beyond a normal schedule" instead of only colouring a badge.
+    """
+    if not grade_level or grade_level > 12:
+        return True
+    policy = get_grad_policy()
+    required = total_required or policy['required']
+    per_year = per_year or policy['per_year']
+    years_left = max(0, 12 - grade_level)
+    return (total_completed or 0) + per_year * years_left >= required
 
 EXPECTED_AG_BY_GRADE = {
     9:  (0, 1, "foundation building"),
@@ -176,23 +272,29 @@ EXPECTED_AG_BY_GRADE = {
 }
 
 
-def expected_progress(grade_level, quarter=4, total_required=TOTAL_REQUIRED):
+def expected_progress(grade_level, quarter=4, total_required=None, per_year=None):
     """Return grade- AND quarter-relative expectations.
 
-    Quarter is 1-4; defaults to 4 (year-end). Linear interpolation between
-    start-of-grade (Q0) and end-of-grade (Q4) credit benchmarks. Returns
-    None for grades outside 9-12 (middle school has no HS credit baseline).
+    Quarter is 1-4; defaults to 4 (year-end). Interpolates linearly between
+    the end of the previous grade and the end of this one, both derived from
+    the school's actual earning capacity rather than hardcoded percentages.
+    Returns None outside grades 9-12 (middle school has no HS baseline).
     """
     if not grade_level or grade_level < 9 or grade_level > 12:
         return None
+    policy = get_grad_policy()
+    required = total_required or policy['required']
+    per_year = per_year or policy['per_year']
+
     quarter = max(1, min(int(quarter or 4), 4))
-    start_pct = _SOG_PCT[grade_level]
-    end_pct = _EOY_PCT[grade_level]
-    progress_pct = start_pct + (end_pct - start_pct) * (quarter / 4)
+    start = expected_credits_by_end_of(grade_level - 1, required, per_year) or 0
+    end = expected_credits_by_end_of(grade_level, required, per_year)
+    credits_expected = start + (end - start) * (quarter / 4)
+
     ag_low, ag_high, ag_label = EXPECTED_AG_BY_GRADE[grade_level]
     return {
-        'credits_expected': round(total_required * progress_pct),
-        'credits_pct': progress_pct,
+        'credits_expected': round(credits_expected),
+        'credits_pct': (credits_expected / required) if required else 0,
         'quarter': quarter,
         'ag_expected_low': ag_low,
         'ag_expected_high': ag_high,

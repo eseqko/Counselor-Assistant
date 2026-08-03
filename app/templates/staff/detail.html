@@ -178,7 +178,7 @@
                         {{ '←' if c.direction == 'incoming' else '→' }} {{ c.type_label }}
                     </span>
                     <strong style="flex:1; font-size:0.9rem;">{{ c.subject or '(no subject)' }}</strong>
-                    <span style="color:var(--gray); font-size:0.78rem;">{{ c.contact_date.strftime('%b %-d') }}</span>
+                    <span style="color:var(--gray); font-size:0.78rem;">{{ c.contact_date | smartdate('%b %-d') }}</span>
                 </div>
                 {% if c.summary %}
                 <div style="color:var(--text); font-size:0.84rem; margin-top:4px; white-space:pre-wrap;">{{ c.summary[:200] }}{% if c.summary|length > 200 %}…{% endif %}</div>
@@ -187,11 +187,11 @@
                 <div style="margin-top:6px; display:flex; gap:8px; align-items:center; font-size:0.82rem;">
                     {% if c.follow_up_completed %}
                     <span style="color:var(--gray); text-decoration:line-through;">
-                        Followed up {{ c.follow_up_date.strftime('%b %-d') if c.follow_up_date else '' }}
+                        Followed up {{ c.follow_up_date | smartdate('%b %-d') if c.follow_up_date else '' }}
                     </span>
                     {% else %}
                     <span style="background:#FFF3D6; color:#996300; padding:2px 8px; border-radius:10px; font-weight:600;">
-                        Follow up{% if c.follow_up_date %} by {{ c.follow_up_date.strftime('%b %-d') }}{% endif %}
+                        Follow up{% if c.follow_up_date %} by {{ c.follow_up_date | smartdate('%b %-d') }}{% endif %}
                     </span>
                     {% if c.follow_up_notes %}<span style="color:var(--gray);">— {{ c.follow_up_notes[:80] }}</span>{% endif %}
                     <form method="POST" action="{{ url_for('staff.complete_followup', comm_id=c.id) }}" style="display:inline;">

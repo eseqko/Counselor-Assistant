@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 from app.models.student import Student
 from app.models.grade import GradeRecord
 from app.routes.graduation import _build_student_grad_data, TOTAL_REQUIRED
+from app.utils.helpers import current_school_year
 
 mail_merge_bp = Blueprint('mail_merge', __name__)
 
@@ -22,26 +23,26 @@ BUILTIN_TEMPLATES = [
         'name': 'Senior At-Risk of Not Graduating',
         'category': 'graduation',
         'body': (
-            'April 2nd, 2026\n\n'
+            '{{date}}\n\n'
             'To: Parent/Guardian of {{student_name}}\n'
             'Address: {{address}}\n\n'
-            'Re: URGENT \u2014 {{student_first_name}}\u2019s Graduation Status (Class of 2026)\n\n'
+            'Re: URGENT \u2014 {{student_first_name}}\u2019s Graduation Status (Class of {{grad_year}})\n\n'
             'Dear Parent of {{student_first_name}},\n\n'
-            '{{student_first_name}} is at risk of not graduating in May 2026 due to a credit deficiency. '
+            '{{student_first_name}} is at risk of not graduating in May {{grad_year}} due to a credit deficiency. '
             'Immediate action is required. {{student_first_name}} must pass the following classes they are '
             'currently enrolled in and additional courses:\n\n'
             '{{current_courses}}\n\n'
             'Graduation Requirements:\n'
             '  \u2022 225 total credits.\n'
             '  \u2022 Pass Specific Subject Requirements (see enclosed transcript).\n\n'
-            'Time-Sensitive Solutions (November 2025\u2014May 2026):\n'
+            'Time-Sensitive Solutions (this school year, {{school_year}}):\n'
             'Actions to be taken now:\n'
             '  \u2022 Register for APEX after school courses: In-person after school. Please see your counselor to register if you haven\u2019t done so.\n'
             '  \u2022 Flex Time: Sign up to see your teachers in classes you need in order to graduate (Tuesdays and Thursdays 11:35am-12:10pm)\n'
             '  \u2022 24/7 Tutoring: Access Paper.co with your School Google Account in order to receive online tutoring 24 hours a day/ 7 days a week.\n'
             '  \u2022 Thornton High School: Transfers to Thornton High School are done Quarterly. Please contact your student\u2019s counselor for this option.\n\n'
             'If you do not graduate in May:\n'
-            'JUHSD Senior Studies (June 2026):\n'
+            'JUHSD Senior Studies (June {{grad_year}}):\n'
             '  \u2022 Earn up to 25 credits through APEX.\n\n'
             'Critical Next Steps:\n'
             '  1. Schedule a Meeting:\n'
@@ -49,7 +50,7 @@ BUILTIN_TEMPLATES = [
             '  2. Monitor Progress:\n'
             '     \u2022 Check ParentVUE for real-time updates.\n\n'
             'Consequences of Inaction:\n'
-            'Without these credits, {{student_first_name}} will not receive a diploma in May 2026, and '
+            'Without these credits, {{student_first_name}} will not receive a diploma in May {{grad_year}}, and '
             'cannot participate in Graduation activities at Jefferson High School. Let\u2019s collaborate to '
             'ensure their success.\n\n\n'
             '{{counselor_name}}, School Counselor\n'
@@ -87,9 +88,14 @@ def _save_custom_templates(templates):
         json.dump(all_templates, f, indent=2)
 
 
+def _grad_year():
+    """Calendar year the current school year graduates in (e.g. '2027')."""
+    return current_school_year().split('-')[1]
+
+
 def _get_current_courses(student_id):
     """Get the student's current-year courses as a formatted string."""
-    current_year = '2025-2026'
+    current_year = current_school_year()
     grades = GradeRecord.query.filter_by(
         student_id=student_id,
         school_year=current_year,
@@ -107,7 +113,14 @@ def _get_current_courses(student_id):
     lines = []
     for g in seen.values():
         grade_str = g.letter_grade or ''
-        status = 'Passing' if g.is_passing else 'NOT PASSING'
+        # `is_passing` is None for 'NM' (teacher hasn't graded yet) — a bare
+        # falsy test printed "NOT PASSING" to a parent for an ungraded course.
+        if g.is_passing:
+            status = 'Passing'
+        elif g.is_passing is False:
+            status = 'NOT PASSING'
+        else:
+            status = 'Not Yet Graded'
         lines.append(f'  \u2022 {g.course_name} \u2014 Current Grade: {grade_str} ({status})')
     return '\n'.join(lines) if lines else '(No current course data available)'
 
@@ -127,6 +140,10 @@ def _merge_letter(template_body, student, extra=None):
         '{{parent_phone}}': student.parent_guardian_phone or '',
         '{{counselor_name}}': current_user.display_name or current_user.username,
         '{{date}}': date.today().strftime('%B %d, %Y'),
+        # Derived from the calendar, not hardcoded — these appear in letters
+        # that go to parents, where a stale year is worse than no year.
+        '{{grad_year}}': _grad_year(),
+        '{{school_year}}': current_school_year(),
         '{{credits_completed}}': str(grad_data['total_completed']),
         '{{credits_needed}}': str(grad_data['total_needed']),
         '{{credits_required}}': str(TOTAL_REQUIRED),

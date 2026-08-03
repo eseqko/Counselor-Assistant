@@ -1,0 +1,172 @@
+{% if schedule_analysis %}
+{% set a = schedule_analysis %}
+<div class="card" style="border-left:3px solid {{ 'var(--danger)' if a.has_issues else 'var(--success)' }};">
+    <div class="card-header">
+        Schedule Check
+        {% if a.has_issues %}
+            <span class="badge badge-danger">{{ a.blocking_count + a.completeness.gaps|length }} to review</span>
+        {% else %}
+            <span class="badge badge-success">Looks good</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div style="font-size:0.88rem;margin-bottom:10px;">
+            <strong>{{ a.completeness.classes|round(1)|int if a.completeness.classes == a.completeness.classes|round(0) else a.completeness.classes }}</strong>
+            of {{ a.completeness.expected_classes }} classes
+            {% if a.completeness.gaps %}
+                &mdash; <span style="color:var(--danger);font-weight:600;">
+                {{ a.completeness.gaps|length }} empty slot{{ '' if a.completeness.gaps|length == 1 else 's' }}</span>:
+                {% for g in a.completeness.gaps %}Period {{ g.period }} {{ g.term }}{{ ', ' if not loop.last }}{% endfor %}
+            {% else %}
+                &mdash; every period filled all year
+            {% endif %}
+        </div>
+
+        {% if a.completeness.non_credit_entries %}
+        <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px;">
+            Counted as classes but earning no credit:
+            {# one entry per quarter, so show each placement once #}
+            {% for title in a.completeness.non_credit_entries|map(attribute='course_title')|unique|sort %}{{ title }}{{ ', ' if not loop.last }}{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if a.findings %}
+        <table style="font-size:0.85rem;">
+            <thead><tr><th style="width:1%;">Per</th><th>Course</th><th>Prerequisite</th></tr></thead>
+            <tbody>
+            {% for f in a.findings %}
+            {% set style = {'missing': ('badge-danger', 'Not met'),
+                            'low_grade': ('badge-danger', 'Grade too low'),
+                            'in_progress': ('badge-info', 'In progress'),
+                            'review': ('badge-warning', 'Check by hand'),
+                            'advisory': ('badge-info', 'Recommended')} %}
+            <tr>
+                <td>{{ f.period }}</td>
+                <td>{{ f.course_title }} <span style="color:var(--text-muted);">({{ f.term }})</span></td>
+                <td>
+                    <span class="badge {{ style[f.status][0] }}">{{ style[f.status][1] }}</span>
+                    {{ f.detail or f.requirement }}
+                    {% if f.status == 'in_progress' %}
+                    <div style="font-size:0.78rem;color:var(--text-muted);">
+                        Taken earlier this year &mdash; re-check at the semester break.
+                    </div>
+                    {% elif f.status == 'review' %}
+                    <div style="font-size:0.78rem;color:var(--text-muted);">
+                        Not something a transcript can answer.
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if course_outcomes and course_outcomes.courses %}
+<div class="card" style="border-left:3px solid {{ 'var(--danger)' if course_outcomes.failing_count else 'var(--success)' }};">
+    <div class="card-header">
+        Course Grades
+        <span style="font-size:0.8rem;font-weight:400;color:var(--text-muted);">{{ schedule_year }}</span>
+        {% if course_outcomes.failing_count %}
+            <span class="badge badge-danger">{{ course_outcomes.failing_count }} at D or F</span>
+        {% else %}
+            <span class="badge badge-success">No D/F</span>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr>
+                <th style="width:1%;">Per</th><th>Course</th><th>Teacher</th><th style="width:1%;">Grade</th>
+            </tr></thead>
+            <tbody>
+            {% for c in course_outcomes.courses %}
+                <tr {% if c.failing %}style="background:rgba(239,68,68,0.08);"{% endif %}>
+                    <td>{{ c.period if c.period is not none else '-' }}</td>
+                    <td style="font-size:0.86rem;">{{ c.course_title }}</td>
+                    <td style="font-size:0.86rem;">{{ c.teacher or '-' }}</td>
+                    <td style="font-size:0.86rem;font-weight:700;
+                        {% if c.failing %}color:var(--danger);{% elif not c.graded %}color:var(--text-muted);{% endif %}">
+                        {% if c.graded %}{{ c.letter }}{% else %}&mdash;{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+            Most recent graded term per course &mdash; a D pulled up to a C shows the C.
+            A dash means the course isn't graded yet.
+            {% if course_outcomes.failing_count %}
+            See <a href="{{ url_for('reports.outcomes_by_section') }}">Outcomes by Section</a>
+            for how your whole caseload is doing in these teachers' sections.
+            {% endif %}
+        </p>
+    </div>
+</div>
+{% endif %}
+
+{% if schedule_by_period %}
+<div class="card">
+    <div class="card-header">
+        Class Schedule
+        <span style="font-size:0.8rem;font-weight:400;color:var(--text-muted);">
+            {{ schedule_year }}
+            {% if schedule_credits %}&middot; {{ schedule_credits }} credits in progress{% endif %}
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr>
+                <th style="width:1%;">Per</th><th>Course</th><th>Teacher</th>
+                <th>Room</th><th style="width:1%;">Term</th><th style="width:1%;">Credits</th>
+            </tr></thead>
+            <tbody>
+            {% for period, entries in schedule_by_period %}
+                {% for e in entries %}
+                <tr>
+                    {% if loop.first %}
+                    <td rowspan="{{ entries|length }}" style="font-weight:700;vertical-align:middle;">
+                        {{ period if period is not none else '-' }}
+                    </td>
+                    {% endif %}
+                    <td style="font-size:0.86rem;">
+                        {{ e.course_title }}
+                        {% if e.is_advisory %}<span class="badge badge-success">Advisory</span>{% endif %}
+                        {% if e.is_non_class %}<span class="badge badge-warning">Not a class</span>{% endif %}
+                        <div style="font-size:0.74rem;color:var(--text-muted);font-family:ui-monospace,monospace;">
+                            {{ e.course_number }}{% if e.section_id %} &middot; {{ e.section_id }}{% endif %}
+                        </div>
+                    </td>
+                    <td style="font-size:0.86rem;">{{ e.teacher_name or '-' }}</td>
+                    <td style="font-size:0.86rem;">{{ e.room or '-' }}</td>
+                    <td><span class="badge badge-info">{{ e.term }}</span></td>
+                    <td style="font-size:0.86rem;">
+                        {% if e.counts_for_credit %}
+                            {% if e.credits is not none %}{{ e.credits }}
+                            {% else %}<span style="color:var(--warning);">&mdash;</span>{% endif %}
+                        {% else %}&mdash;{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-header">Class Schedule</div>
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No schedule on file for {{ student.first_name }}.</p>
+            <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-sm btn-primary">
+                Import Schedules
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}

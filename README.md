@@ -193,6 +193,7 @@ Every step is skippable. You can change all settings later under **Settings**.
 ## FERPA & Security
 
 - All data stored in a local SQLite database (`data/counselor.db`)
+- **Turn on full-disk encryption — this is a hard prerequisite, not a suggestion.** The database and everything in `data/uploads/` are stored in plaintext on disk, so the app's login protects access *through the app*, not access to the files. Anyone who walks off with the laptop, or reads the drive from another OS, has the whole caseload. Enable **BitLocker** (Windows: Settings → Privacy & security → Device encryption) or **FileVault** (macOS: Settings → Privacy & Security → FileVault) before putting real student data in. On a lost unencrypted laptop this is a reportable FERPA breach with no work factor at all
 - No network requests except optional Google Calendar / Forms / Classroom integration (your FERPA-covered Google Workspace)
 - Session auto-timeout after 30 minutes of inactivity, with Flask-Login `session_protection='strong'` (invalidates on remote-address / user-agent change)
 - Complete audit trail of all data access (view, create, update, delete, export). `log_action()` commits immediately so the FERPA "who viewed which record" trail persists even on read-only GETs
@@ -201,9 +202,13 @@ Every step is skippable. You can change all settings later under **Settings**.
 - CSRF protection on all state-changing forms (Flask-WTF `CSRFProtect`)
 - **Per-resource ownership** enforced via `owned_or_404` across notes, documents, students, goals, referrals, interventions, consents, and communications — non-owned IDs return **404** (deliberately, so a 403 doesn't confirm a record exists on another counselor's caseload). Admins bypass for department-wide oversight
 - **Content-Security-Policy** locks `default-src` to `'self'` — no external hosts. Worker scripts allowed from `'self' blob:` for the transcript renderer. Uploaded SVG logos are served with a tighter `sandbox` CSP that neutralizes SVG-borne XSS
-- **SSRF guard** on the Ollama base URL: only loopback, RFC-1918 private ranges, and the Tailscale CGNAT range (100.64.0.0/10) are accepted. Public hosts and the 169.254.169.254 cloud-metadata IP are refused
-- **CSV/Excel exports** neutralize spreadsheet formula injection (`=`, `+`, `-`, `@` prefixes get an apostrophe)
+- **SSRF guards** on every URL the server fetches. The Ollama base URL accepts only loopback, RFC-1918 private ranges, and the Tailscale CGNAT range (100.64.0.0/10). The external iCal URL is the inverse — it must be public, so loopback/private/link-local/tailnet addresses are refused, blocking the 169.254.169.254 cloud-metadata endpoint. The iCal URL is re-checked on every fetch (not just when saved, which DNS rebinding would defeat) and redirects are not followed
+- **First-run setup is loopback-only.** The wizard can't require a login — no account exists yet — so it accepts requests only from the machine itself, preventing anyone else on the network from claiming the account on a fresh install or after a factory reset. Override with `COUNSELOR_ALLOW_REMOTE_SETUP=1` if you must provision remotely
+- **Rate limits on the unauthenticated surfaces:** public booking confirmations and student-portal AI generation are capped per IP, and the public free-text fields are length-capped
+- **CSV/Excel exports** neutralize spreadsheet formula injection (`=`, `+`, `-`, `@` prefixes get an apostrophe) across the caseload export, report exports, and the shared template builder — so a roster row named `=HYPERLINK(...)` can't become a live formula in a workbook you email to an administrator. Numeric and date cells keep their native types
 - Optional: Ollama AI assistant runs 100% locally (no data sent to cloud)
+- **Whole-database actions are gated** -- Backup, Export, Import, Cleanup, and Factory Reset require an admin account, or are allowed when yours is the only account on the install (where you own all the data anyway). A second counselor cannot download the database or wipe the audit trail
+- **Automatic pre-flight snapshot** before the end-of-year rollover, which mutates every student at once. The in-app undo expires after 24 hours; the snapshot in `data/backups/` does not
 - **Factory Reset** -- Settings → Danger Zone → Reset App wipes the database, uploads, and your account in one click (requires typing `RESET` to confirm)
 
 ---

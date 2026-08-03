@@ -6,13 +6,14 @@ from app.utils.student_tools_registry import STUDENT_TOOLS, get_student_tool
 from app.utils import ollama_client
 from app.utils.stream_helpers import stream_sse
 from app.utils.context_budget import budget_prompt
+from app.utils.ratelimit import rate_limit
 
 student_portal_bp = Blueprint('student_portal', __name__,
                               template_folder='../templates/student_portal')
 
 
 def _get_counselor_by_token(token):
-    return User.query.filter_by(calendar_feed_token=token).first()
+    return User.query.filter_by(portal_token=token).first()
 
 
 @student_portal_bp.route('/<token>')
@@ -44,6 +45,9 @@ def tool_page(token, tool_id):
 
 @student_portal_bp.route('/<token>/generate', methods=['POST'])
 @csrf.exempt
+# Unauthenticated LLM inference — a token-holder should not get unlimited
+# free compute on the counselor's Ollama server.
+@rate_limit('portal_generate', limit=10, window=300)
 def generate(token):
     counselor = _get_counselor_by_token(token)
     if not counselor:
@@ -79,6 +83,7 @@ def generate(token):
 
 @student_portal_bp.route('/<token>/generate-stream', methods=['POST'])
 @csrf.exempt
+@rate_limit('portal_generate', limit=10, window=300)
 def generate_stream(token):
     counselor = _get_counselor_by_token(token)
     if not counselor:

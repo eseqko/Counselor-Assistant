@@ -5,9 +5,21 @@ from flask_login import login_required, current_user
 from app import db
 from app.models.student import Student
 from app.models.college_career import CollegeCareerPlan, CollegeApplication, TestScore
-from app.utils.roles import owned_or_404
+from app.utils.roles import owned_or_404, caseload_student_or_404
 
 college_career_bp = Blueprint('college_career', __name__)
+
+
+def _owned_plan_child_or_404(model, obj_id):
+    """Fetch a CollegeApplication/TestScore scoped to the caller's caseload.
+
+    Neither child carries an owner column — only plan_id — and the parent's
+    CollegeCareerPlan.counselor_id is nullable, so it can't be relied on.
+    Resolve ownership through the student instead, which is always assigned.
+    """
+    obj = model.query.get_or_404(obj_id)
+    caseload_student_or_404(obj.plan.student_id)
+    return obj
 
 
 def _parse_date(val):
@@ -225,7 +237,7 @@ def add_application(student_id):
 @college_career_bp.route('/application/<int:app_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_application(app_id):
-    app_record = CollegeApplication.query.get_or_404(app_id)
+    app_record = _owned_plan_child_or_404(CollegeApplication, app_id)
     plan = app_record.plan
     student = plan.student
 
@@ -254,7 +266,7 @@ def edit_application(app_id):
 @college_career_bp.route('/application/<int:app_id>/delete', methods=['POST'])
 @login_required
 def delete_application(app_id):
-    app_record = CollegeApplication.query.get_or_404(app_id)
+    app_record = _owned_plan_child_or_404(CollegeApplication, app_id)
     student_id = app_record.plan.student_id
     name = app_record.college_name
     db.session.delete(app_record)
@@ -294,7 +306,7 @@ def add_test(student_id):
 @college_career_bp.route('/test/<int:test_id>/delete', methods=['POST'])
 @login_required
 def delete_test(test_id):
-    score = TestScore.query.get_or_404(test_id)
+    score = _owned_plan_child_or_404(TestScore, test_id)
     student_id = score.plan.student_id
     db.session.delete(score)
     db.session.commit()

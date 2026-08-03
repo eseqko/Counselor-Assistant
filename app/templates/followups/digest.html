@@ -62,7 +62,7 @@
         </div>
         <div class="meta">
             <span class="due {{ urgency }}">
-                {% if it.due %}{{ it.due.strftime('%a %b %-d') }}{% else %}No date{% endif %}
+                {% if it.due %}{{ it.due | smartdate('%a %b %-d') }}{% else %}No date{% endif %}
             </span>
             ·
             {% if it.who_url %}<a href="{{ it.who_url }}">{{ it.who }}</a>{% else %}{{ it.who }}{% endif %}
@@ -81,9 +81,9 @@
     <span class="hint">
         {% if total_open %}
             {{ total_open }} open follow-up{{ '' if total_open == 1 else 's' }}
-            · {{ today.strftime('%A, %b %-d') }}
+            · {{ today | smartdate('%A, %b %-d') }}
         {% else %}
-            All caught up — {{ today.strftime('%A, %b %-d') }}
+            All caught up — {{ today | smartdate('%A, %b %-d') }}
         {% endif %}
     </span>
     <a href="{{ url_for('followups.index') }}" class="btn btn-sm btn-outline">Student Follow-Up Tracker</a>

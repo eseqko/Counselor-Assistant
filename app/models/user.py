@@ -21,7 +21,16 @@ class User(UserMixin, db.Model):
     school_name = db.Column(db.String(200), default='')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_login = db.Column(db.DateTime)
+    # LEGACY: this single token used to gate the student portal, the public
+    # booking page AND the private iCal feed. The portal link is meant to be
+    # broadcast to a whole caseload, so any student holding it could swap the
+    # path and read the counselor's calendar — student names and free-text
+    # note bodies included. Split into three independently rotatable tokens
+    # below; kept only so the one-time migration can seed them.
     calendar_feed_token = db.Column(db.String(64), unique=True)
+    portal_token = db.Column(db.String(64), unique=True, index=True)
+    booking_token = db.Column(db.String(64), unique=True, index=True)
+    ical_feed_token = db.Column(db.String(64), unique=True, index=True)
     external_ical_url = db.Column(db.String(500))
     school_config_json = db.Column(db.Text)  # JSON: school name, colors, mascot for catalog
     google_token_json = db.Column(db.Text)  # OAuth 2.0 token JSON for Google APIs
@@ -43,10 +52,45 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
     def get_or_create_feed_token(self):
+        """DEPRECATED — use the per-surface accessors below.
+
+        Retained because the migration seeds from it and older links may still
+        reference it. New code must never gate a surface on this value.
+        """
         if not self.calendar_feed_token:
             self.calendar_feed_token = secrets.token_urlsafe(32)
             db.session.commit()
         return self.calendar_feed_token
+
+    def _get_or_create(self, attr):
+        if not getattr(self, attr):
+            setattr(self, attr, secrets.token_urlsafe(32))
+            db.session.commit()
+        return getattr(self, attr)
+
+    def get_or_create_portal_token(self):
+        """Student-facing portal link. Broadcast to the whole caseload."""
+        return self._get_or_create('portal_token')
+
+    def get_or_create_booking_token(self):
+        """Public booking page. Shared with parents and students."""
+        return self._get_or_create('booking_token')
+
+    def get_or_create_ical_token(self):
+        """PRIVATE calendar feed — discloses student names and note text.
+
+        Never share this one. It is deliberately seeded fresh rather than from
+        calendar_feed_token, because that value is already in students' hands.
+        """
+        return self._get_or_create('ical_feed_token')
+
+    def rotate_token(self, surface):
+        """Invalidate and reissue exactly one surface's token."""
+        attr = {'portal': 'portal_token', 'booking': 'booking_token',
+                'ical': 'ical_feed_token'}[surface]
+        setattr(self, attr, secrets.token_urlsafe(32))
+        db.session.commit()
+        return getattr(self, attr)
 
 
 class AuditLog(db.Model):

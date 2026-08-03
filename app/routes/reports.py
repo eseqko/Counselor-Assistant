@@ -9,7 +9,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.grade import GradeRecord
 from app.models.transcript import TranscriptRecord
 from app.utils.audit import log_action
-from app.utils.helpers import parse_date
+from app.utils.helpers import parse_date, current_school_year
 from app.utils.security import csv_safe
 from app.utils.roles import owned_or_404
 from datetime import date, timedelta
@@ -471,9 +471,16 @@ def cohort_trends():
             att_weekly_rates[week] = round((1 - data['absent'] / data['total']) * 100, 1)
 
     # --- Grade distribution by quarter ---
+    # Scoped to ONE school year. Without this filter the buckets are keyed on
+    # quarter alone, so a student's 9th-grade Q1 and 12th-grade Q1 merge into a
+    # single "Q1" column — a *trend* report whose time axis flattens further
+    # every year the caseload accumulates history. Also feeds grades_by_subject
+    # below, so subject pass rates and GPA were lifetime averages too.
+    trend_year = request.args.get('school_year') or current_school_year()
     grade_dist_by_quarter = defaultdict(lambda: defaultdict(int))
     all_grades = GradeRecord.query.filter(
-        GradeRecord.student_id.in_(student_ids)
+        GradeRecord.student_id.in_(student_ids),
+        GradeRecord.school_year == trend_year,
     ).all()
     for g in all_grades:
         q_label = f"Q{g.quarter}" if g.quarter else "Unknown"
@@ -605,7 +612,7 @@ def asca_results_add():
 @login_required
 def asca_results_view(id):
     from app.models.asca_program import ASCAProgram
-    prog = ASCAProgram.query.get_or_404(id)
+    prog = owned_or_404(ASCAProgram, id)
     log_action('view', 'asca_program', prog.id)
     return render_template('reports/asca_results_view.html', program=prog)
 
@@ -614,7 +621,7 @@ def asca_results_view(id):
 @login_required
 def asca_results_edit(id):
     from app.models.asca_program import ASCAProgram
-    prog = ASCAProgram.query.get_or_404(id)
+    prog = owned_or_404(ASCAProgram, id)
     if request.method == 'POST':
         prog.name = request.form['name'].strip()
         prog.school_year = request.form.get('school_year', '').strip()
@@ -648,7 +655,7 @@ def asca_results_edit(id):
 @login_required
 def asca_results_delete(id):
     from app.models.asca_program import ASCAProgram
-    prog = ASCAProgram.query.get_or_404(id)
+    prog = owned_or_404(ASCAProgram, id)
     log_action('delete', 'asca_program', prog.id)
     db.session.delete(prog)
     db.session.commit()
@@ -904,6 +911,157 @@ def _compute_metric(students_in_cohort, metric):
         return out
 
     return 0
+
+
+# ── Cohort concentration in the master schedule ──────────────────
+
+# Cohorts worth asking "are these students clustered?" about. Reuses
+# _cohort_key so a cohort means the same thing here as in the ELPAC report,
+# plus the boolean program flags that only make sense as a yes/no split.
+_CONCENTRATION_COHORTS = [
+    ('el_status', 'EL Status (Newcomer / LTEL / RFEP / EO)'),
+    ('grade_level', 'Grade Level'),
+    ('years_in_us_schools', 'Years in US Schools'),
+    ('iep_status', 'IEP'),
+    ('section_504', '504 Plan'),
+    ('gender', 'Gender'),
+    ('ethnicity', 'Ethnicity'),
+]
+
+_CONCENTRATION_DIMENSIONS = [
+    ('period', 'Period'),
+    ('teacher', 'Teacher'),
+    ('course', 'Course'),
+    ('advisory', 'Advisory Section'),
+]
+
+_TERM_OPTIONS = [('all', 'Any term'), ('Q1', 'Q1'), ('Q2', 'Q2'),
+                 ('Q3', 'Q3'), ('Q4', 'Q4'), ('YR', 'Year-long')]
+
+
+def _concentration_cohort_key(student, dim):
+    """Cohort label, extending _cohort_key with the boolean program flags."""
+    if dim == 'iep_status':
+        return 'IEP' if student.iep_status else 'No IEP'
+    if dim == 'section_504':
+        return '504' if student.section_504 else 'No 504'
+    return _cohort_key(student, dim)
+
+
+@reports_bp.route('/cohort-concentration')
+@login_required
+def cohort_concentration():
+    """Where a cohort sits in the master schedule."""
+    from app.models.schedule import ScheduleEntry
+    from app.utils.cohort_concentration import build_concentration, chart_payload
+
+    cohort_dim = request.args.get('cohort', 'el_status')
+    dimension = request.args.get('dimension', 'period')
+    term = request.args.get('term', 'all')
+    school_year = request.args.get('school_year') or current_school_year()
+
+    if cohort_dim not in {k for k, _ in _CONCENTRATION_COHORTS}:
+        cohort_dim = 'el_status'
+    if dimension not in {k for k, _ in _CONCENTRATION_DIMENSIONS}:
+        dimension = 'period'
+    if term not in {k for k, _ in _TERM_OPTIONS}:
+        term = 'all'
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+    student_ids = [s.id for s in students]
+
+    entries = []
+    years = []
+    if student_ids:
+        years = sorted({y for (y,) in db.session.query(
+            ScheduleEntry.school_year).filter(
+                ScheduleEntry.student_id.in_(student_ids)).distinct().all() if y},
+            reverse=True)
+        if years and school_year not in years:
+            school_year = years[0]
+        entries = ScheduleEntry.query.filter(
+            ScheduleEntry.student_id.in_(student_ids),
+            ScheduleEntry.school_year == school_year,
+        ).all()
+
+    cohort_of = {s.id: _concentration_cohort_key(s, cohort_dim) for s in students}
+    result = build_concentration(students, entries, cohort_of, dimension, term=term)
+
+    log_action('view', 'report',
+               details=f'Cohort concentration: {cohort_dim} by {dimension}')
+
+    return render_template('reports/cohort_concentration.html',
+        cohort_options=_CONCENTRATION_COHORTS,
+        dimension_options=_CONCENTRATION_DIMENSIONS,
+        term_options=_TERM_OPTIONS,
+        cohort_dim=cohort_dim, dimension=dimension, term=term,
+        school_year=school_year, years=years,
+        result=result,
+        chart=chart_payload(result),
+        has_schedule_data=bool(entries),
+    )
+
+
+@reports_bp.route('/outcomes-by-section')
+@login_required
+def outcomes_by_section():
+    """D/F rates for the counselor's own students, grouped by section."""
+    from app.models.schedule import ScheduleEntry
+    from app.utils.grade_outcomes import build_section_outcomes, chart_payload
+
+    dimension = request.args.get('dimension', 'teacher')
+    cohort_dim = request.args.get('cohort', 'el_status')
+    cohort_filter = request.args.get('cohort_value', '')
+    school_year = request.args.get('school_year') or current_school_year()
+
+    if dimension not in {'teacher', 'period', 'course'}:
+        dimension = 'teacher'
+    if cohort_dim not in {k for k, _ in _CONCENTRATION_COHORTS}:
+        cohort_dim = 'el_status'
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active').all()
+    student_ids = [s.id for s in students]
+
+    entries, grades, years = [], [], []
+    if student_ids:
+        years = sorted({y for (y,) in db.session.query(
+            ScheduleEntry.school_year).filter(
+                ScheduleEntry.student_id.in_(student_ids)).distinct().all() if y},
+            reverse=True)
+        if years and school_year not in years:
+            school_year = years[0]
+        entries = ScheduleEntry.query.filter(
+            ScheduleEntry.student_id.in_(student_ids),
+            ScheduleEntry.school_year == school_year).all()
+        grades = GradeRecord.query.filter(
+            GradeRecord.student_id.in_(student_ids),
+            GradeRecord.school_year == school_year).all()
+
+    cohort_of = {s.id: _concentration_cohort_key(s, cohort_dim) for s in students}
+    cohort_values = sorted(set(cohort_of.values()))
+    if cohort_filter not in cohort_values:
+        cohort_filter = ''
+
+    result = build_section_outcomes(
+        entries, grades, dimension=dimension,
+        cohort_of=cohort_of, cohort_filter=cohort_filter or None)
+
+    log_action('view', 'report',
+               details=f'D/F outcomes by {dimension}'
+                       + (f' for {cohort_filter}' if cohort_filter else ''))
+
+    return render_template('reports/outcomes_by_section.html',
+        dimension=dimension,
+        dimension_options=[('teacher', 'Teacher'), ('period', 'Period'),
+                           ('course', 'Course')],
+        cohort_options=_CONCENTRATION_COHORTS,
+        cohort_dim=cohort_dim, cohort_filter=cohort_filter,
+        cohort_values=cohort_values,
+        school_year=school_year, years=years,
+        result=result, chart=chart_payload(result),
+        has_data=bool(entries and grades))
 
 
 @reports_bp.route('/elpac')

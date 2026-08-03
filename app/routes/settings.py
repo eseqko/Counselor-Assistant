@@ -3,7 +3,8 @@ import os
 import re
 import shutil
 from datetime import datetime, date, timezone
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, Response
+from flask import (Blueprint, render_template, request, redirect, url_for, flash,
+                   send_file, Response, session, abort)
 from flask_login import login_required, current_user
 from flask import jsonify
 from app import db, csrf
@@ -15,6 +16,8 @@ from app.models.transcript import TranscriptRecord
 from app.models.course import Department, Course, GraduationRequirement
 from app.utils.audit import log_action
 from app.utils.helpers import current_school_year
+from app.utils.roles import admin_or_sole_user_required, admin_required
+from app.utils.db_snapshot import snapshot_database
 from config import Config
 
 settings_bp = Blueprint('settings', __name__)
@@ -55,7 +58,13 @@ def _cleanup_duplicate_notes():
 @settings_bp.route('/')
 @login_required
 def index():
-    return render_template('settings/index.html')
+    from app.routes.graduation import get_grad_policy, expected_credits_by_end_of
+    policy = get_grad_policy()
+    benchmarks = [(g, int(expected_credits_by_end_of(g, policy['required'],
+                                                     policy['per_year'])))
+                  for g in (9, 10, 11, 12)]
+    return render_template('settings/index.html',
+                           grad_policy=policy, grad_benchmarks=benchmarks)
 
 
 @settings_bp.route('/api/theme', methods=['POST'])
@@ -122,27 +131,21 @@ def audit_log():
 
 
 @settings_bp.route('/backup', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def backup():
     """Create a local backup of the database."""
-    backup_dir = Config.BACKUP_DIR
-    os.makedirs(backup_dir, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    backup_path = os.path.join(backup_dir, f'counselor_backup_{timestamp}.db')
-    db_path = os.path.join(Config.DATA_DIR if hasattr(Config, 'DATA_DIR') else 'data', 'counselor.db')
-
-    try:
-        shutil.copy2(db_path, backup_path)
+    backup_path = snapshot_database('backup')
+    if backup_path:
         log_action('backup', 'database', details=f'Backup created: {backup_path}')
         flash('Backup created successfully.', 'success')
-    except Exception:
+    else:
         flash('Backup failed. Please check disk space and try again.', 'danger')
 
     return redirect(url_for('settings.index'))
 
 
 @settings_bp.route('/export-backup')
-@login_required
+@admin_or_sole_user_required
 def export_backup():
     """Download the latest backup."""
     backup_dir = Config.BACKUP_DIR
@@ -164,6 +167,64 @@ def export_backup():
         return redirect(url_for('settings.index'))
     log_action('export', 'database', details='Downloaded backup')
     return send_file(backup_path, as_attachment=True)
+
+
+@settings_bp.route('/regenerate-token/<surface>', methods=['POST'])
+@login_required
+def regenerate_token(surface):
+    """Rotate exactly one share link, leaving the other two untouched.
+
+    Each surface is independently rotatable on purpose: revoking a leaked
+    portal link must not also kill the counselor's calendar subscription.
+    """
+    labels = {'portal': 'Student Portal', 'booking': 'Booking Page',
+              'ical': 'Private Calendar Feed'}
+    if surface not in labels:
+        abort(404)
+    current_user.rotate_token(surface)
+    log_action('update', 'user', current_user.id,
+               details=f'Regenerated {surface} share token')
+    flash(f'{labels[surface]} link regenerated. The previous link no longer works'
+          + (' — re-add the feed in your calendar app.' if surface == 'ical' else '.'),
+          'success')
+    return redirect(url_for('settings.index'))
+
+
+@settings_bp.route('/graduation-policy', methods=['POST'])
+@login_required
+def graduation_policy():
+    """Save the school's credit requirement and annual earning capacity.
+
+    These two numbers drive every credit-risk flag in the app, so they are a
+    setting rather than a constant: a school on a 6-period day earns ~60/year
+    while JUHSD's accelerated block earns 80, and benchmarks tuned for one are
+    actively misleading on the other.
+    """
+    from app.utils.school_config import merge_school_config
+
+    def _num(field, lo, hi):
+        raw = (request.form.get(field) or '').strip()
+        try:
+            val = float(raw)
+        except ValueError:
+            return None
+        return val if lo <= val <= hi else None
+
+    required = _num('credits_required', 1, 1000)
+    per_year = _num('credits_per_year', 1, 500)
+    if required is None or per_year is None:
+        flash('Enter a credit requirement and a per-year value as numbers.', 'danger')
+        return redirect(url_for('settings.index'))
+
+    merge_school_config(current_user, {
+        'credits_required': required,
+        'credits_per_year': per_year,
+    })
+    log_action('update', 'school_config',
+               details=f'Graduation policy: {required} required, {per_year}/year')
+    flash(f'Saved: {required:g} credits to graduate, {per_year:g} earnable per year. '
+          'Credit-risk levels across the app now use these.', 'success')
+    return redirect(url_for('settings.index'))
 
 
 def _serialize_date(val):
@@ -333,7 +394,7 @@ def _grad_req_to_dict(gr):
 
 
 @settings_bp.route('/export-data')
-@login_required
+@admin_or_sole_user_required
 def export_data():
     """Export caseload and course catalog data as a portable JSON file.
 
@@ -426,7 +487,7 @@ def export_data():
 
 
 @settings_bp.route('/import-data', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def import_data():
     """Import caseload and course catalog data from a portable JSON file."""
     file = request.files.get('import_file')
@@ -726,7 +787,7 @@ def import_data():
 
 
 @settings_bp.route('/cleanup-duplicates', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def cleanup_duplicates():
     """Remove duplicate notes from the database."""
     removed = _cleanup_duplicate_notes()
@@ -923,7 +984,10 @@ def upload_calendar():
 
 
 @settings_bp.route('/calendars/<int:cal_id>/delete', methods=['POST'])
-@login_required
+# SchoolCalendar is school-wide config with no owner column, so owned_or_404
+# doesn't apply — deleting one wipes the quarter/semester windows for EVERY
+# counselor. Gate it rather than scope it. (Sole-user installs keep working.)
+@admin_or_sole_user_required
 def delete_calendar(cal_id):
     from app.models.school_calendar import SchoolCalendar
     cal = SchoolCalendar.query.get_or_404(cal_id)
@@ -936,7 +1000,7 @@ def delete_calendar(cal_id):
 
 
 @settings_bp.route('/factory-reset', methods=['POST'])
-@login_required
+@admin_or_sole_user_required
 def factory_reset():
     """Delete all data and restart the setup wizard."""
     from flask_login import logout_user
@@ -959,4 +1023,13 @@ def factory_reset():
     # Force the before_request handler to re-check setup status
     if hasattr(current_app, '_setup_done'):
         current_app._setup_done = False
+    # The wizard is loopback-only (it can't require a login — no account exists
+    # after this wipe). Carry a one-shot grant in the session so a counselor who
+    # reset from a remote device isn't stranded with an empty DB and a 403.
+    # Safe to mint here: this route is @login_required + CSRF-protected, and
+    # logout_user() above leaves the rest of the session intact. The signed
+    # cookie survives because SECRET_KEY lives in data/.secret_key, which this
+    # reset does not delete.
+    from app.routes.setup import SETUP_GRANT_KEY
+    session[SETUP_GRANT_KEY] = True
     return redirect('/setup')

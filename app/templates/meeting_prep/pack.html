@@ -171,7 +171,7 @@ tr.failing td { background:#fff5f5; }
         <thead><tr><th>Period</th><th>Course</th><th>Grade</th><th>%</th></tr></thead>
         <tbody>
         {% for g in grades %}
-        <tr {% if not g.is_passing %}class="failing"{% endif %}>
+        <tr {% if g.is_passing is false %}class="failing"{% endif %}>
             <td>{{ g.period or '-' }}</td>
             <td>{{ g.course_name }}</td>
             <td><strong>{{ g.letter_grade }}</strong></td>

@@ -119,9 +119,9 @@
                         <strong>{{ c.school_year }}</strong>
                         {% if c.school_year == current_year %}<span class="badge" style="background:#3b82f6;color:#fff;font-size:0.7rem;padding:1px 6px;border-radius:4px;">current</span>{% endif %}
                     </td>
-                    <td>{{ c.first_day.strftime('%b %-d, %Y') if c.first_day else '—' }} → {{ c.last_day.strftime('%b %-d, %Y') if c.last_day else '—' }}</td>
+                    <td>{{ c.first_day | smartdate('%b %-d, %Y') if c.first_day else '—' }} → {{ c.last_day | smartdate('%b %-d, %Y') if c.last_day else '—' }}</td>
                     <td>
-                        {% for q in c.quarters() %}Q{{ q.n }} {{ q.end.strftime('%b %-d') if q.end else '?' }}{% if not loop.last %} · {% endif %}{% endfor %}
+                        {% for q in c.quarters() %}Q{{ q.n }} {{ q.end | smartdate('%b %-d') if q.end else '?' }}{% if not loop.last %} · {% endif %}{% endfor %}
                     </td>
                     <td style="color:var(--gray);">{{ c.source }}</td>
                     <td style="text-align:right;white-space:nowrap;">

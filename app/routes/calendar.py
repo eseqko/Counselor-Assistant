@@ -9,6 +9,7 @@ from app.utils.audit import log_action
 from app.utils.roles import owned_or_404, caseload_student_or_404
 from app.utils import google_client, google_calendar
 from app.utils.ics import build_ical_feed
+from app.utils.security import validate_external_url
 from datetime import datetime, date, timedelta, timezone
 from dateutil.rrule import rrulestr
 import pytz
@@ -187,7 +188,7 @@ def delete_event(id):
 @login_required
 def feed_url():
     """Generate and return the user's personal iCal feed URL."""
-    token = current_user.get_or_create_feed_token()
+    token = current_user.get_or_create_ical_token()
     feed_link = url_for('calendar.ical_feed', token=token, _external=True)
     return jsonify({'feed_url': feed_link})
 
@@ -200,7 +201,7 @@ def ical_feed(token):
     (parent/cohort-booked appointments) so subscribed Google Calendars see
     everything the app considers scheduled.
     """
-    user = User.query.filter_by(calendar_feed_token=token).first()
+    user = User.query.filter_by(ical_feed_token=token).first()
     if not user:
         abort(404)
 
@@ -278,9 +279,16 @@ def external_ical():
     """Save or remove the user's external Google Calendar iCal URL."""
     if request.method == 'POST':
         ical_url = request.form.get('external_ical_url', '').strip()
-        if ical_url and not ical_url.startswith(('http://', 'https://')):
-            flash('Please enter a valid URL starting with https://', 'danger')
-            return redirect(url_for('calendar.index'))
+        if ical_url:
+            # SSRF: this URL is fetched SERVER-side on every dashboard load and
+            # the parsed body is returned to the caller, so a scheme-only check
+            # let anyone point it at 169.254.169.254 and read cloud metadata
+            # back through the ICS parser.
+            ok, result = validate_external_url(ical_url)
+            if not ok:
+                flash(result, 'danger')
+                return redirect(url_for('calendar.index'))
+            ical_url = result
         current_user.external_ical_url = ical_url or None
         db.session.commit()
         if ical_url:
@@ -298,8 +306,17 @@ def get_external_events():
     if not current_user.external_ical_url:
         return jsonify([])
 
+    # Re-validate at FETCH time, not just at save time: a host that resolved
+    # public when saved can resolve to an internal address later (DNS
+    # rebinding). allow_redirects=False stops a 302 relocating the request to
+    # an internal host after the check has passed.
+    ok, _ = validate_external_url(current_user.external_ical_url)
+    if not ok:
+        return jsonify([])
+
     try:
-        resp = http_requests.get(current_user.external_ical_url, timeout=3)
+        resp = http_requests.get(current_user.external_ical_url, timeout=3,
+                                 allow_redirects=False)
         resp.raise_for_status()
         events = _parse_ical_feed(resp.text)
         return jsonify(events)

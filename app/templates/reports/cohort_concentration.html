@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Cohort Concentration{% endblock %}
+{% block page_title %}Cohort Concentration in the Schedule{% endblock %}
+{% block content %}
+
+<!-- Selector bar -->
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="padding:14px;">
+        <form method="GET" style="display:flex;flex-wrap:wrap;gap:14px;align-items:end;">
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Cohort</label>
+                <select name="cohort" onchange="this.form.submit()">
+                    {% for k, label in cohort_options %}
+                    <option value="{{ k }}" {{ 'selected' if cohort_dim == k }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Grouped by</label>
+                <select name="dimension" onchange="this.form.submit()">
+                    {% for k, label in dimension_options %}
+                    <option value="{{ k }}" {{ 'selected' if dimension == k }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">Term</label>
+                <select name="term" onchange="this.form.submit()">
+                    {% for k, label in term_options %}
+                    <option value="{{ k }}" {{ 'selected' if term == k }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if years %}
+            <div>
+                <label style="display:block;font-size:12px;font-weight:600;margin-bottom:2px;">School year</label>
+                <select name="school_year" onchange="this.form.submit()">
+                    {% for y in years %}
+                    <option value="{{ y }}" {{ 'selected' if school_year == y }}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if not has_schedule_data %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>No class schedules imported for {{ school_year }} yet.</p>
+            <a href="{{ url_for('data_import.schedules_upload') }}" class="btn btn-primary">Import Schedules</a>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<!-- What stands out -->
+<div class="card">
+    <div class="card-header">
+        What stands out
+        {% if result.flagged %}<span class="badge badge-warning">{{ result.flagged|length }}</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:10px;">
+            A group is flagged when it makes up at least 1.5&times; its usual share of a
+            section. Your caseload baseline:
+            {% for cohort, share in result.baseline.items() %}
+            <strong>{{ cohort }}</strong> {{ (share * 100)|round|int }}%{{ ', ' if not loop.last }}
+            {% endfor %}
+            ({{ result.total_students }} students).
+        </p>
+        {% if result.flagged %}
+        <ul style="font-size:0.88rem;line-height:1.7;margin:0;padding-left:18px;">
+            {% for f in result.flagged %}
+            <li>
+                <strong>{{ f.slice }}</strong> &mdash;
+                {{ f.count }} of {{ f.total }} of your students there are
+                <strong>{{ f.cohort }}</strong>
+                ({{ (f.share * 100)|round|int }}%,
+                <span style="color:var(--warning);font-weight:600;">{{ f.index|round(1) }}&times;</span>
+                your baseline)
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p style="font-size:0.88rem;margin:0;">
+            No group is concentrated beyond 1.5&times; its usual share. Sections with
+            fewer than 5 of your students are never flagged &mdash; one student swings
+            the ratio too far to mean anything.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="card">
+    <div class="card-header">Your students by {{ dimension_options|selectattr('0','equalto',dimension)|map(attribute='1')|first|lower }}</div>
+    <div class="card-body">
+        <div style="height:{{ [result.rows|length * 42 + 60, 220]|max }}px;">
+            <canvas id="concentrationChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+    <div class="card-header">Detail</div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>{{ dimension_options|selectattr('0','equalto',dimension)|map(attribute='1')|first }}</th>
+                    <th style="width:1%;">Your students</th>
+                    {% for cohort in result.cohorts %}<th>{{ cohort }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in result.rows %}
+                <tr>
+                    <td style="font-size:0.86rem;font-weight:600;">{{ row.label }}</td>
+                    <td>{{ row.total }}</td>
+                    {% for cell in row.cells %}
+                    <td style="font-size:0.86rem;{% if cell.flagged %}background:rgba(245,158,11,0.14);{% endif %}">
+                        {% if cell.count %}
+                            {{ cell.count }}
+                            <span style="color:var(--text-muted);font-size:0.78rem;">
+                                ({{ (cell.share * 100)|round|int }}%)
+                            </span>
+                            {% if cell.flagged %}
+                            <span class="badge badge-warning" title="Times this group's share of your caseload">
+                                {{ cell.index|round(1) }}&times;
+                            </span>
+                            {% endif %}
+                        {% else %}<span style="color:var(--text-muted);">&mdash;</span>{% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+        <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+            Counts are distinct students, not schedule rows &mdash; a student taking the
+            same period all year is counted once. Administrative rows (a Vice Principal
+            assignment) are excluded.
+        </p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-enhancements.js', v=static_v('js/chart-enhancements.js')) }}"></script>
+<script>
+(function () {
+    var el = document.getElementById('concentrationChart');
+    if (!el) return;
+    // `|tojson` already emits a JS object literal — wrapping it in JSON.parse
+    // hands an object to a string parser and throws "[object Object]" is not
+    // valid JSON. (Other templates JSON.parse because they pass a pre-dumped
+    // json.dumps STRING; this one passes the dict.)
+    var chart = {{ chart|tojson }};
+    var palette = window.chartPalette || ['#2a78d6', '#eb6834', '#1baf7a', '#eda100',
+                                          '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+    new Chart(el, {
+        type: 'bar',
+        data: {
+            labels: chart.labels,
+            datasets: chart.series.map(function (s, i) {
+                return {
+                    label: s.name,
+                    data: s.data,
+                    backgroundColor: palette[i % palette.length],
+                    borderWidth: 2,
+                    // A surface-coloured border reads as a gap between stacked
+                    // segments, so adjacent cohorts never smear together.
+                    borderColor: window.chartSurface || '#fff',
+                    borderSkipped: false,
+                };
+            })
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { stacked: true, beginAtZero: true,
+                     ticks: { precision: 0 },
+                     title: { display: true, text: 'Your students' } },
+                y: { stacked: true, grid: { display: false } }
+            },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            var total = ctx.chart.data.datasets.reduce(function (sum, d) {
+                                return sum + (d.data[ctx.dataIndex] || 0);
+                            }, 0);
+                            var pct = total ? Math.round(ctx.parsed.x / total * 100) : 0;
+                            return ctx.dataset.label + ': ' + ctx.parsed.x + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

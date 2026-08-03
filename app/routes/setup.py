@@ -1,15 +1,20 @@
 """First-run setup wizard. Guides new users through initial configuration."""
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort, session
 from flask_login import login_user, current_user
 from sqlalchemy.exc import IntegrityError
 from app import db, csrf
 from app.models.user import User
 from app.models.student import Student
 from app.utils.audit import log_action
+from app.utils.networking import is_loopback
 import json, csv, io, os
 from config import Config
 
 setup_bp = Blueprint('setup', __name__, template_folder='../templates/setup')
+
+# Session key set by settings.factory_reset so a counselor who resets the app
+# from a remote device (phone over Tailscale) can still finish the wizard there.
+SETUP_GRANT_KEY = 'setup_grant'
 
 
 def needs_setup():
@@ -18,11 +23,59 @@ def needs_setup():
     return user is None or not user.setup_completed
 
 
+def setup_source_allowed():
+    """Whether this request may drive the first-run wizard.
+
+    The wizard cannot require a login — no account exists yet — so during the
+    first-run window (fresh install, or right after a factory reset) anyone who
+    can reach the port could otherwise complete setup and claim the account.
+    The counselor is physically at the machine when they install, so loopback
+    is the natural trust boundary.
+
+    Two deliberate escape hatches, or real workflows break:
+      * COUNSELOR_ALLOW_REMOTE_SETUP=1 for intentional remote provisioning.
+      * a one-shot grant issued by an authenticated, CSRF-protected factory
+        reset, so resetting from a remote device doesn't strand the user with
+        a wiped database and no way to set the app back up.
+    """
+    if session.get(SETUP_GRANT_KEY):
+        return True
+    if os.environ.get('COUNSELOR_ALLOW_REMOTE_SETUP') == '1':
+        return True
+    return is_loopback(request.remote_addr)
+
+
+def _guard_setup_route():
+    """Shared guard for every setup route. Returns a response, or None to proceed.
+
+    SECURITY: the `not needs_setup()` test must stand ALONE. It previously read
+    `if not needs_setup() and current_user.is_authenticated`, which meant an
+    ANONYMOUS caller failed the second clause and fell straight through into
+    _handle_complete() — rewriting the first user's username and password and
+    logging the attacker in. CSRF was no obstacle: the attacker GETs this page
+    first and receives a token bound to their own session.
+
+    404 (not 403) once setup is done, matching the app-wide convention of never
+    confirming a record's existence to an unauthenticated caller. 403 with an
+    explanation for the loopback refusal, because pre-setup the app already
+    redirects everyone here — the page's existence is not a secret at that
+    point, and a blank 404 would just strand a confused user.
+    """
+    if not needs_setup():
+        if current_user.is_authenticated:
+            return redirect(url_for('dashboard.index'))
+        abort(404)
+    if not setup_source_allowed():
+        return render_template('setup/blocked.html'), 403
+    return None
+
+
 @setup_bp.route('/setup', methods=['GET', 'POST'])
 def index():
     """Multi-step setup wizard."""
-    if not needs_setup() and current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+    blocked = _guard_setup_route()
+    if blocked is not None:
+        return blocked
 
     if request.method == 'POST':
         step = request.form.get('step', '')
@@ -34,6 +87,10 @@ def index():
 
 def _handle_complete(form):
     """Process the full setup form submission."""
+    # Defence in depth: index() already guards, and is the only caller today —
+    # this keeps the account-rewrite path closed if another caller is ever added.
+    if not needs_setup():
+        abort(404)
     user = User.query.first()
     if not user:
         user = User(username='counselor', display_name='School Counselor', role='counselor')
@@ -131,8 +188,14 @@ def _handle_complete(form):
 
     merge_school_config(user, school_config, commit=False)
     user.setup_completed = True
+    # The primary user must be an admin, or the admin surface is unreachable:
+    # admin.py can grant the role but is itself @admin_required, so a fresh
+    # install with only counselors could never produce one.
+    if not User.query.filter_by(role='admin').first():
+        user.role = 'admin'
     db.session.commit()
 
+    session.pop(SETUP_GRANT_KEY, None)   # one-shot: consumed on success
     login_user(user, remember=False)
     log_action('setup_complete', 'user', user.id)
 
@@ -144,8 +207,9 @@ def _handle_complete(form):
 @csrf.exempt
 def import_preview():
     """Preview CSV/Excel headers and sample data. Returns JSON."""
-    if not needs_setup():
-        abort(403)
+    blocked = _guard_setup_route()
+    if blocked is not None:
+        return blocked
     file = request.files.get('file')
     if not file or not file.filename:
         return jsonify({'ok': False, 'error': 'No file selected'}), 400
@@ -189,8 +253,9 @@ def import_preview():
 @csrf.exempt
 def import_students():
     """Import students from CSV/Excel during setup. Returns JSON."""
-    if not needs_setup():
-        abort(403)
+    blocked = _guard_setup_route()
+    if blocked is not None:
+        return blocked
     file = request.files.get('file')
     if not file or not file.filename:
         return jsonify({'ok': False, 'error': 'No file selected'}), 400
@@ -309,8 +374,9 @@ def import_students():
 @csrf.exempt
 def upload_logo():
     """Upload school logo during setup. Returns JSON."""
-    if not needs_setup():
-        abort(403)
+    blocked = _guard_setup_route()
+    if blocked is not None:
+        return blocked
     file = request.files.get('logo')
     if not file or not file.filename:
         return jsonify({'ok': False, 'error': 'No file selected'}), 400

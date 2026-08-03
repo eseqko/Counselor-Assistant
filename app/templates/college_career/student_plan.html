@@ -182,6 +182,7 @@
     </div>
     <div class="card-body" style="padding:0;">
         {% if applications %}
+        <div class="table-responsive">
         <table class="mini-table">
             <thead>
                 <tr>
@@ -216,6 +217,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <div style="padding:30px;text-align:center;color:var(--gray);font-style:italic;">
             No applications added yet.

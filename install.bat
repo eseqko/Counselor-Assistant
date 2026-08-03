@@ -122,6 +122,20 @@ echo   Back up this folder regularly!
 echo.
 echo  ============================================================
 echo.
+echo  ============================================================
+echo   BEFORE YOU ADD REAL STUDENT DATA
+echo  ============================================================
+echo   Student records are stored in plain files on this PC.
+echo   The app login does NOT protect them if the laptop is lost
+echo   or the drive is read from another operating system.
+echo.
+echo   Turn on BitLocker now:
+echo     Settings ^> Privacy ^& security ^> Device encryption
+echo.
+echo   On an unencrypted laptop, a loss is a reportable FERPA
+echo   breach. This is a prerequisite, not a suggestion.
+echo  ============================================================
+echo.
 set /p LAUNCH="  Launch now? (Y/n): "
 if /i "%LAUNCH%"=="n" goto :done
 if /i "%LAUNCH%"=="N" goto :done

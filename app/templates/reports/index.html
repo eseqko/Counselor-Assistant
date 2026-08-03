@@ -14,6 +14,16 @@
         <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Cohort Trends</div>
         <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Caseload-wide patterns & trends</div>
     </a>
+    <a href="{{ url_for('reports.cohort_concentration') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid #0ea5e9;">
+        <div class="stat-value" style="font-size:1.5rem;">&#127890;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Cohort Concentration</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Which periods &amp; teachers your groups cluster in</div>
+    </a>
+    <a href="{{ url_for('reports.outcomes_by_section') }}" class="stat-card" style="text-decoration:none;cursor:pointer;border-left:4px solid #ef4444;">
+        <div class="stat-value" style="font-size:1.5rem;">&#128203;</div>
+        <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Outcomes by Section</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px;">Where your students are earning D/F</div>
+    </a>
     <a href="{{ url_for('reports.use_of_time') }}" class="stat-card" style="text-decoration:none;cursor:pointer;">
         <div class="stat-value" style="font-size:1.5rem;">&#9202;</div>
         <div class="stat-label" style="font-size:0.9rem;color:var(--dark);font-weight:600;">Use of Time Analysis</div>

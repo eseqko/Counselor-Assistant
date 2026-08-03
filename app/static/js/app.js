@@ -1,11 +1,14 @@
 // Counselor Assistant - Main JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Mobile sidebar toggle
+    // Sidebar drawer: close on an outside click.
+    //
+    // The toggle itself lives in an inline onclick on the button (base.html), so
+    // it works without this file. Binding a second toggle here would fire on the
+    // same click and flip the class straight back — the drawer would never open.
     const menuToggle = document.querySelector('.menu-toggle');
     const sidebar = document.querySelector('.sidebar');
     if (menuToggle && sidebar) {
-        menuToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
         document.addEventListener('click', (e) => {
             if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
                 sidebar.classList.remove('open');

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Import Schedules{% endblock %}
+{% block page_title %}Import Student Schedules{% endblock %}
+{% block content %}
+
+<div class="ferpa-notice">&#128274; All uploaded data stays on this computer. Nothing is sent to the cloud.</div>
+
+<div class="card">
+    <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+        <span style="background:var(--primary);color:#fff;width:28px;height:28px;border-radius:50%;
+                     display:inline-flex;align-items:center;justify-content:center;
+                     font-size:0.82rem;font-weight:700;">1</span>
+        Drop your schedule export
+    </div>
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" id="sched-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div id="drop-zone" style="border:2px dashed var(--primary);border-radius:10px;
+                 padding:40px 20px;text-align:center;cursor:pointer;background:var(--bg);">
+                <div style="font-size:2.5rem;margin-bottom:8px;">&#128197;</div>
+                <div style="font-size:1rem;font-weight:600;color:var(--dark);">Drag &amp; drop here</div>
+                <div style="font-size:0.82rem;color:var(--gray);margin-top:4px;">
+                    or click to browse &mdash; Synergy .xls/.xlsx/.csv, or one or more printed .pdf schedules
+                </div>
+                <input type="file" name="files" id="file-input" multiple
+                       accept=".xls,.xlsx,.csv,.pdf" required style="display:none;">
+            </div>
+
+            <div id="file-info" style="display:none;margin-top:12px;padding:10px 14px;
+                 background:var(--glass-accent-bg, #ecfdf5);border-radius:8px;font-size:0.88rem;">
+                <span style="font-weight:600;">&#9989;</span> <span id="file-name"></span>
+            </div>
+
+            <details style="margin-top:14px;font-size:0.82rem;color:var(--gray);">
+                <summary style="cursor:pointer;font-weight:600;color:var(--dark);">Which file should I use?</summary>
+                <div style="margin-top:8px;padding:12px;background:var(--bg);border-radius:6px;line-height:1.6;">
+                    <p style="margin-bottom:8px;">
+                        <strong>Best:</strong> the Synergy <code>U-SCH100</code> schedule export
+                        (Excel). One file covers your whole caseload, the fields are exact, and
+                        it keeps working if the printed layout ever changes.
+                        Required columns: <em>Course ID, Course Title, Term Code, Begin Period,
+                        Staff Name</em> &mdash; plus <em>Perm ID</em> or <em>Student Name</em> so
+                        each row can be matched to a student.
+                    </p>
+                    <p style="margin:0;">
+                        <strong>Also works:</strong> the printed first-day schedule PDF, one
+                        student per page. Handy when that's all you have &mdash; it's read by
+                        column position, so check the preview before saving.
+                    </p>
+                </div>
+            </details>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button type="submit" class="btn btn-primary">Preview Import</button>
+                <a href="{{ url_for('data_import.index') }}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    var zone = document.getElementById('drop-zone');
+    var input = document.getElementById('file-input');
+    var info = document.getElementById('file-info');
+    var nameEl = document.getElementById('file-name');
+
+    function show() {
+        if (!input.files.length) { info.style.display = 'none'; return; }
+        var names = Array.prototype.map.call(input.files, function (f) { return f.name; });
+        nameEl.textContent = names.length === 1 ? names[0]
+            : names.length + ' files selected';
+        info.style.display = 'block';
+    }
+    zone.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', show);
+    ['dragenter', 'dragover'].forEach(function (e) {
+        zone.addEventListener(e, function (ev) {
+            ev.preventDefault(); zone.style.background = 'var(--hover-bg)';
+        });
+    });
+    ['dragleave', 'drop'].forEach(function (e) {
+        zone.addEventListener(e, function (ev) {
+            ev.preventDefault(); zone.style.background = 'var(--bg)';
+        });
+    });
+    zone.addEventListener('drop', function (ev) {
+        if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; show(); }
+    });
+})();
+</script>
+{% endblock %}

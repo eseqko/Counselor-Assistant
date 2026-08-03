@@ -7,6 +7,7 @@ first column gets a locked-key tint.
 """
 import io
 from flask import send_file
+from app.utils.security import xlsx_safe
 
 
 # Late-imported by callers via app.routes.data_import; we accept the openpyxl
@@ -101,7 +102,9 @@ def build_import_workbook(
                                 end_color=LOCK_FILL_HEX, fill_type='solid')
         for row_idx, row in enumerate(prefill_rows, start=2):
             for col_idx, val in enumerate(row, 1):
-                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                # Shared by several exports; prefill values originate from
+                # imported rosters, so neutralize formula triggers here once.
+                cell = ws.cell(row=row_idx, column=col_idx, value=xlsx_safe(val))
                 cell.border = thin_border
             if lock_first_column:
                 ws.cell(row=row_idx, column=1).fill = lock_fill

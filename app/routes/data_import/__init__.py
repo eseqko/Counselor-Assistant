@@ -72,4 +72,4 @@ STUDENT_UPDATE_FIELDS = {
 }
 
 # Import sub-modules at the bottom so they can register routes on the blueprint
-from app.routes.data_import import index, attendance, grades, students, elpac  # noqa: E402, F401
+from app.routes.data_import import index, attendance, grades, students, elpac, schedules  # noqa: E402, F401
