@@ -242,3 +242,78 @@ def test_final_grades_supersede_progress_grades_in_every_quarter(app, grd_env):
     with app.app_context():
         assert GradeRecord.query.filter_by(
             grade_type='progress', school_year='2025-2026').count() == 0
+
+
+# ── the year must be stated, because the report never says ──
+
+def test_the_preview_reports_that_the_file_carries_no_school_year(app, grd_env):
+    """GRD401 has no year column, and the UI keys its prompt off this flag."""
+    client, _ = grd_env
+    wb = Workbook()
+    ws = wb.active
+    ws.append(GRD401)
+    ws.append(grd_row(perm='GRD-1', q1='A'))
+    ws.append(grd_row(perm='GRD-1', q3='B'))
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    r = client.post('/data-import/grades/preview',
+                    data={'file': (buf, 'grd401.xlsx')},
+                    content_type='multipart/form-data')
+    body = r.get_json()
+    assert body['has_school_year'] is False
+    # And it says which quarters are in the file, so the prompt can be specific.
+    assert body['quarters'] == [1, 3]
+
+
+def test_a_file_that_does_carry_a_year_is_not_prompted(app, grd_env):
+    client, _ = grd_env
+    wb = Workbook()
+    ws = wb.active
+    ws.append(['Perm ID', 'Course Title', 'Letter Grade', 'Mark Name', 'School Year'])
+    ws.append(['GRD-1', 'Math', 'B', 'Quarter 2', '2024-2025'])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    r = client.post('/data-import/grades/preview',
+                    data={'file': (buf, 'g.xlsx')},
+                    content_type='multipart/form-data')
+    assert r.get_json()['has_school_year'] is True
+
+
+def test_importing_without_a_year_is_refused_rather_than_defaulted(app, grd_env):
+    """The server guard, not just the browser: silently falling back to the
+    current year would file a whole year of grades under the wrong one and
+    look like it worked."""
+    client, ids = grd_env
+    r = _upload(client, [grd_row(perm='GRD-1', q1='A')], year='')
+    assert r.status_code == 200
+    assert 'Choose the school year' in r.data.decode()
+    with app.app_context():
+        assert GradeRecord.query.filter_by(student_id=ids['student']).count() == 0
+
+
+def test_a_file_carrying_its_own_year_still_imports_without_the_form_field(app, grd_env):
+    """Only reports with no year of their own require the prompt."""
+    client, ids = grd_env
+    wb = Workbook()
+    ws = wb.active
+    ws.append(['Perm ID', 'Course Title', 'Letter Grade', 'Mark Name', 'School Year'])
+    ws.append(['GRD-1', 'Math Course 1 CP', 'B', 'Quarter 2', '2024-2025'])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    client.post('/data-import/grades/upload', data={
+        'file': (buf, 'g.xlsx'), 'school_year': '', 'grade_type': 'final',
+    }, content_type='multipart/form-data', follow_redirects=True)
+    with app.app_context():
+        g = GradeRecord.query.filter_by(student_id=ids['student']).first()
+        assert g is not None and g.school_year == '2024-2025'
+
+
+def test_the_chosen_year_is_what_gets_stored(app, grd_env):
+    client, ids = grd_env
+    _upload(client, [grd_row(perm='GRD-1', q1='A')], year='2023-2024')
+    with app.app_context():
+        g = GradeRecord.query.filter_by(student_id=ids['student']).first()
+        assert g.school_year == '2023-2024'

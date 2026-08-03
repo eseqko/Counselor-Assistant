@@ -17,7 +17,10 @@
         <div class="card-body">
             <form id="grade-form" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="school_year" id="school-year-input" value="{{ default_school_year }}">
+                {# Deliberately empty: the value is set from the picker when the
+                   file is previewed, so a report with no year of its own cannot
+                   ride a stale default into the wrong school year. #}
+                <input type="hidden" name="school_year" id="school-year-input" value="">
                 <input type="hidden" name="grade_type" id="grade-type-input" value="final">
 
                 <!-- Drop zone -->
@@ -151,11 +154,23 @@
                     <div style="display:flex;align-items:center;gap:8px;">
                         <label style="font-weight:600;font-size:0.88rem;white-space:nowrap;">School Year:</label>
                         <select id="school-year-select" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.88rem;">
+                            <option value="">-- Which year is this? --</option>
                             {% for yr in school_year_options %}
-                            <option value="{{ yr }}" {% if yr == default_school_year %}selected{% endif %}>{{ yr }}</option>
+                            <option value="{{ yr }}">{{ yr }}</option>
                             {% endfor %}
                         </select>
                     </div>
+                </div>
+
+                {# The report has no year of its own, so it must be stated. Left
+                   unselected on purpose: a pre-filled default is the thing that
+                   quietly files last year's grades under this year. #}
+                <div id="year-prompt" style="display:none;padding:10px 12px;background:#fef3c7;
+                     border:1px solid #fbbf24;border-radius:6px;font-size:0.85rem;
+                     color:#92400e;margin-bottom:14px;">
+                    <strong>Which school year is this file for?</strong>
+                    This report doesn't include one, so pick it above before importing.
+                    <span id="year-prompt-quarters"></span>
                 </div>
                 <!-- Auto-purge notice -->
                 <div id="purge-notice" style="display:none;padding:8px 12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;font-size:0.82rem;color:#92400e;margin-bottom:14px;">
@@ -366,10 +381,25 @@
             tbody.appendChild(tr);
         });
 
-        // School year default from server
-        if (data.default_school_year) {
-            schoolYearSelect.value = data.default_school_year;
+        // School year. When the file states it per row, pre-fill the server's
+        // default — it's only a fallback. When the file does NOT (GRD401),
+        // leave the picker empty and ask outright, because a wrong year here
+        // is invisible afterwards: the grades just aren't where you look.
+        needsYear = !data.has_school_year;
+        var prompt = document.getElementById('year-prompt');
+        if (needsYear) {
+            schoolYearSelect.value = '';
+            var qs = (data.quarters || []);
+            document.getElementById('year-prompt-quarters').textContent =
+                qs.length > 1
+                    ? 'This file covers quarters ' + qs.join(', ') + '.'
+                    : (qs.length === 1 ? 'This file covers quarter ' + qs[0] + '.' : '');
+            prompt.style.display = '';
+        } else {
+            prompt.style.display = 'none';
+            if (data.default_school_year) schoolYearSelect.value = data.default_school_year;
         }
+        updateImportEnabled();
 
         // Show grade type notices if quarter detected
         if (data.quarter) {
@@ -384,12 +414,26 @@
     }
 
     // School year sync
+    var needsYear = false;
+    function updateImportEnabled() {
+        var btn = document.getElementById('import-btn');
+        var missing = needsYear && !schoolYearSelect.value;
+        btn.disabled = missing;
+        btn.style.opacity = missing ? '0.5' : '';
+        btn.style.cursor = missing ? 'not-allowed' : '';
+        btn.title = missing ? 'Choose the school year this file covers' : '';
+    }
     schoolYearSelect.addEventListener('change', () => {
         schoolYearInput.value = schoolYearSelect.value;
+        updateImportEnabled();
     });
 
     // Import button
     document.getElementById('import-btn').addEventListener('click', () => {
+        if (needsYear && !schoolYearSelect.value) {
+            schoolYearSelect.focus();
+            return;
+        }
         schoolYearInput.value = schoolYearSelect.value;
         gradeTypeInput.value = gradeTypeSelect.value;
         gradeForm.submit();
