@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% block title %}{{ student.display_name }} - Caseload{% endblock %}
 {% block page_title %}Student Profile{% endblock %}
+
+{# Loaded in <head>, for the whole page, because several partials draw charts
+   from inline scripts that run as the body is parsed. This used to be pulled in
+   by _elpac_scores.html — which sits further down the document AND only renders
+   for EL students, so the trend charts at the top silently drew nothing: their
+   `typeof Chart === 'undefined'` guard returned before Chart.js existed. #}
+{% block head %}
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-enhancements.js', v=static_v('js/chart-enhancements.js')) }}"></script>
+{% endblock %}
+
 {% block content %}
 
 {% include "caseload/_partials/_profile_header_strip.html" %}

@@ -99,8 +99,8 @@
 </div>
 
 {% if summative | length >= 2 %}
-<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/chart-enhancements.js', v=static_v('js/chart-enhancements.js')) }}"></script>
+{# Chart.js is loaded once for the whole profile in caseload/view.html's head
+   block. Loading it again here would re-register the shared plugins. #}
 <script>
 (function() {
     var ctx = document.getElementById('elpac-growth-chart');
