@@ -10,10 +10,13 @@ from datetime import date as _date
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, abort)
 from flask_login import login_required, current_user
+import re
+
 from app import db
 from app.models.staff import Staff
 from app.models.student import Student
 from app.models.grade import GradeRecord
+from app.models.schedule import ScheduleEntry
 from app.models.communication import CommunicationLog
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
@@ -22,6 +25,23 @@ from app.utils.roles import caseload_student_or_404
 staff_bp = Blueprint('staff', __name__)
 
 _DF = {'F', 'NP', 'D+', 'D', 'D-'}
+
+# Synergy splits a course that runs across a semester into separate titled rows
+# — "Fashion Design CP [S1]" and "[S2]" are one class at one period, taught by
+# one teacher. Grouping on the raw title would report it as two.
+_SEMESTER_SUFFIX = re.compile(r'\s*\[\s*S\s*[12]\s*\]\s*$', re.I)
+
+
+def _class_label(title):
+    """Course title with the semester marker removed, for grouping."""
+    return _SEMESTER_SUFFIX.sub('', (title or '').strip()) or 'Unknown'
+
+
+def _caseload_students(user):
+    """The counselor's own active students, excluding the sample record."""
+    return Student.query.filter_by(
+        assigned_counselor_id=user.id, status='active'
+    ).filter(Student.is_sample == False).all()
 
 
 def _grades_for_caseload(student_ids):
@@ -36,16 +56,41 @@ def _grades_for_caseload(student_ids):
     ).all()
 
 
+def _schedule_for_caseload(student_ids, teacher_name=None):
+    """Scheduled classes for the caseload — who sits with which teacher.
+
+    This is the enrollment source. Grades only tell you who a teacher saw once
+    marks exist, which is nobody for the first months of a school year; the
+    schedule knows on day one. Administrative placements ("Vice Principal") are
+    excluded because they are not classes, but advisory IS a real group.
+    """
+    if not student_ids:
+        return []
+    q = ScheduleEntry.query.filter(
+        ScheduleEntry.student_id.in_(student_ids),
+        ScheduleEntry.teacher_name.isnot(None),
+        ScheduleEntry.teacher_name != '',
+        ScheduleEntry.is_non_class == False,
+    )
+    if teacher_name is not None:
+        q = q.filter(db.func.lower(ScheduleEntry.teacher_name) == teacher_name.lower())
+    return q.all()
+
+
 @staff_bp.route('/')
 @login_required
 def index():
     """Roster: persistent staff rows joined with grade-derived stats."""
-    students = Student.query.filter_by(
-        assigned_counselor_id=current_user.id, status='active').all()
+    students = _caseload_students(current_user)
     student_ids = [s.id for s in students]
     grades = _grades_for_caseload(student_ids)
+    scheduled = _schedule_for_caseload(student_ids)
 
-    years = sorted({g.school_year for g in grades if g.school_year}, reverse=True)
+    # Years come from both sources: a freshly imported schedule is the only
+    # record of the current year until grades start arriving.
+    years = sorted({g.school_year for g in grades if g.school_year}
+                   | {e.school_year for e in scheduled if e.school_year},
+                   reverse=True)
     year = request.args.get('year') or (years[0] if years else '')
 
     # teacher (lowercased) -> aggregates for the selected year, plus the
@@ -56,6 +101,20 @@ def index():
         'classes': defaultdict(lambda: {'students': set(), 'df': 0, 'total': 0,
                                         'subjects': set()}),
     })
+    # Enrollment first, from the schedule. A course spanning several quarters is
+    # one class; the student set dedupes across those rows on its own.
+    for e in scheduled:
+        if year and e.school_year != year:
+            continue
+        raw = (e.teacher_name or '').strip()
+        key = raw.lower()
+        if not by_name[key]['display']:
+            by_name[key]['display'] = raw
+        cell = by_name[key]['classes'][(_class_label(e.course_title), e.period)]
+        cell['students'].add(e.student_id)
+
+    # Then grades, which supply the D/F signal the schedule cannot. Same key, so
+    # a class known from both sources stays one row.
     for g in grades:
         if year and g.school_year != year:
             continue
@@ -63,7 +122,7 @@ def index():
         key = raw.lower()
         if not by_name[key]['display']:
             by_name[key]['display'] = raw
-        cell = by_name[key]['classes'][(g.course_name or 'Unknown', g.period)]
+        cell = by_name[key]['classes'][(_class_label(g.course_name), g.period)]
         cell['students'].add(g.student_id)
         cell['total'] += 1
         if g.subject_area:
@@ -162,8 +221,7 @@ def create_from_name():
 def detail(staff_id):
     """Profile + classes + which of YOUR students are in each."""
     staff = Staff.query.get_or_404(staff_id)
-    students = Student.query.filter_by(
-        assigned_counselor_id=current_user.id, status='active').all()
+    students = _caseload_students(current_user)
     student_ids = [s.id for s in students]
     name_by_id = {s.id: s for s in students}
 
@@ -174,8 +232,11 @@ def detail(staff_id):
             db.func.lower(GradeRecord.teacher) == staff.name.lower(),
             GradeRecord.grade_type == 'final',
         ).all()
+    scheduled = _schedule_for_caseload(student_ids, staff.name)
 
-    years = sorted({g.school_year for g in grades if g.school_year}, reverse=True)
+    years = sorted({g.school_year for g in grades if g.school_year}
+                   | {e.school_year for e in scheduled if e.school_year},
+                   reverse=True)
     year = request.args.get('year') or (years[0] if years else '')
 
     # (course, period) -> list of (student, latest grade)
@@ -186,10 +247,32 @@ def detail(staff_id):
     for g in grades:
         if year and g.school_year != year:
             continue
-        key = (g.course_name or 'Unknown', g.period, g.student_id)
+        key = (_class_label(g.course_name), g.period, g.student_id)
         prev = by_student_class.get(key)
         if not prev or (g.quarter or 0) > (prev.quarter or 0):
             by_student_class[key] = g
+
+    # Roster from the schedule, so a class shows its students before any grade
+    # exists. A student already listed from a grade row is not repeated.
+    listed = set(by_student_class)
+    for e in scheduled:
+        if year and e.school_year != year:
+            continue
+        key = (_class_label(e.course_title), e.period, e.student_id)
+        if key in listed:
+            continue
+        listed.add(key)
+        s = name_by_id.get(e.student_id)
+        if not s:
+            continue
+        classes[(key[0], key[1])]['rows'].append({
+            'id': e.student_id,
+            'name': f'{s.first_name} {s.last_name}',
+            'grade_level': s.grade_level,
+            'letter': '',
+            'is_df': False,
+            'quarter': None,
+        })
 
     for (course, period, sid), g in by_student_class.items():
         s = name_by_id.get(sid)
