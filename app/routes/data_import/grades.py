@@ -17,6 +17,7 @@ from app.routes.data_import import (
 )
 from app.routes.data_import._parsers import (
     parse_upload_file, build_grade_col_map, col, parse_quarter,
+    expand_quarter_columns,
 )
 
 
@@ -110,6 +111,10 @@ def grades_preview():
     if _header is None:
         return jsonify({'error': 'Could not read file'}), 400
 
+    # A GRD401-style export carries one column per quarter; flatten it to one
+    # row per grade before anything counts or maps columns.
+    _header, rows = expand_quarter_columns(_header, rows)
+
     col_map = build_grade_col_map(_header)
     header_quarter = col_map.get('_quarter_from_header')
 
@@ -179,6 +184,13 @@ def grades_preview():
         'empty_grade': empty_grade,
         'sample': sample_rows,
         'default_school_year': current_school_year(),
+        # GRD401 and friends carry no school year at all, so the counselor has
+        # to say which year the file is for. Defaulting silently would file a
+        # whole year of grades under the wrong one.
+        'has_school_year': 'school_year' in col_map,
+        'quarters': sorted({q for q in (
+            parse_quarter(col(r, col_map, 'mark_name')) for r in rows
+        ) if q}) if 'mark_name' in col_map else ([header_quarter] if header_quarter else []),
     })
 
 
@@ -199,7 +211,7 @@ def grades_upload():
             return redirect(url_for('data_import.grades_upload'))
 
         # School year from form (since Synergy doesn't include it)
-        form_school_year = request.form.get('school_year', '').strip() or default_school_year
+        form_school_year = request.form.get('school_year', '').strip()
         # Grade type: 'final' (quarter grades) or 'progress' (mid-quarter progress report)
         form_grade_type = request.form.get('grade_type', 'final').strip()
         if form_grade_type not in ('final', 'progress'):
@@ -208,6 +220,21 @@ def grades_upload():
         _header, rows = parse_upload_file(file)
         if rows is None:
             return redirect(url_for('data_import.grades_upload'))
+
+        # Same flattening as the preview, so what was previewed is what commits.
+        _header, rows = expand_quarter_columns(_header, rows)
+
+        # A report like GRD401 carries no school year, so one has to be chosen.
+        # Guarded here rather than only in the browser: falling back to "this
+        # year" would file a whole year of grades under the wrong one, and it
+        # would look like it worked.
+        if not form_school_year:
+            if 'school_year' in build_grade_col_map(_header):
+                form_school_year = default_school_year   # the file supplies it per row
+            else:
+                flash('Choose the school year this file covers — '
+                      'the report itself does not say.', 'danger')
+                return redirect(url_for('data_import.grades_upload'))
 
         added = 0
         updated = 0
@@ -240,11 +267,24 @@ def grades_upload():
         # Auto-purge: when importing FINAL grades, delete progress report grades
         # for the same quarter/year/students
         purged = 0
-        if form_grade_type == 'final' and header_quarter and form_school_year:
-            purged = GradeRecord.query.filter_by(
-                school_year=form_school_year,
-                quarter=header_quarter,
-                grade_type='progress',
+        # A single-quarter export names its quarter in the header; a flattened
+        # multi-quarter one carries a quarter per row, so collect those instead
+        # or the superseded progress grades would survive for every quarter but
+        # the first.
+        purge_quarters = set()
+        if header_quarter:
+            purge_quarters.add(header_quarter)
+        elif 'mark_name' in col_map:
+            for row in rows:
+                q = parse_quarter(col(row, col_map, 'mark_name'))
+                if q:
+                    purge_quarters.add(q)
+
+        if form_grade_type == 'final' and purge_quarters and form_school_year:
+            purged = GradeRecord.query.filter(
+                GradeRecord.school_year == form_school_year,
+                GradeRecord.quarter.in_(sorted(purge_quarters)),
+                GradeRecord.grade_type == 'progress',
             ).delete(synchronize_session=False)
             if purged:
                 db.session.commit()
