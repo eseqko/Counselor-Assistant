@@ -17,6 +17,7 @@ from app.routes.data_import import (
 )
 from app.routes.data_import._parsers import (
     parse_upload_file, build_grade_col_map, col, parse_quarter,
+    expand_quarter_columns,
 )
 
 
@@ -109,6 +110,10 @@ def grades_preview():
     _header, rows = parse_upload_file(file)
     if _header is None:
         return jsonify({'error': 'Could not read file'}), 400
+
+    # A GRD401-style export carries one column per quarter; flatten it to one
+    # row per grade before anything counts or maps columns.
+    _header, rows = expand_quarter_columns(_header, rows)
 
     col_map = build_grade_col_map(_header)
     header_quarter = col_map.get('_quarter_from_header')
@@ -209,6 +214,9 @@ def grades_upload():
         if rows is None:
             return redirect(url_for('data_import.grades_upload'))
 
+        # Same flattening as the preview, so what was previewed is what commits.
+        _header, rows = expand_quarter_columns(_header, rows)
+
         added = 0
         updated = 0
         skipped = 0
@@ -240,11 +248,24 @@ def grades_upload():
         # Auto-purge: when importing FINAL grades, delete progress report grades
         # for the same quarter/year/students
         purged = 0
-        if form_grade_type == 'final' and header_quarter and form_school_year:
-            purged = GradeRecord.query.filter_by(
-                school_year=form_school_year,
-                quarter=header_quarter,
-                grade_type='progress',
+        # A single-quarter export names its quarter in the header; a flattened
+        # multi-quarter one carries a quarter per row, so collect those instead
+        # or the superseded progress grades would survive for every quarter but
+        # the first.
+        purge_quarters = set()
+        if header_quarter:
+            purge_quarters.add(header_quarter)
+        elif 'mark_name' in col_map:
+            for row in rows:
+                q = parse_quarter(col(row, col_map, 'mark_name'))
+                if q:
+                    purge_quarters.add(q)
+
+        if form_grade_type == 'final' and purge_quarters and form_school_year:
+            purged = GradeRecord.query.filter(
+                GradeRecord.school_year == form_school_year,
+                GradeRecord.quarter.in_(sorted(purge_quarters)),
+                GradeRecord.grade_type == 'progress',
             ).delete(synchronize_session=False)
             if purged:
                 db.session.commit()

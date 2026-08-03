@@ -66,6 +66,55 @@ GRADE_COL_ALIASES = {
 }
 
 
+_QUARTER_HEADER_RE = re.compile(r'^(?:quarter|qtr|q)\s*([1-4])$')
+
+
+def find_quarter_columns(header):
+    """[(column_index, quarter_number)] for every 'Quarter N' header, in order."""
+    found = []
+    for i, h in enumerate(header or []):
+        m = _QUARTER_HEADER_RE.match(str(h or '').strip().lower())
+        if m:
+            found.append((i, int(m.group(1))))
+    return found
+
+
+def expand_quarter_columns(header, rows):
+    """Unpivot a wide Synergy grade report (GRD401) into one row per grade.
+
+    GRD401 ships a column PER QUARTER — Quarter 1 through Quarter 4 — with the
+    letter grade sitting in whichever one matches that section's term, and the
+    others blank. The rest of this importer expects the long shape: one row per
+    student per course per quarter, with a single letter-grade column.
+
+    Without this, a four-quarter export imported as a single quarter: the
+    header scan below picks the FIRST "Quarter N" column it sees, so a full
+    year of grades silently became Quarter 1 only — roughly a quarter of the
+    file, with the rest dropped and no warning.
+
+    Returns (header, rows) untouched when fewer than two quarter columns are
+    present, so a single-quarter export keeps using the existing path.
+    """
+    qcols = find_quarter_columns(header)
+    if len(qcols) < 2:
+        return header, rows
+
+    drop = {i for i, _ in qcols}
+    keep = [i for i in range(len(header)) if i not in drop]
+    new_header = [header[i] for i in keep] + ['Letter Grade', 'Mark Name']
+
+    out = []
+    for row in rows:
+        base = [row[i] if i < len(row) else '' for i in keep]
+        for ci, quarter in qcols:
+            cell = row[ci] if ci < len(row) else None
+            letter = '' if cell is None else str(cell).strip()
+            if not letter:
+                continue          # that quarter simply isn't graded for this row
+            out.append(list(base) + [letter, 'Quarter %d' % quarter])
+    return new_header, out
+
+
 def build_grade_col_map(header):
     """Map canonical column names to 0-based indices from the actual header row.
 
