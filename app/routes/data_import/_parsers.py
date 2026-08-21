@@ -282,13 +282,36 @@ def convert_synergy_rows(header, rows):
                 return header_lower.index(name)
         return None
 
-    id_col = find_col(['perm id', 'student id', 'student id #'])
+    # 'Sis Number' is how the ATP201 attendance report names the student id —
+    # it has no Perm ID column at all, so leaving it out rejected the whole
+    # report the district actually exports.
+    id_col = find_col(['perm id', 'student id', 'student id #',
+                       'sis number', 'sis id'])
     date_col = find_col(['date'])
     name_col = find_col(['student name', 'name'])
     grade_col = find_col(['grd', 'grade'])
 
     if id_col is None or date_col is None or not period_cols:
         return None  # Not a valid Synergy file
+
+    # Keep only period columns that carry at least one mark anywhere in the
+    # file. ATP201 always ships Period 0..Period 10, but this school's bell
+    # schedule uses five of them — emitting a present row for every padded
+    # column made a fully absent day read as 5 absent of 11 scheduled (45%),
+    # under the 50% absent-day threshold, so no day EVER counted absent and
+    # every student looked satisfactory. The live columns define the real
+    # schedule, the same way the source Attendance Tracker infers periods-
+    # per-day from the marks.
+    live = {}
+    for row in rows:
+        for period_num, col_idx in period_cols.items():
+            if period_num in live:
+                continue
+            if col_idx < len(row) and str(row[col_idx] or '').strip():
+                live[period_num] = col_idx
+    if live:
+        period_cols = live
+    # else: a file with no marks at all — keep every column; nothing to skew.
 
     flat_rows = []
     # Carry-forward state for grouped student rows
@@ -312,6 +335,10 @@ def convert_synergy_rows(header, rows):
             row_name = current_name
 
         date_str = row[date_col].strip() if date_col is not None else ''
+        # ATP201 tags each date with the day's bell schedule — "08/07/2026
+        # (D2S)", "(MFonly)", "(W2122)". parse_date returns None on the
+        # annotated form, which silently dropped every row of the report.
+        date_str = re.sub(r'\s*\([^)]*\)\s*$', '', date_str)
 
         if not row_id or not date_str:
             continue

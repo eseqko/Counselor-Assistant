@@ -47,6 +47,12 @@ SYNERGY_STATUS_MAP = {
     'parent unexcused': ('absent', 'Parent Unexcused'),
     'tardy':            ('tardy', 'Tardy'),
     'unexcused tardy':  ('tardy', 'Unexcused Tardy'),
+    # Spellings the ATP201 report actually emits: "Ilness" is the SIS's own
+    # misspelling (keep the correct spelling too, above), and tardies come
+    # abbreviated or with a duration.
+    'ilness':           ('excused', 'Illness'),
+    'unx.tardy':        ('tardy', 'Unexcused Tardy'),
+    'tardy 30min':      ('tardy', 'Tardy 30min'),
 }
 
 # Fields that can be bulk-updated via spreadsheet
