@@ -352,6 +352,52 @@ def view_student(id):
     attendance_rate = (round(100 - att['rate_pct'], 1)
                        if att['rate_pct'] is not None else None)
 
+    # ── Attendance detail: tier, streaks, calendar heatmap, weekly trend ──
+    # Ported from the counselor's standalone Attendance Tracker; the same
+    # math drives Reports > Attendance Insights, so the two never disagree.
+    # The school calendar comes from ALL attendance in the window, because a
+    # single student's marked days are not the school calendar — their
+    # unlisted days mean present, not non-days.
+    from app.models.attendance import AttendanceRecord
+    from app.utils.attendance_analysis import (
+        TIER_LABELS as ATT_TIER_LABELS, build_bundle as build_att_bundle,
+        calendar_heatmap, period_table, weekly_series)
+    today = date.today()
+    att_start = (date(today.year - 1, 8, 1) if today.month < 8
+                 else date(today.year, 8, 1))
+    att_rows = db.session.query(
+        AttendanceRecord.student_id, AttendanceRecord.date,
+        AttendanceRecord.period, AttendanceRecord.status,
+        AttendanceRecord.reason,
+    ).filter(
+        AttendanceRecord.student_id == student.id,
+        AttendanceRecord.date >= att_start).all()
+    attendance_detail = None
+    if att_rows:
+        school_days = [d for (d,) in db.session.query(
+            AttendanceRecord.date).filter(
+                AttendanceRecord.date >= att_start).distinct().all()]
+        att_bundle = build_att_bundle(
+            att_rows, student_ids={student.id}, calendar=school_days,
+            enrollment_starts=({student.id: student.enrollment_date}
+                               if student.enrollment_date else None))
+        # Per-period unexcused misses (the tracker's "By class period"),
+        # against the school-day denominator.
+        p_table = period_table(att_rows, sessions=len(school_days)).get(
+            student.id, {})
+        by_class_period = [
+            {'period': p, **cell} for p, cell in sorted(p_table.items())
+            if cell['unexcused'] > 0
+        ]
+        attendance_detail = {
+            'metrics': att_bundle['metrics'][student.id],
+            'heatmap': calendar_heatmap(att_bundle['days'],
+                                        att_bundle['calendar'], student.id),
+            'weekly': weekly_series(att_bundle['weekly'].get(student.id, [])),
+            'by_period': by_class_period,
+            'tier_labels': ATT_TIER_LABELS,
+        }
+
     # Per-student screening history with delta vs the previous result of the
     # same screener (screenings previously had no per-student surface at all).
     from app.models.screening import ScreeningResult
@@ -437,6 +483,7 @@ def view_student(id):
         uses_state_min=uses_state_min,
         state_min_risk=state_min_risk,
         attendance_rate=attendance_rate,
+        attendance_detail=attendance_detail,
         goals_completion_pct=goals_completion_pct,
         action_plan=action_plan,
         grad_data=grad_data,

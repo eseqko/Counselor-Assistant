@@ -1155,3 +1155,186 @@ def elpac_cohorts_export():
 
     return Response(buf.getvalue(), mimetype='text/csv',
         headers={'Content-Disposition': 'attachment; filename=ELPAC_Cohorts.csv'})
+
+
+# ---------------------------------------------------------------------------
+# Attendance Insights — ported from the counselor's standalone Attendance
+# Tracker (github.com/eseqko/attendancetracker): tier watch-list, patterns
+# (Monday/Friday, streaks, period skipping), trends and breakdowns.
+# ---------------------------------------------------------------------------
+
+_ATTENDANCE_WINDOWS = [
+    ('year', 'This school year'),
+    ('90', 'Last 90 days'),
+    ('30', 'Last 30 days'),
+]
+
+_TIER_FILTERS = [('all', 'All tiers'), ('at_risk', 'At risk +'),
+                 ('chronic', 'Chronic +'), ('severe', 'Severe only')]
+
+#: Minimum tier index for each filter (TIERS order).
+_TIER_MIN_INDEX = {'all': 0, 'at_risk': 1, 'chronic': 2, 'severe': 3}
+
+
+def _attendance_window_start(window, today=None):
+    """Start date for a report window. 'year' uses the app's school-year
+    convention (Aug 1), matching analytics.py's range logic."""
+    today = today or date.today()
+    if window == '30':
+        return today - timedelta(days=30)
+    if window == '90':
+        return today - timedelta(days=90)
+    return date(today.year - 1, 8, 1) if today.month < 8 else date(today.year, 8, 1)
+
+
+@reports_bp.route('/attendance-insights')
+@login_required
+def attendance_insights():
+    """Attendance watch-list, tiers, and pattern detection for the caseload."""
+    from app.utils.attendance_analysis import (
+        TIER_LABELS, TIERS, build_bundle, by_month, by_period, by_weekday,
+        summarize_population,
+    )
+
+    window = request.args.get('window', 'year')
+    if window not in {k for k, _ in _ATTENDANCE_WINDOWS}:
+        window = 'year'
+    tier_filter = request.args.get('tier', 'all')
+    if tier_filter not in _TIER_MIN_INDEX:
+        tier_filter = 'all'
+    declining_only = request.args.get('declining') == '1'
+    flagged_only = request.args.get('flagged') == '1'
+
+    start = _attendance_window_start(window)
+
+    students = Student.query.filter_by(
+        assigned_counselor_id=current_user.id, status='active'
+    ).filter(Student.is_sample == False).all()  # noqa: E712
+    student_by_id = {s.id: s for s in students}
+
+    # Only the four attributes the analysis reads (plus reason for the
+    # Activity/Office-Excused correction) — full ORM objects would be
+    # materialized tens of thousands at a time on a year window.
+    _att_cols = (AttendanceRecord.student_id, AttendanceRecord.date,
+                 AttendanceRecord.period, AttendanceRecord.status,
+                 AttendanceRecord.reason)
+    rows = []
+    if student_by_id:
+        rows = db.session.query(*_att_cols).filter(
+            AttendanceRecord.student_id.in_(list(student_by_id)),
+            AttendanceRecord.date >= start,
+        ).all()
+        # No DB uniqueness exists on (student, date, period) — the importer
+        # dedupes in memory, but rows written by other paths could double a
+        # day's periods and overstate the absent share. Keep first.
+        seen, deduped = set(), []
+        for r in rows:
+            key = (r.student_id, r.date, r.period)
+            if key not in seen:
+                seen.add(key)
+                deduped.append(r)
+        rows = deduped
+
+    bundle = build_bundle(
+        rows, student_ids=set(student_by_id),
+        enrollment_starts={s.id: s.enrollment_date for s in students
+                           if s.enrollment_date})
+    metrics = bundle['metrics']
+    caseload_summary = summarize_population(
+        {sid: m for sid, m in metrics.items() if m['attendance_rate'] is not None})
+
+    # Schoolwide baseline: every student's attendance in the window, shadow
+    # rows included — aggregates only, mirroring both the tracker's baseline
+    # and the grades importer's school-wide comparison. Shown only when the
+    # school population is meaningfully larger than the caseload, otherwise
+    # "caseload vs school" is the caseload compared with itself.
+    baseline = None
+    school_q = db.session.query(*_att_cols).join(
+        Student, Student.id == AttendanceRecord.student_id
+    ).filter(
+        AttendanceRecord.date >= start,
+        Student.is_sample == False,  # noqa: E712 — the screener test vehicle
+    )
+    if school_q.count() > len(rows):
+        school_metrics = build_bundle(school_q.all())['metrics']
+        if len(school_metrics) > len([m for m in metrics.values()
+                                      if m['attendance_rate'] is not None]):
+            baseline = summarize_population(school_metrics)
+
+    # Watch-list: caseload students with data, worst absence first (the
+    # tracker's sort), filtered by tier / trend / pattern flags.
+    min_tier = _TIER_MIN_INDEX[tier_filter]
+    watchlist = []
+    for sid, m in metrics.items():
+        student = student_by_id.get(sid)
+        if student is None or m['attendance_rate'] is None:
+            continue
+        if m['tier'] and TIERS.index(m['tier']) < min_tier:
+            continue
+        if tier_filter != 'all' and not m['tier']:
+            continue
+        if declining_only and m['trend'] != 'declining':
+            continue
+        if flagged_only and not (m['mon_fri_flag'] or m['worst_period']
+                                 or m['current_streak'] >= 3):
+            continue
+        watchlist.append({'student': student, **m})
+    watchlist.sort(key=lambda r: r['absence_pct'], reverse=True)
+
+    no_data = sorted((student_by_id[sid] for sid, m in metrics.items()
+                      if m['attendance_rate'] is None and sid in student_by_id),
+                     key=lambda s: (s.last_name or '', s.first_name or ''))
+
+    # Pattern tables (all caseload, unfiltered — patterns are the point).
+    with_data = [r for r in (dict(m, student=student_by_id[sid])
+                             for sid, m in metrics.items() if sid in student_by_id)
+                 if r['attendance_rate'] is not None]
+    mon_fri = sorted((r for r in with_data if r['mon_fri_flag']),
+                     key=lambda r: r['absence_pct'], reverse=True)
+    streaks = sorted((r for r in with_data if r['max_streak'] >= 3),
+                     key=lambda r: (r['current_streak'], r['max_streak']),
+                     reverse=True)
+    skippers = sorted((r for r in with_data if r['worst_period']),
+                      key=lambda r: r['absence_pct'], reverse=True)
+    declining = [r for r in with_data if r['trend'] == 'declining']
+
+    # "X% of tardies are in period 1 — morning arrival" (tracker: patterns.py).
+    tardy_period_rows = [r for r in rows if r.period is not None
+                         and (r.status or '').strip().lower() == 'tardy']
+    first_period_tardy_share = None
+    if tardy_period_rows:
+        first_period_tardy_share = round(
+            100 * sum(1 for r in tardy_period_rows if r.period in (0, 1))
+            / len(tardy_period_rows))
+
+    tier_counts = caseload_summary['tier_counts']
+    chart = {
+        'tiers': {
+            'labels': [TIER_LABELS[t] for t in TIERS],
+            'counts': [tier_counts[t] for t in TIERS],
+        },
+        'weekday': by_weekday(bundle['days']),
+        'months': [
+            {**m, 'month': m['month'].strftime('%b %Y')}
+            for m in by_month(bundle['days'])
+        ],
+    }
+    periods = by_period(rows)
+
+    log_action('view', 'report', details=f'Attendance insights ({window})')
+
+    return render_template('reports/attendance_insights.html',
+        window=window, window_options=_ATTENDANCE_WINDOWS,
+        tier_filter=tier_filter, tier_options=_TIER_FILTERS,
+        declining_only=declining_only, flagged_only=flagged_only,
+        start=start,
+        has_data=bool(rows),
+        summary=caseload_summary, baseline=baseline,
+        watchlist=watchlist, no_data=no_data,
+        mon_fri=mon_fri, streaks=streaks, skippers=skippers,
+        declining=declining,
+        chart=chart, periods=periods,
+        first_period_tardy_share=first_period_tardy_share,
+        tier_labels=TIER_LABELS, tiers=TIERS,
+        school_days=len(bundle['calendar']),
+    )
