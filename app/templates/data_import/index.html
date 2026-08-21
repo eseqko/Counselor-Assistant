@@ -73,8 +73,10 @@
                 <a href="{{ url_for('data_import.attendance_upload') }}" class="btn btn-primary">Upload Attendance</a>
             </div>
             <div style="font-size:0.82rem;color:var(--gray);">
-                <strong>Accepted formats:</strong> .xlsx, .csv<br>
-                <strong>Columns:</strong> Student ID #, Date, Period, Status, Course Name, Reason
+                <strong>Best:</strong> the Synergy <code>ATP201</code> report (.xlsx) &mdash;
+                auto-detected, no reformatting<br>
+                <strong>Also accepted:</strong> the template (.xlsx, .csv) with columns
+                Student ID #, Date, Period, Status, Course Name, Reason
             </div>
             {% if attendance_count > 0 %}
             <form method="POST" action="{{ url_for('data_import.clear_attendance') }}" style="margin-top:12px;"

@@ -43,12 +43,17 @@
                     </ul>
                 </div>
                 <div style="background:#e8f4e8;border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.82rem;">
-                    <strong>Synergy SIS compatible:</strong>
+                    <strong>Best: the Synergy <code>ATP201</code> attendance report</strong> &mdash;
+                    upload it directly, no reformatting needed.
                     <ul style="margin-top:4px;padding-left:20px;">
-                        <li>Upload the Synergy attendance report directly &mdash; no reformatting needed</li>
-                        <li>The format is auto-detected (looks for Period 0, Period 1, &hellip; columns)</li>
-                        <li>Only students on your caseload are imported; the rest are skipped</li>
-                        <li>Synergy codes (Illness, Cut, Activity, etc.) are mapped automatically</li>
+                        <li>Auto-detected by its Period 0, Period 1, &hellip; columns; students
+                            are matched by <em>Sis Number</em> (or Perm ID)</li>
+                        <li>Bell-schedule tags on dates &mdash; "08/07/2026 (D2S)" &mdash; are handled</li>
+                        <li>Synergy codes (Illness, Unverified, Cut, Unx.Tardy, Activity, &hellip;)
+                            are mapped automatically; Activity and Office Excused count as
+                            present in reports, matching the district's own totals</li>
+                        <li>Students not on your caseload are kept as anonymous school-wide
+                            rows, so Attendance Insights can compare your caseload to the school</li>
                     </ul>
                 </div>
                 <button type="submit" class="btn btn-success">Upload & Import</button>
