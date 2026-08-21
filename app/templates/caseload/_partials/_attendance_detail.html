@@ -1,0 +1,156 @@
+{# Attendance detail — year-at-a-glance heatmap, weekly trend, patterns.
+   Context: attendance_detail (metrics / heatmap / weekly / tier_labels).
+   Ported from the counselor's standalone Attendance Tracker; the math is
+   shared with Reports > Attendance Insights via attendance_analysis. #}
+{% if attendance_detail %}
+{% set m = attendance_detail.metrics %}
+{% set tier_color = {'satisfactory': '#0ca30c', 'at_risk': '#fab219',
+                     'chronic': '#ec835a', 'severe': '#d03b3b'} %}
+
+<div class="card">
+    <div class="card-header">
+        Attendance This Year
+        {% if m.tier %}
+        <span class="badge" style="background:{{ tier_color[m.tier] }}22;color:{{ tier_color[m.tier] }};border:1px solid {{ tier_color[m.tier] }};">
+            {{ attendance_detail.tier_labels[m.tier] }}
+        </span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div style="display:flex;gap:22px;flex-wrap:wrap;font-size:0.86rem;margin-bottom:12px;">
+            <div><strong style="font-size:1.15rem;">{{ (m.attendance_rate * 100)|round(1) }}%</strong>
+                <div style="color:var(--text-muted);font-size:0.74rem;">ATTENDANCE RATE</div></div>
+            <div><strong style="font-size:1.15rem;">{{ m.days_absent }}</strong>
+                <span style="color:var(--text-muted);font-size:0.78rem;">of {{ m.days_enrolled }}</span>
+                <div style="color:var(--text-muted);font-size:0.74rem;">DAYS ABSENT
+                    ({{ m.days_excused }} exc / {{ m.days_unexcused }} unexc)</div></div>
+            <div><strong style="font-size:1.15rem;">{{ m.days_tardy }}</strong>
+                <div style="color:var(--text-muted);font-size:0.74rem;">TARDY DAYS</div></div>
+            <div><strong style="font-size:1.15rem;">{{ m.current_streak }}</strong>
+                <span style="color:var(--text-muted);font-size:0.78rem;">now &middot; longest {{ m.max_streak }}</span>
+                <div style="color:var(--text-muted);font-size:0.74rem;">ABSENCE STREAK</div></div>
+            <div>
+                {% if m.trend == 'declining' %}<strong style="color:var(--danger);">&#9660; Declining</strong>
+                {% elif m.trend == 'improving' %}<strong style="color:var(--success);">&#9650; Improving</strong>
+                {% elif m.trend == 'stable' %}<strong>&#8212; Steady</strong>
+                {% else %}<strong style="color:var(--text-muted);">&mdash;</strong>{% endif %}
+                {% if m.trend_slope is not none %}
+                <span style="color:var(--text-muted);font-size:0.78rem;">{{ '%+.1f'|format(m.trend_slope) }} pp/wk</span>
+                {% endif %}
+                <div style="color:var(--text-muted);font-size:0.74rem;">6-WEEK TREND</div>
+            </div>
+            {% if m.mon_fri_flag or m.worst_period %}
+            <div style="display:flex;gap:6px;align-items:flex-start;">
+                {% if m.mon_fri_flag %}<span class="badge badge-warning" title="Monday/Friday absences at least 1.5x the midweek rate">Mon/Fri pattern</span>{% endif %}
+                {% if m.worst_period %}<span class="badge badge-danger" title="Unexcused absences concentrate in this period">Skips P{{ m.worst_period }}</span>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {# Year at a glance: weeks x weekday grid of day statuses. #}
+        {% set day_color = {'present': 'var(--success)',
+                            'tardy': '#fab219',
+                            'partial': '#ec835a',
+                            'absent_excused': '#ec835a',
+                            'absent_unexcused': '#d03b3b'} %}
+        <div style="overflow-x:auto;padding-bottom:4px;">
+            <table style="border-collapse:separate;border-spacing:2px;width:auto;">
+                {% for weekday in ['M', 'T', 'W', 'Th', 'F'] %}
+                <tr>
+                    <td style="font-size:0.64rem;color:var(--text-muted);padding:0 4px 0 0;border:none;">{{ weekday }}</td>
+                    {% for cell in attendance_detail.heatmap.cells[loop.index0] %}
+                    <td style="width:11px;height:11px;padding:0;border:none;border-radius:2px;
+                               background:{{ day_color.get(cell.status, 'var(--light-gray)') if cell else 'transparent' }};
+                               {% if cell and cell.status in ('absent_unexcused', 'absent_excused') %}outline:1px solid rgba(0,0,0,0.25);outline-offset:-1px;{% endif %}"
+                        {% if cell %}title="{{ cell.date }} — {{ (cell.status or 'present')|replace('_', ' ') }}"{% endif %}></td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <div style="display:flex;gap:12px;font-size:0.7rem;color:var(--text-muted);margin:6px 0 14px;flex-wrap:wrap;">
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--success);"></span> Present</span>
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#fab219;"></span> Tardy</span>
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#ec835a;"></span> Partial / excused absence</span>
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#d03b3b;"></span> Unexcused absence</span>
+        </div>
+
+        {% if attendance_detail.by_period %}
+        <div style="margin-bottom:14px;">
+            <div style="font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;">
+                UNEXCUSED MISSES BY CLASS PERIOD
+            </div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.84rem;">
+                {% for p in attendance_detail.by_period %}
+                <span>
+                    <strong>P{{ p.period }}</strong>
+                    {{ p.unexcused }} of {{ p.scheduled }}
+                    <span style="color:{{ 'var(--danger)' if p.rate >= 0.2 else 'var(--text-muted)' }};">
+                        ({{ (p.rate * 100)|round(0)|int }}%)</span>
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if attendance_detail.weekly|length >= 2 %}
+        <div style="position:relative;height:170px;">
+            <canvas id="att-weekly-chart"></canvas>
+        </div>
+        {% else %}
+        <div class="empty-note" style="font-size:0.8rem;color:var(--text-muted);">
+            Not enough weeks of data yet for a weekly trend line.
+        </div>
+        {% endif %}
+
+        <p style="font-size:0.72rem;color:var(--text-muted);margin:10px 0 0;">
+            A day counts absent when at least half its recorded periods are missed;
+            unlisted school days count as present. Same math as
+            <a href="{{ url_for('reports.attendance_insights') }}">Attendance Insights</a>.
+        </p>
+    </div>
+</div>
+
+{% if attendance_detail.weekly|length >= 2 %}
+<script>
+(function() {
+    if (typeof Chart === 'undefined') return;
+    var weekly = {{ attendance_detail.weekly|tojson }};
+    var muted = getComputedStyle(document.documentElement)
+        .getPropertyValue('--text-muted').trim() || '#888';
+    new Chart(document.getElementById('att-weekly-chart'), {
+        type: 'line',
+        data: {
+            labels: weekly.map(function(w) { return w.week.slice(5); }),
+            datasets: [
+                { label: 'Weekly rate', data: weekly.map(function(w) { return w.rate; }),
+                  borderColor: '#4A90D9', backgroundColor: '#4A90D920',
+                  fill: true, tension: 0.3, pointRadius: 3 },
+                { label: '4-week average', data: weekly.map(function(w) { return w.rolling; }),
+                  borderColor: '#4A90D9', borderDash: [4, 4], pointRadius: 0,
+                  fill: false, tension: 0.3 },
+            ],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, labels: { color: muted, boxWidth: 18, font: { size: 10 } } },
+                tooltip: { callbacks: { label: function(ctx) {
+                    var w = weekly[ctx.dataIndex];
+                    return ctx.dataset.label + ': ' + ctx.parsed.y + '%'
+                        + (ctx.datasetIndex === 0
+                           ? ' (' + w.absent_days + ' absent of ' + w.school_days + ')'
+                           : '');
+                }}},
+            },
+            scales: {
+                y: { min: 0, max: 100, ticks: { color: muted,
+                     callback: function(v) { return v + '%'; } } },
+                x: { ticks: { color: muted, font: { size: 9 } } },
+            },
+        },
+    });
+})();
+</script>
+{% endif %}
+{% endif %}

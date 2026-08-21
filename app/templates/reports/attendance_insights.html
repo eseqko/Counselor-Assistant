@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% block title %}Attendance Insights{% endblock %}
+{% block page_title %}Attendance Insights{% endblock %}
+{% block content %}
+
+{# Tier status colors (fixed, labeled — color never carries meaning alone). #}
+{% set tier_color = {'satisfactory': '#0ca30c', 'at_risk': '#fab219',
+                     'chronic': '#ec835a', 'severe': '#d03b3b'} %}
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group">
+            <label>Window</label>
+            <select name="window" class="form-control" onchange="this.form.submit()">
+                {% for k, label in window_options %}
+                <option value="{{ k }}" {% if window == k %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Tier</label>
+            <select name="tier" class="form-control" onchange="this.form.submit()">
+                {% for k, label in tier_options %}
+                <option value="{{ k }}" {% if tier_filter == k %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;padding-bottom:8px;">
+            <input type="checkbox" name="declining" value="1"
+                   {% if declining_only %}checked{% endif %} onchange="this.form.submit()">
+            Declining only
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;padding-bottom:8px;">
+            <input type="checkbox" name="flagged" value="1"
+                   {% if flagged_only %}checked{% endif %} onchange="this.form.submit()">
+            Pattern flags only
+        </label>
+        <span style="font-size:0.78rem;color:var(--text-muted);padding-bottom:10px;">
+            Since {{ start|smartdate }} &middot; {{ school_days }} school day{{ '' if school_days == 1 else 's' }} on record
+        </span>
+    </form>
+</div>
+
+{% if not has_data %}
+<div class="card"><div class="card-body">
+    <div class="empty-state">
+        <p>No attendance records in this window.</p>
+        <a href="{{ url_for('data_import.attendance_upload') }}" class="btn btn-sm btn-primary">
+            Import Attendance
+        </a>
+    </div>
+</div></div>
+{% else %}
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ summary.n_with_data }}</div>
+        <div class="stat-label">Students with data</div>
+    </div>
+    <div class="stat-card {% if summary.mean_attendance_rate is not none and summary.mean_attendance_rate < 0.9 %}danger{% endif %}">
+        <div class="stat-value">
+            {%- if summary.mean_attendance_rate is not none -%}
+                {{ (summary.mean_attendance_rate * 100)|round(1) }}%
+            {%- else %}&mdash;{% endif -%}
+        </div>
+        <div class="stat-label">Mean attendance rate
+            {% if baseline and baseline.mean_attendance_rate is not none
+                  and summary.mean_attendance_rate is not none %}
+            {% set delta = (summary.mean_attendance_rate - baseline.mean_attendance_rate) * 100 %}
+            <span style="color:{{ 'var(--danger)' if delta < 0 else 'var(--success)' }};">
+                {{ '%+.1f'|format(delta) }} pp vs school
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="stat-card {% if summary.tier_counts.chronic + summary.tier_counts.severe %}danger{% endif %}">
+        <div class="stat-value">{{ summary.tier_counts.chronic + summary.tier_counts.severe }}</div>
+        <div class="stat-label">Chronic or severe</div>
+    </div>
+    <div class="stat-card {% if declining %}warning{% endif %}">
+        <div class="stat-value">{{ declining|length }}</div>
+        <div class="stat-label">Declining trend</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Chronic-Absenteeism Tiers</div>
+        <div class="card-body" style="position:relative;height:240px;">
+            <canvas id="tier-chart"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Caseload vs Schoolwide</div>
+        <div class="card-body">
+            {% if baseline %}
+            <table style="font-size:0.86rem;">
+                <thead><tr><th>Cohort</th><th>Students</th>
+                    <th>Mean attendance</th><th>Chronic or worse</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td style="font-weight:600;">My caseload</td>
+                        <td>{{ summary.n_with_data }}</td>
+                        <td>{{ (summary.mean_attendance_rate * 100)|round(1) if summary.mean_attendance_rate is not none else '—' }}%</td>
+                        <td>{{ summary.pct_chronic_or_worse|round(1) if summary.pct_chronic_or_worse is not none else '—' }}%</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight:600;">Schoolwide</td>
+                        <td>{{ baseline.n_with_data }}</td>
+                        <td>{{ (baseline.mean_attendance_rate * 100)|round(1) if baseline.mean_attendance_rate is not none else '—' }}%</td>
+                        <td>{{ baseline.pct_chronic_or_worse|round(1) if baseline.pct_chronic_or_worse is not none else '—' }}%</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:0.76rem;color:var(--text-muted);margin:10px 0 0;">
+                Schoolwide figures are aggregates over every student in your imported
+                attendance, including students not on any caseload. Only students with
+                at least one attendance mark can be counted, so schoolwide absence is
+                slightly overstated when perfect-attendance students aren't in the export.
+            </p>
+            {% else %}
+            <div class="empty-state" style="padding:14px 0;">
+                <p style="font-size:0.85rem;">
+                    No schoolwide baseline &mdash; your attendance import covers only your
+                    own caseload. Import a schoolwide report to compare against the school.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        Watch-List
+        <span style="font-size:0.8rem;font-weight:400;color:var(--text-muted);">
+            worst absence first &middot; {{ watchlist|length }} student{{ '' if watchlist|length == 1 else 's' }}
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr>
+                <th>Student</th><th>Grade</th><th>Tier</th><th>Absence</th>
+                <th>Days absent</th><th>Tardy</th><th>Streak</th><th>Trend</th><th>Patterns</th>
+            </tr></thead>
+            <tbody>
+            {% for r in watchlist %}
+                <tr>
+                    <td><a href="{{ url_for('caseload.view_student', id=r.student.id) }}">{{ r.student.display_name }}</a></td>
+                    <td>{{ r.student.grade_level or '—' }}</td>
+                    <td>
+                        <span class="badge" style="background:{{ tier_color[r.tier] }}22;color:{{ tier_color[r.tier] }};border:1px solid {{ tier_color[r.tier] }};">
+                            {{ tier_labels[r.tier] }}
+                        </span>
+                    </td>
+                    <td style="font-weight:600;">{{ r.absence_pct|round(1) }}%</td>
+                    <td>{{ r.days_absent }} of {{ r.days_enrolled }}
+                        <span style="color:var(--text-muted);font-size:0.76rem;">
+                            ({{ r.days_unexcused }} unexc)</span></td>
+                    <td>{{ r.days_tardy }}</td>
+                    <td>{% if r.current_streak %}<strong>{{ r.current_streak }} now</strong> &middot; {% endif %}max {{ r.max_streak }}</td>
+                    <td>
+                        {% if r.trend == 'declining' %}<span style="color:var(--danger);">&#9660; declining</span>
+                        {% elif r.trend == 'improving' %}<span style="color:var(--success);">&#9650; improving</span>
+                        {% elif r.trend == 'stable' %}steady
+                        {% else %}<span style="color:var(--text-muted);">&mdash;</span>{% endif %}
+                        {% if r.trend_slope is not none %}
+                        <span style="color:var(--text-muted);font-size:0.76rem;">{{ '%+.1f'|format(r.trend_slope) }} pp/wk</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:0.8rem;">
+                        {% if r.mon_fri_flag %}<span class="badge badge-warning" title="Monday/Friday absences at least 1.5x the midweek rate">Mon/Fri</span>{% endif %}
+                        {% if r.worst_period %}<span class="badge badge-danger" title="Unexcused absences concentrate in this period">Skips P{{ r.worst_period }}</span>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if not watchlist %}
+                <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px;">
+                    No students match these filters.
+                </td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">Absence Rate by Weekday</div>
+        <div class="card-body" style="position:relative;height:220px;">
+            <canvas id="weekday-chart"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Absence Rate by Month</div>
+        <div class="card-body" style="position:relative;height:220px;">
+            <canvas id="month-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            Consecutive-Absence Streaks
+            <span style="font-size:0.78rem;font-weight:400;color:var(--text-muted);">3+ school days</span>
+        </div>
+        <div class="card-body">
+            {% if streaks %}
+            <table style="font-size:0.85rem;">
+                <thead><tr><th>Student</th><th>Current</th><th>Longest</th><th>Tier</th></tr></thead>
+                <tbody>
+                {% for r in streaks[:12] %}
+                    <tr>
+                        <td><a href="{{ url_for('caseload.view_student', id=r.student.id) }}">{{ r.student.display_name }}</a></td>
+                        <td>{% if r.current_streak %}<strong style="color:var(--danger);">{{ r.current_streak }}</strong>{% else %}0{% endif %}</td>
+                        <td>{{ r.max_streak }}</td>
+                        <td style="font-size:0.78rem;color:{{ tier_color[r.tier] }};">{{ tier_labels[r.tier] }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <p style="font-size:0.76rem;color:var(--text-muted);margin:8px 0 0;">
+                Streaks count school days, so weekends and breaks never interrupt a run.
+                "Current" means the run reaches the most recent school day on record.
+            </p>
+            {% else %}
+            <div class="empty-state" style="padding:12px 0;"><p style="font-size:0.85rem;">No streaks of 3+ school days.</p></div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Possible Period Skipping</div>
+        <div class="card-body">
+            {% if skippers %}
+            <table style="font-size:0.85rem;">
+                <thead><tr><th>Student</th><th>Period</th><th>Absence</th><th>Tier</th></tr></thead>
+                <tbody>
+                {% for r in skippers[:12] %}
+                    <tr>
+                        <td><a href="{{ url_for('caseload.view_student', id=r.student.id) }}">{{ r.student.display_name }}</a></td>
+                        <td><strong>P{{ r.worst_period }}</strong></td>
+                        <td>{{ r.absence_pct|round(1) }}%</td>
+                        <td style="font-size:0.78rem;color:{{ tier_color[r.tier] }};">{{ tier_labels[r.tier] }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <p style="font-size:0.76rem;color:var(--text-muted);margin:8px 0 0;">
+                Flagged when one period's unexcused-absence rate is at least twice the
+                student's other periods, with a minimum of 3 misses.
+            </p>
+            {% elif periods %}
+            <div class="empty-state" style="padding:12px 0;"><p style="font-size:0.85rem;">No student shows a concentrated single-period pattern.</p></div>
+            {% else %}
+            <div class="empty-state" style="padding:12px 0;"><p style="font-size:0.85rem;">
+                Needs period-level attendance (the Synergy import has it).
+            </p></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if mon_fri %}
+<div class="card">
+    <div class="card-header">Monday / Friday Pattern</div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Student</th><th>Grade</th><th>Tier</th><th>Absence</th><th>Days absent</th></tr></thead>
+            <tbody>
+            {% for r in mon_fri %}
+                <tr>
+                    <td><a href="{{ url_for('caseload.view_student', id=r.student.id) }}">{{ r.student.display_name }}</a></td>
+                    <td>{{ r.student.grade_level or '—' }}</td>
+                    <td style="font-size:0.8rem;color:{{ tier_color[r.tier] }};">{{ tier_labels[r.tier] }}</td>
+                    <td>{{ r.absence_pct|round(1) }}%</td>
+                    <td>{{ r.days_absent }} of {{ r.days_enrolled }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body" style="padding-top:8px;">
+        <p style="font-size:0.76rem;color:var(--text-muted);margin:0;">
+            Monday or Friday absence rate at least 1.5&times; the Tue&ndash;Thu average,
+            with 5+ total absences.
+        </p>
+    </div>
+</div>
+{% endif %}
+
+{% if periods %}
+<div class="card">
+    <div class="card-header">Absences by Period
+        {% if first_period_tardy_share is not none %}
+        <span style="font-size:0.78rem;font-weight:400;color:var(--text-muted);">
+            {{ first_period_tardy_share }}% of tardies are in period 1 &mdash; morning arrival
+        </span>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead><tr><th>Period</th><th>Unexcused</th><th>Excused</th><th>Tardies</th><th>Students affected</th></tr></thead>
+            <tbody>
+            {% for p in periods %}
+                <tr>
+                    <td style="font-weight:600;">P{{ p.period }}</td>
+                    <td>{{ p.unexcused }}</td>
+                    <td>{{ p.excused }}</td>
+                    <td>{{ p.tardies }}</td>
+                    <td>{{ p.students }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if no_data %}
+<div class="card">
+    <div class="card-header">
+        No attendance data
+        <span style="font-size:0.8rem;font-weight:400;color:var(--text-muted);">{{ no_data|length }} student{{ '' if no_data|length == 1 else 's' }}</span>
+    </div>
+    <div class="card-body">
+        <p style="font-size:0.84rem;">
+            {% for s in no_data %}<a href="{{ url_for('caseload.view_student', id=s.id) }}">{{ s.display_name }}</a>{{ ', ' if not loop.last }}{% endfor %}
+        </p>
+        <p style="font-size:0.76rem;color:var(--text-muted);margin:6px 0 0;">
+            Not in the attendance import for this window. In an exception-style export
+            that can simply mean perfect attendance &mdash; check before assuming a gap.
+        </p>
+    </div>
+</div>
+{% endif %}
+
+<p style="font-size:0.76rem;color:var(--text-muted);margin-top:4px;">
+    Method (matches your Attendance Tracker): a day counts absent when at least half
+    of its recorded periods are missed; enrolled days come from the school calendar
+    implied by the whole import, with unlisted days counted present. Tiers:
+    satisfactory &lt;5%, at&nbsp;risk 5&ndash;9%, chronic 10&ndash;19%, severe &ge;20%
+    of enrolled days missed. Trend is the slope of the weekly attendance rate over the
+    last 6 weeks (&plusmn;0.5&nbsp;pp/week splits improving/declining; 4-week minimum).
+    Other pages that count raw absence records (Early Warning, alerts) will read
+    higher on period-level imports, where one absent day is several records.
+</p>
+
+{% endif %}
+
+<script src="{{ url_for('static', filename='vendor/chart.js-4.4.1.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-enhancements.js', v=static_v('js/chart-enhancements.js')) }}"></script>
+<script>
+(function() {
+    if (typeof Chart === 'undefined') return;
+    var chart = {{ chart|tojson }};
+    var palette = window.chartPalette || ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'];
+    var muted = getComputedStyle(document.documentElement)
+        .getPropertyValue('--text-muted').trim() || '#888';
+
+    // Direct count labels at the bar end, so color never carries the value.
+    var countLabels = {
+        id: 'countLabels',
+        afterDatasetsDraw: function(c) {
+            var meta = c.getDatasetMeta(0);
+            var ctx = c.ctx;
+            ctx.save();
+            ctx.fillStyle = getComputedStyle(document.documentElement)
+                .getPropertyValue('--text').trim() || '#333';
+            ctx.font = '600 11px "Segoe UI", system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            meta.data.forEach(function(bar, i) {
+                var v = c.data.datasets[0].data[i];
+                if (v > 0) ctx.fillText(v, bar.x, bar.y - 6);
+            });
+            ctx.restore();
+        },
+    };
+
+    var tierEl = document.getElementById('tier-chart');
+    if (tierEl) {
+        new Chart(tierEl, {
+            type: 'bar',
+            data: {
+                labels: chart.tiers.labels,
+                datasets: [{
+                    data: chart.tiers.counts,
+                    backgroundColor: ['#0ca30c', '#fab219', '#ec835a', '#d03b3b'],
+                }],
+            },
+            plugins: [countLabels],
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    // grace leaves headroom so the count label above the
+                    // tallest bar isn't clipped by the chart edge.
+                    y: { beginAtZero: true, grace: '15%',
+                         ticks: { precision: 0, color: muted },
+                         title: { display: true, text: 'Students', color: muted } },
+                    x: { ticks: { color: muted, font: { size: 10 } } },
+                },
+            },
+        });
+    }
+
+    function rateBars(el, labels, rates, counts) {
+        if (!el) return;
+        new Chart(el, {
+            type: 'bar',
+            data: { labels: labels, datasets: [{
+                data: rates, backgroundColor: palette[0],
+            }]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(ctx) {
+                        return ctx.parsed.y.toFixed(1) + '% absence rate ('
+                            + counts[ctx.dataIndex] + ' absent days)';
+                    }}},
+                },
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: muted,
+                         callback: function(v) { return v + '%'; } } },
+                    x: { ticks: { color: muted, font: { size: 10 } } },
+                },
+            },
+        });
+    }
+
+    rateBars(document.getElementById('weekday-chart'),
+        chart.weekday.map(function(r) { return r.weekday.slice(0, 3); }),
+        chart.weekday.map(function(r) { return r.absence_rate * 100; }),
+        chart.weekday.map(function(r) { return r.absent_days; }));
+    rateBars(document.getElementById('month-chart'),
+        chart.months.map(function(r) { return r.month; }),
+        chart.months.map(function(r) { return r.absence_rate * 100; }),
+        chart.months.map(function(r) { return r.absent_days; }));
+})();
+</script>
+
+{% endblock %}
