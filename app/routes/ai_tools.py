@@ -18,7 +18,7 @@ from app.utils.context_budget import budget_prompt
 from app.utils.audit import log_action
 from app.models.knowledge_base import KnowledgeDocument, KnowledgeChunk
 from app.utils.knowledge_base import build_knowledge_context
-from app.utils.roles import caseload_student_or_404
+from app.utils.roles import caseload_student_or_404, owned_or_404
 
 ai_tools_bp = Blueprint('ai_tools', __name__, template_folder='../templates/ai_tools')
 
@@ -245,10 +245,8 @@ def history():
 @ai_tools_bp.route('/history/<int:entry_id>')
 @login_required
 def history_detail(entry_id):
-    entry = AIToolHistory.query.get_or_404(entry_id)
-    if entry.user_id != current_user.id:
-        flash('Access denied.', 'error')
-        return redirect(url_for('ai_tools.history'))
+    # 404 (not a redirect) for another user's entry, so ids can't be enumerated.
+    entry = owned_or_404(AIToolHistory, entry_id, owner_attr='user_id')
     tool = get_tool(entry.tool_id)
     return jsonify({
         'tool_title': entry.tool_title,
@@ -258,6 +256,32 @@ def history_detail(entry_id):
         'created_at': entry.created_at.isoformat(),
         'tool': {'id': tool['id'], 'title': tool['title']} if tool else None,
     })
+
+
+@ai_tools_bp.route('/history/<int:entry_id>/delete', methods=['POST'])
+@login_required
+def history_delete(entry_id):
+    """Delete one history entry. AIToolHistory.inputs_json stores expanded
+    prompts (student name, IEP/504/EL status, note excerpts), so a counselor
+    needs a way to remove them — e.g. to honor a FERPA amendment/deletion
+    request — without a full factory reset."""
+    entry = owned_or_404(AIToolHistory, entry_id, owner_attr='user_id')
+    db.session.delete(entry)
+    db.session.commit()
+    log_action('delete', 'ai_tool_history', entry_id, 'Deleted AI history entry')
+    flash('History entry deleted.', 'success')
+    return redirect(url_for('ai_tools.history'))
+
+
+@ai_tools_bp.route('/history/clear', methods=['POST'])
+@login_required
+def history_clear():
+    """Purge all of the current user's AI history (owner-scoped)."""
+    deleted = AIToolHistory.query.filter_by(user_id=current_user.id).delete()
+    db.session.commit()
+    log_action('delete', 'ai_tool_history', None, f'Cleared {deleted} AI history entries')
+    flash(f'Cleared {deleted} history entr{"y" if deleted == 1 else "ies"}.', 'success')
+    return redirect(url_for('ai_tools.history'))
 
 
 def _build_student_context(student_id):
@@ -439,16 +463,27 @@ def action_create_followup():
             followups = json.load(f)
 
     import uuid
+    # Match the schema the follow-ups API writes: without counselor_id and
+    # status the entry is invisible to every reader (which filter on exactly
+    # those keys) and can never be viewed or deleted — a write-only PII sink
+    # that also silently loses the follow-up.
+    valid_types = ('check-in', 'referral', 'attendance-grades')
+    ftype = data.get('followup_type', 'check-in')
+    if ftype not in valid_types:
+        ftype = 'check-in'
+    now = datetime.utcnow().isoformat()
     entry = {
         'id': str(uuid.uuid4()),
+        'counselor_id': current_user.id,
         'student_name': student_name or data.get('title', 'Follow-up'),
         'student_id': str(student_id) if student_id else '',
         'grade': '',
-        'type': data.get('followup_type', 'check-in'),
+        'type': ftype,
         'due_date': due_date,
         'notes': notes_text[:500],
-        'completed': False,
-        'created_at': datetime.utcnow().isoformat(),
+        'status': 'open',
+        'created_at': now,
+        'updated_at': now,
     }
     followups.append(entry)
     with open(followups_path, 'w') as f:
@@ -466,9 +501,13 @@ def action_save_email_draft():
         return jsonify({'ok': False, 'error': 'No content provided'}), 400
 
     import os
+    # Write to comm_templates.json — the file the drafts UI actually reads —
+    # with counselor_id, so the saved draft is visible and deletable through the
+    # scoped templates API instead of accumulating in an orphaned, unreadable
+    # email_custom_templates.json that no route ever loads.
     templates_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        'data', 'email_custom_templates.json'
+        'data', 'comm_templates.json'
     )
     templates = []
     if os.path.exists(templates_path):
@@ -478,11 +517,14 @@ def action_save_email_draft():
     import uuid
     template = {
         'id': str(uuid.uuid4()),
+        'counselor_id': current_user.id,
         'name': data.get('title', 'AI-Generated Draft'),
         'section': 'email',
         'category': 'ai_generated',
         'subject': data.get('subject', ''),
         'body': body,
+        'builtin': False,
+        'created_at': datetime.utcnow().isoformat(),
     }
     templates.append(template)
     with open(templates_path, 'w') as f:

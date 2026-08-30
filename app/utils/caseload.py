@@ -19,6 +19,36 @@ def caseload_student_ids(user, status=None):
     return [row[0] for row in q.with_entities(Student.id).all()]
 
 
+def importable_student_query(user):
+    """Query over students a bulk import may resolve a row to and write.
+
+    Scope = the user's own students PLUS every unowned record
+    (assigned_counselor_id IS NULL) — the "shadow"/unassigned students used for
+    school-wide "vs school" comparison. Real students owned by ANOTHER
+    counselor are deliberately excluded so an uploaded file can never attach or
+    overwrite records (grades, attendance, ...) on a student outside the
+    uploader's scope. Admins get the whole table for department-wide oversight.
+    """
+    from app import db
+    if getattr(user, 'role', None) == 'admin':
+        return Student.query
+    return Student.query.filter(
+        db.or_(Student.assigned_counselor_id == user.id,
+               Student.assigned_counselor_id.is_(None)))
+
+
+def importable_student_ids(user):
+    """Set of student DB IDs a bulk import by ``user`` may write to.
+
+    See importable_student_query. Use it as a membership guard after resolving
+    an uploaded row against a global perm-id/name cache: a resolved id that is
+    NOT in this set belongs to another counselor and the row must be skipped
+    (never written), mirroring the ELPAC importer's caseload check.
+    """
+    return {row[0] for row in
+            importable_student_query(user).with_entities(Student.id).all()}
+
+
 def get_or_create_sample_student(user):
     """Return this counselor's "Sample Student", creating it if needed.
 

@@ -11,6 +11,7 @@ from app.utils.knowledge_base import (
     DOCUMENT_CATEGORIES, allowed_file, extract_text_from_file, chunk_text,
 )
 from app.utils.audit import log_action
+from app.utils.roles import owned_or_404
 
 kb_bp = Blueprint('knowledge_base', __name__, template_folder='../templates/knowledge_base')
 
@@ -130,10 +131,9 @@ def upload():
 @kb_bp.route('/document/<int:doc_id>')
 @login_required
 def document(doc_id):
-    doc = KnowledgeDocument.query.get_or_404(doc_id)
-    if doc.user_id != current_user.id:
-        flash('Access denied.', 'error')
-        return redirect(url_for('knowledge_base.index'))
+    # 404 (not an 'Access denied' redirect) for another user's document, so the
+    # endpoint can't be used to enumerate which KB document IDs exist.
+    doc = owned_or_404(KnowledgeDocument, doc_id, owner_attr='user_id')
     chunks = doc.chunks.order_by(KnowledgeChunk.chunk_index).all()
     return render_template('knowledge_base/document.html',
                            doc=doc,
@@ -144,10 +144,7 @@ def document(doc_id):
 @kb_bp.route('/document/<int:doc_id>/delete', methods=['POST'])
 @login_required
 def delete(doc_id):
-    doc = KnowledgeDocument.query.get_or_404(doc_id)
-    if doc.user_id != current_user.id:
-        flash('Access denied.', 'error')
-        return redirect(url_for('knowledge_base.index'))
+    doc = owned_or_404(KnowledgeDocument, doc_id, owner_attr='user_id')
 
     filepath = os.path.join(_kb_upload_path(), doc.filename)
     if os.path.exists(filepath):

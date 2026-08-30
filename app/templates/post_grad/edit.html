@@ -112,9 +112,16 @@
             </div>
 
             <div class="form-group">
-                <label>Notes</label>
+                <label>Notes <span style="font-weight:normal;color:var(--text-muted);font-size:0.85em;">(internal — not shown to the graduate)</span></label>
                 <textarea name="notes" class="form-control" rows="3">{{ outcome.notes or '' }}</textarea>
             </div>
+
+            {% if outcome.self_report_notes %}
+            <div class="form-group">
+                <label>Graduate's self-report <span style="font-weight:normal;color:var(--text-muted);font-size:0.85em;">(submitted via survey link)</span></label>
+                <div class="form-control" style="background:var(--surface-2, #f6f6f6);white-space:pre-wrap;">{{ outcome.self_report_notes }}</div>
+            </div>
+            {% endif %}
 
             <div style="display:flex;gap:8px;">
                 <button type="submit" class="btn btn-primary">Save</button>

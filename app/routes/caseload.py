@@ -769,14 +769,22 @@ def _parse_caseload_file(file):
     if not file or not file.filename.endswith(('.xlsx', '.xls')):
         return [], [], 'Please upload an Excel file (.xlsx).'
     try:
-        wb = load_workbook(file, data_only=True)
+        # read_only streams the sheet instead of materializing the whole
+        # decompressed workbook in memory, so a small XLSX (a ZIP) whose XML
+        # expands to gigabytes can't OOM the process. Matches setup.py and
+        # schedule_parser.py; the code below only iterates rows, so streaming
+        # mode is sufficient.
+        wb = load_workbook(file, data_only=True, read_only=True)
         ws = wb.active
     except Exception as e:
         return [], [], f'Could not read Excel file: {str(e)}'
 
     expected = ['first name', 'last name', 'grade', 'student id #', 'email',
                 'el status', 'el level', 'iep', '504 plan']
-    headers = [str(cell.value or '').strip().lower() for cell in ws[1]]
+    # read_only worksheets don't support ws[1] indexing — read the header via
+    # iter_rows instead.
+    header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    headers = [str(v or '').strip().lower() for v in header_row]
     if headers[:len(expected)] != expected:
         return [], [], ('Column headers don\'t match the template. '
                         'Please download a fresh template and try again.')

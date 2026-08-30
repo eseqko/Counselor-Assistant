@@ -571,17 +571,22 @@ document.addEventListener('DOMContentLoaded', function() {
             var noMsg = document.getElementById('no-events-msg');
             if (noMsg) noMsg.style.display = 'none';
             var container = document.getElementById('external-events-container');
+            // Event title/location come straight from a remote iCal feed (e.g.
+            // a Google Calendar invite an outside party controls), so they must
+            // be HTML-escaped before going into innerHTML — otherwise a crafted
+            // SUMMARY/LOCATION runs script in the authenticated dashboard.
+            var esc = function(s){ var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; };
             var stored = JSON.parse(localStorage.getItem('checkedExternalEvents_{{ today.isoformat() }}') || '{}');
             data.events.forEach(function(ev, i){
                 var id = 'ext-' + (i+1);
                 var checked = stored[id] ? ' checked' : '';
                 var cls = stored[id] ? ' completed' : '';
-                var time = ev.is_all_day ? 'All Day' : (ev.start + (ev.end ? ' - ' + ev.end : ''));
-                var loc = ev.location ? ' | ' + ev.location : '';
+                var time = ev.is_all_day ? 'All Day' : (esc(ev.start) + (ev.end ? ' - ' + esc(ev.end) : ''));
+                var loc = ev.location ? ' | ' + esc(ev.location) : '';
                 container.innerHTML += '<div class="schedule-item' + cls + '" data-event-id="' + id + '" data-event-type="external">'
                     + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">'
                     + '<input type="checkbox" class="schedule-check" data-id="' + id + '" data-source="external"' + checked + ' title="Mark as done">'
-                    + '<div style="min-width:0;"><strong class="schedule-title">' + ev.title + '</strong>'
+                    + '<div style="min-width:0;"><strong class="schedule-title">' + esc(ev.title) + '</strong>'
                     + '<div class="schedule-time">' + time + loc + '</div></div></div>'
                     + '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'
                     + '<span class="badge" style="background:#DB443720;color:#DB4437;font-size:0.7rem;">Google</span></div></div>';

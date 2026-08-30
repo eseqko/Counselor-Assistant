@@ -1015,6 +1015,19 @@ def factory_reset():
     if os.path.isdir(uploads_dir):
         shutil.rmtree(uploads_dir)
         os.makedirs(uploads_dir, exist_ok=True)
+    # Delete full-database backups too. snapshot_database() writes complete
+    # copies of the DB (every student, IEP/504, screening, note) before
+    # rollovers and schedule imports; leaving them behind means whoever
+    # completes the NEW setup wizard could download the previous install's
+    # entire database via /settings/export-backup.
+    if os.path.isdir(Config.BACKUP_DIR):
+        shutil.rmtree(Config.BACKUP_DIR, ignore_errors=True)
+    os.makedirs(Config.BACKUP_DIR, exist_ok=True)
+    # The DB wipe doesn't touch the JSON sidecar PII stores (follow-ups,
+    # comm/letter templates) — clear those too, or the first new account
+    # (wizard user id 1) would inherit the previous id-1 counselor's data.
+    from app.utils.user_data import delete_all_sidecars
+    delete_all_sidecars()
     schema_hash = os.path.join(Config.BASE_DIR, 'data', '.schema_hash')
     if os.path.exists(schema_hash):
         os.remove(schema_hash)

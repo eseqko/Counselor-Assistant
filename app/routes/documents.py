@@ -7,7 +7,7 @@ from app.models.document import StudentDocument
 from app.models.student import Student
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
-from app.utils.roles import caseload_student_or_404
+from app.utils.roles import caseload_student_or_404, owned_or_404
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -101,9 +101,10 @@ def add():
 @documents_bp.route('/<int:id>/download')
 @login_required
 def download(id):
-    doc = StudentDocument.query.get_or_404(id)
-    if doc.counselor_id != current_user.id:
-        abort(403)
+    # 404 (not 403) for another counselor's document, so sequential-id probing
+    # can't confirm which student documents colleagues hold. Admins keep the
+    # oversight bypass owned_or_404 grants.
+    doc = owned_or_404(StudentDocument, id)
     log_action('download', 'student_document', doc.id)
     return send_file(os.path.join(_docs_dir(), doc.filename),
                      download_name=doc.original_filename or doc.filename,
@@ -113,9 +114,7 @@ def download(id):
 @documents_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
 def delete(id):
-    doc = StudentDocument.query.get_or_404(id)
-    if doc.counselor_id != current_user.id:
-        abort(403)
+    doc = owned_or_404(StudentDocument, id)
     log_action('delete', 'student_document', doc.id)
     try:
         os.remove(os.path.join(_docs_dir(), doc.filename))

@@ -10,6 +10,7 @@ from app import db, csrf
 from app.models.meeting_note import MeetingNote
 from app.models.student import Student
 from app.utils.audit import log_action
+from app.utils.roles import owned_or_404
 from app.utils import ollama_client
 
 meeting_notes_bp = Blueprint('meeting_notes', __name__,
@@ -155,10 +156,10 @@ def add():
 @meeting_notes_bp.route('/<int:note_id>')
 @login_required
 def view(note_id):
-    note = MeetingNote.query.get_or_404(note_id)
-    if note.author_id != current_user.id:
-        flash('Access denied.', 'danger')
-        return redirect(url_for('meeting_notes.index'))
+    # owned_or_404 returns 404 (not a 302 redirect) for another counselor's
+    # note, so this endpoint can't be used to enumerate which meeting-note IDs
+    # exist across the system. Admins keep department-wide oversight.
+    note = owned_or_404(MeetingNote, note_id, owner_attr='author_id')
     log_action('view', 'meeting_note', note.id)
 
     type_label = dict(MEETING_TYPES).get(note.meeting_type, note.meeting_type)
@@ -168,10 +169,7 @@ def view(note_id):
 @meeting_notes_bp.route('/<int:note_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit(note_id):
-    note = MeetingNote.query.get_or_404(note_id)
-    if note.author_id != current_user.id:
-        flash('Access denied.', 'danger')
-        return redirect(url_for('meeting_notes.index'))
+    note = owned_or_404(MeetingNote, note_id, owner_attr='author_id')
 
     if request.method == 'POST':
         raw_content = request.form.get('content', '').strip()
@@ -215,10 +213,7 @@ def edit(note_id):
 @meeting_notes_bp.route('/<int:note_id>/delete', methods=['POST'])
 @login_required
 def delete(note_id):
-    note = MeetingNote.query.get_or_404(note_id)
-    if note.author_id != current_user.id:
-        flash('Access denied.', 'danger')
-        return redirect(url_for('meeting_notes.index'))
+    note = owned_or_404(MeetingNote, note_id, owner_attr='author_id')
     log_action('delete', 'meeting_note', note.id)
     db.session.delete(note)
     db.session.commit()
