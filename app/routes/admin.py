@@ -143,6 +143,12 @@ def delete_user(user_id):
     name = user.display_name
     db.session.delete(user)
     db.session.commit()
+    # Purge the deleted counselor's follow-ups/templates from the JSON sidecar
+    # stores. They are scoped only by the integer user id, which SQLite reuses,
+    # so leftover entries would leak this counselor's student PII to whoever is
+    # next assigned the same id.
+    from app.utils.user_data import purge_counselor_sidecars
+    purge_counselor_sidecars(user_id)
     log_action('user_delete', 'user', user_id, f'Deleted user: {name}')
     flash(f'User "{name}" deleted.', 'success')
     return redirect(url_for('admin.users'))

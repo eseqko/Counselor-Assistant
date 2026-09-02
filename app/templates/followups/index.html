@@ -329,7 +329,10 @@
         document.getElementById('stat-resolved').textContent = all.resolved;
     }
 
-    function esc(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+    // Escapes &<> via textContent AND quotes, so esc() output is safe inside a
+    // double- or single-quoted HTML attribute (a student name with a " must not
+    // be able to break out and inject an event-handler attribute).
+    function esc(s) { var d=document.createElement('div'); d.textContent=(s==null?'':s); return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     /* ── Actions ──────────────────────────────── */
     window.resolve = function(id) {
@@ -457,9 +460,9 @@
                 .then(function(results){
                     if (!results.length) { acList.classList.remove('open'); return; }
                     acList.innerHTML = results.map(function(s){
-                        return '<div class="ac-item" data-name="'+esc(s.name)+'" data-id="'+esc(s.id)+'" data-grade="'+(s.grade||'')+'">'
+                        return '<div class="ac-item" data-name="'+esc(s.name)+'" data-id="'+esc(s.id)+'" data-grade="'+esc(s.grade||'')+'">'
                             + '<span>'+esc(s.name)+'</span>'
-                            + (s.grade ? '<span class="ac-grade">Grade '+s.grade+'</span>' : '')
+                            + (s.grade ? '<span class="ac-grade">Grade '+esc(s.grade)+'</span>' : '')
                             + '</div>';
                     }).join('');
                     acList.classList.add('open');

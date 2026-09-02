@@ -7,7 +7,7 @@ from app.models.grade import GradeRecord
 from app.models.import_log import ImportLog
 from app.utils.audit import log_action
 from app.utils.excel_helpers import build_import_workbook, workbook_response
-from app.utils.caseload import caseload_student_ids
+from app.utils.caseload import caseload_student_ids, importable_student_ids
 from app.utils.helpers import current_school_year
 from datetime import date
 from app.routes.data_import import (
@@ -126,14 +126,18 @@ def grades_preview():
             idx = col_map[key]
             detected[key] = _header[idx] if idx < len(_header) else key
 
-    # Count students on caseload vs not
+    # Count students on caseload vs not — scoped to what THIS uploader may
+    # write (own caseload + unowned shadow/unassigned records), so the preview
+    # never confirms that another counselor's perm ID exists in the system.
+    from app.utils.caseload import importable_student_query
+    _writable = importable_student_query(current_user)
     id_cache = {
         s.student_id_number: True
-        for s in Student.query.with_entities(Student.student_id_number).all()
+        for s in _writable.with_entities(Student.student_id_number).all()
     }
     # Also build name-based lookup for fallback
     name_cache = {}
-    for s in Student.query.with_entities(Student.last_name, Student.first_name, Student.student_id_number).all():
+    for s in _writable.with_entities(Student.last_name, Student.first_name, Student.student_id_number).all():
         key = f"{s.last_name.strip().lower()}, {s.first_name.strip().lower()}"
         name_cache[key] = s.student_id_number
 
@@ -257,6 +261,14 @@ def grades_upload():
                 Student.last_name, Student.first_name, Student.student_id_number).all():
             key = f"{s.last_name.strip().lower()}, {s.first_name.strip().lower()}"
             name_to_sid[key] = s.student_id_number
+
+        # Cross-scope guard: the caches above span the WHOLE student table so a
+        # perm ID/name can be resolved, but a row must only ever be written to a
+        # student the uploader owns (or an unowned shadow/unassigned record).
+        # Without this, an uploaded file containing another counselor's perm IDs
+        # would overwrite/inject grades on their students. Admins get the full
+        # set (importable_student_ids returns every id for them).
+        writable_ids = importable_student_ids(current_user)
 
         # Build column index from header row
         col_map = build_grade_col_map(_header)
@@ -398,6 +410,14 @@ def grades_upload():
                 fallback_sid = name_to_sid.get(name_key)
                 if fallback_sid:
                     student_db_id = student_cache.get(fallback_sid)
+
+            # A resolved perm ID/name that belongs to another counselor's real
+            # student is out of scope: skip the row rather than writing to it.
+            # (student_id_number is UNIQUE, so we can't shadow-create a copy —
+            # skipping is the only safe option, matching the ELPAC importer.)
+            if student_db_id is not None and student_db_id not in writable_ids:
+                not_on_caseload += 1
+                continue
 
             if not student_db_id:
                 # School-wide comparison data: create a "shadow" Student record so

@@ -229,7 +229,9 @@ def public_survey_submit(token):
     outcome.military_branch = request.form.get('military_branch', '').strip()
     outcome.contact_email = request.form.get('contact_email', '').strip()
     outcome.contact_phone = request.form.get('contact_phone', '').strip()
-    outcome.notes = request.form.get('notes', '').strip()
+    # Student self-report goes to its own column — never the counselor's private
+    # `notes`, which must not be read back to or clobbered by the graduate.
+    outcome.self_report_notes = request.form.get('notes', '').strip()
     outcome.last_followup_date = date.today()
 
     if is_new:

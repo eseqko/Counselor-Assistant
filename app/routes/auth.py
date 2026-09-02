@@ -13,7 +13,14 @@ def _is_safe_redirect(target):
     """Reject external / open-redirect URLs."""
     if not target:
         return False
-    parsed = urlparse(target)
+    # Browsers normalize backslashes to forward slashes in URLs, so '/\evil.com'
+    # (which urlparse reads as a harmless path) becomes '//evil.com' — a
+    # protocol-relative URL to an external host. Normalize before parsing, and
+    # require a single-slash absolute path so '//x' and '/\x' are both rejected.
+    normalized = target.replace('\\', '/')
+    if not normalized.startswith('/') or normalized.startswith('//'):
+        return False
+    parsed = urlparse(normalized)
     # Only allow relative paths (no scheme, no external host)
     return parsed.scheme == '' and parsed.netloc == ''
 

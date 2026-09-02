@@ -8,7 +8,7 @@ from app.models.import_log import ImportLog
 from app.utils.audit import log_action
 from app.utils.helpers import parse_date
 from app.utils.excel_helpers import build_import_workbook, workbook_response
-from app.utils.caseload import caseload_student_ids
+from app.utils.caseload import caseload_student_ids, importable_student_ids
 from app.routes.data_import import (
     data_import_bp, HAS_OPENPYXL, VALID_ATTENDANCE,
     Workbook, Font, PatternFill, Alignment, Border, Side,
@@ -111,6 +111,12 @@ def attendance_upload():
             for s in Student.query.with_entities(
                 Student.student_id_number, Student.id).all()
         }
+        # Cross-scope guard: the cache spans the whole student table so a perm
+        # ID can be resolved, but a record must only be written to a student the
+        # uploader owns (or an unowned shadow/unassigned record). Without this,
+        # an uploaded file with another counselor's perm IDs would fabricate
+        # attendance on their students. Admins get every id.
+        writable_ids = importable_student_ids(current_user)
 
         # Pre-load existing attendance keys to avoid per-row duplicate checks
         caseload_ids = list(student_cache.values())
@@ -164,6 +170,11 @@ def attendance_upload():
 
             sid_clean = str(student_id_str).strip()
             student_db_id = student_cache.get(sid_clean)
+            # A resolved perm ID belonging to another counselor's real student
+            # is out of scope: skip rather than write attendance to it.
+            if student_db_id is not None and student_db_id not in writable_ids:
+                not_on_caseload += 1
+                continue
             if not student_db_id:
                 # School-wide comparison data: auto-create a shadow Student for
                 # Synergy whole-school exports so attendance is retained for the

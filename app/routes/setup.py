@@ -168,10 +168,16 @@ def _handle_complete(form):
         except Exception:
             pass
 
-    # iCal URL
+    # iCal URL — validate it points at a public host before storing, so the
+    # wizard can't be used to persist an internal/localhost/tailnet URL that the
+    # dashboard/calendar fetchers would later request (SSRF). The fetch paths
+    # re-validate too, but rejecting at save time keeps bad values out entirely.
     ical_url = form.get('ical_url', '').strip()
     if ical_url:
-        user.external_ical_url = ical_url
+        from app.utils.security import validate_external_url
+        ok, _ = validate_external_url(ical_url)
+        if ok:
+            user.external_ical_url = ical_url
 
     # Theme
     theme = form.get('theme', '').strip()

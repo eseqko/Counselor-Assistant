@@ -91,8 +91,19 @@ def _fetch_todays_external_events(user):
     """Fetch today's events from the user's external iCal feed (Google Calendar, etc.)."""
     if not user.external_ical_url:
         return []
+    # Re-validate at FETCH time (not just save time): a host that resolved
+    # public when saved can later resolve to an internal address (DNS
+    # rebinding), and allow_redirects=False stops a 302 relocating the request
+    # onto localhost/LAN/tailnet after the check passes. Mirrors the hardened
+    # calendar.get_external_events; without it this second fetch path is an SSRF
+    # read-back channel for internal responses that parse as iCal.
+    from app.utils.security import validate_external_url
+    ok, _ = validate_external_url(user.external_ical_url)
+    if not ok:
+        return []
     try:
-        resp = http_requests.get(user.external_ical_url, timeout=3)
+        resp = http_requests.get(user.external_ical_url, timeout=3,
+                                 allow_redirects=False)
         resp.raise_for_status()
     except Exception:
         return []

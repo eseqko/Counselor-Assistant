@@ -38,11 +38,22 @@ def snapshot_database(label='backup'):
         return None
     try:
         backup_dir = Config.BACKUP_DIR
-        os.makedirs(backup_dir, exist_ok=True)
+        # A backup is a full copy of the FERPA database, so keep it owner-only
+        # (mode on makedirs is subject to umask, hence the explicit chmod), the
+        # way config.py already protects data/.secret_key.
+        os.makedirs(backup_dir, mode=0o700, exist_ok=True)
+        try:
+            os.chmod(backup_dir, 0o700)
+        except OSError:
+            pass
         stamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         safe_label = ''.join(c for c in label if c.isalnum() or c in '-_') or 'backup'
         dest = os.path.join(backup_dir, f'counselor_{safe_label}_{stamp}.db')
         shutil.copy2(src, dest)
+        try:
+            os.chmod(dest, 0o600)
+        except OSError:
+            pass
         return dest
     except Exception:
         return None

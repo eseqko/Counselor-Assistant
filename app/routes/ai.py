@@ -167,6 +167,20 @@ def status():
 def settings():
     """Get or update Ollama settings."""
     if request.method == 'POST':
+        # The Ollama endpoint is a SHARED, everyone-affecting setting: every
+        # counselor's AI prompts (student names, IEP/504/EL status, note
+        # context) are POSTed to whatever host is stored here. A single
+        # low-privilege account must not be able to repoint it at a machine it
+        # controls and harvest the whole department's prompts. Gate the write to
+        # admins — or the sole user of a single-account install, who owns all
+        # the data anyway — mirroring the whole-database action gate.
+        if getattr(current_user, 'role', None) != 'admin':
+            from app.models.user import User
+            if User.query.count() > 1:
+                return jsonify({
+                    'saved': False,
+                    'error': 'Only an administrator can change the AI server address.',
+                }), 403
         data = request.get_json()
         base_url = data.get('base_url', '').strip().rstrip('/')
         model = data.get('model', '').strip()

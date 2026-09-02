@@ -40,6 +40,17 @@ def callback():
     """Handle the OAuth 2.0 callback from Google."""
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
+    # Verify the anti-CSRF state saved in authorize(). Without this check any
+    # authorization response is accepted, so an attacker could get a logged-in
+    # counselor's browser to hit /callback with the ATTACKER's own auth code and
+    # bind the attacker's Google account to this user (OAuth account-binding
+    # CSRF) — after which calendar/forms/classroom data carrying student names
+    # flows to the attacker's account. session.pop makes the state single-use.
+    expected_state = session.pop('google_oauth_state', None)
+    if not expected_state or request.args.get('state') != expected_state:
+        flash('Google authorization could not be verified. Please try again.', 'danger')
+        return redirect(url_for('calendar.index'))
+
     redirect_uri = url_for('google_auth.callback', _external=True)
     flow = create_flow(redirect_uri)
 

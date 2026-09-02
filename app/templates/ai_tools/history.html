@@ -15,6 +15,13 @@
                    value="{{ search_query }}" style="padding:8px 12px;border-radius:8px;font-size:0.86rem;width:220px;">
             <button type="submit" class="btn btn-sm btn-primary" style="border-radius:8px;">Search</button>
         </form>
+        {% if entries.items %}
+        <form method="post" action="{{ url_for('ai_tools.history_clear') }}"
+              onsubmit="return confirm('Delete ALL AI history? This permanently removes the stored prompts (including student details) and cannot be undone.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger" style="border-radius:8px;">Clear all</button>
+        </form>
+        {% endif %}
     </div>
 
     {% if entries.items %}
@@ -43,9 +50,15 @@
                     <td style="padding:10px 14px;white-space:nowrap;">
                         {{ entry.created_at.strftime('%b %d, %Y %I:%M %p') }}
                     </td>
-                    <td style="padding:10px 14px;text-align:center;">
+                    <td style="padding:10px 14px;text-align:center;white-space:nowrap;">
                         <button onclick="viewEntry({{ entry.id }})" class="btn btn-sm btn-secondary"
                                 style="border-radius:6px;padding:3px 10px;font-size:0.78rem;">View</button>
+                        <form method="post" action="{{ url_for('ai_tools.history_delete', entry_id=entry.id) }}"
+                              style="display:inline;" onsubmit="return confirm('Delete this history entry permanently?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    style="border-radius:6px;padding:3px 10px;font-size:0.78rem;">Delete</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}

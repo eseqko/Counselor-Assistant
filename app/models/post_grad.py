@@ -27,7 +27,12 @@ class PostGradOutcome(db.Model):
 
     enrollment_verified = db.Column(db.Boolean, default=False)
     completed_credential = db.Column(db.Boolean, default=False)
+    # Counselor-only internal notes — NEVER rendered on the public survey page.
     notes = db.Column(db.Text)
+    # Free-text the graduate submits through the public survey link. Kept
+    # separate from `notes` so the survey can't display the counselor's private
+    # notes back to the alum, nor overwrite them on submission.
+    self_report_notes = db.Column(db.Text)
 
     contact_email = db.Column(db.String(200))
     contact_phone = db.Column(db.String(40))

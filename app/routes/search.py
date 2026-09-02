@@ -1,6 +1,7 @@
 """Global instant search across students, notes, and meeting notes."""
 from flask import Blueprint, request, jsonify, url_for
 from flask_login import login_required, current_user
+from markupsafe import escape
 from sqlalchemy.orm import joinedload
 from app import db
 from app.models.student import Student
@@ -37,7 +38,10 @@ def instant_search():
             'type': 'student',
             'icon': '&#128100;',
             'title': f'{s.first_name} {s.last_name}',
-            'subtitle': f'Grade {s.grade_level} &middot; ID: {s.student_id_number}',
+            # subtitle is inserted as raw HTML by the client (base.html), so
+            # escape the user-controlled parts here; the &middot; separator is
+            # deliberate markup and stays literal.
+            'subtitle': f'Grade {escape(s.grade_level)} &middot; ID: {escape(s.student_id_number)}',
             'url': url_for('caseload.view_student', id=s.id),
         })
 
@@ -55,7 +59,7 @@ def instant_search():
         student = n.student  # already loaded via joinedload
         sub = ''
         if student:
-            sub = f'{student.first_name} {student.last_name}'
+            sub = f'{escape(student.first_name)} {escape(student.last_name)}'
         if n.session_date:
             sub += f' &middot; {n.session_date.strftime("%b %d, %Y")}' if sub else n.session_date.strftime('%b %d, %Y')
         results.append({
@@ -76,7 +80,7 @@ def instant_search():
     ).order_by(MeetingNote.meeting_date.desc()).limit(5).all()
 
     for m in meetings:
-        sub = m.meeting_type.replace('_', ' ').title() if m.meeting_type else ''
+        sub = f"{escape(m.meeting_type.replace('_', ' ').title())}" if m.meeting_type else ''
         if m.meeting_date:
             sub += f' &middot; {m.meeting_date.strftime("%b %d, %Y")}' if sub else m.meeting_date.strftime('%b %d, %Y')
         results.append({
