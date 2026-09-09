@@ -15,16 +15,19 @@
             <div style="margin-top:16px;font-size:0.82rem;color:var(--gray);">
                 <strong>Template columns:</strong>
                 <ul style="margin-top:4px;padding-left:20px;">
-                    <li>First Name (required)</li>
-                    <li>Last Name (required)</li>
-                    <li>Grade (6-12, required)</li>
-                    <li>Student ID # (required, unique)</li>
+                    <li>First Name, Last Name, Grade (6-12), Student ID # &mdash; <strong>required</strong></li>
                     <li>Email (optional)</li>
-                    <li>EL Status (Newcomer, LTEL, RFEP, or EO)</li>
-                    <li>EL Level (EL 1, EL 2, EL 3 - only for Newcomers)</li>
+                    <li>Gender (optional: Male, Female, Non-Binary, Other, Prefer not to say &mdash; M / F / X are fine too)</li>
+                    <li>EL Status &mdash; may also be titled <strong>&ldquo;English Learner&rdquo;</strong>. Newcomer, LTEL, RFEP, or EO.
+                        <strong>Leave it blank for students who are not English Learners</strong> (recorded as EO).
+                        A plain &ldquo;Yes&rdquo; is recorded as LTEL, or as Newcomer when an EL Level is given.</li>
+                    <li>EL Level (EL 1, EL 2, EL 3 &mdash; only for Newcomers)</li>
                     <li>IEP (Yes or blank)</li>
                     <li>504 Plan (Yes or blank)</li>
                 </ul>
+                <p style="margin-top:8px;">Columns are matched by their header names, so extra columns and a different
+                    column order are fine. If your file leaves a column out, existing students keep their current
+                    values for it.</p>
             </div>
         </div>
     </div>
@@ -111,6 +114,7 @@
             </div>
         </details>
 
+        <div id="pv-notice-list" style="margin-top:10px;"></div>
         <div id="pv-error-list" style="margin-top:10px;"></div>
 
         <div style="margin-top:16px;display:flex;gap:8px;">
@@ -252,6 +256,15 @@ function renderPreview(data) {
         return '<tr' + style + '><td>' + esc(n.name) + '</td><td>' + esc(n.sid) + '</td><td>' +
                esc(n.grade) + '</td><td style="font-size:0.8rem;">' + kindLabel[n.kind] + '</td></tr>';
     }).join('');
+
+    /* Notices — non-blocking: how ambiguous values (e.g. a plain "Yes" in the
+       English Learner column) were interpreted, so the counselor can check them */
+    var noteList = document.getElementById('pv-notice-list');
+    var notices = data.notices || [];
+    noteList.innerHTML = notices.length
+        ? '<div style="font-size:0.82rem;color:var(--warning, #b7791f);"><strong>Please check:</strong><ul style="margin:4px 0 0 18px;">' +
+          notices.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul></div>'
+        : '';
 
     /* Row errors */
     var errList = document.getElementById('pv-error-list');

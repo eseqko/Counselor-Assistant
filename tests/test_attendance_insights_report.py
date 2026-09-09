@@ -14,6 +14,14 @@ from app.models.student import Student
 from app.models.user import User
 
 
+# The fixture's 20 school days sit 12-40 days back, but the report's default
+# window is the school year (Aug 1), which clips them by an amount that depends
+# on today's date — through mid-August they are not in it at all and the page
+# shows its empty-state prompt instead. Assertions that need the fixture
+# in-window ask for the 90-day one (see test_tier_filter_narrows_the_watchlist).
+FULL_WINDOW = '/reports/attendance-insights?window=90'
+
+
 def _school_days(start, n):
     out, cur = [], start
     while len(out) < n:
@@ -99,7 +107,7 @@ def att_env(app):
 
 def test_report_renders_with_the_watchlist(app, att_env):
     client, ids = att_env
-    r = client.get('/reports/attendance-insights')
+    r = client.get(FULL_WINDOW)
     assert r.status_code == 200
     html = r.data.decode()
     assert 'Watch-List' in html
@@ -120,7 +128,7 @@ def test_patterns_appear_when_the_window_covers_them(app, att_env):
 
 def test_never_shows_another_counselors_or_shadow_or_sample_students(app, att_env):
     client, ids = att_env
-    html = client.get('/reports/attendance-insights').data.decode()
+    html = client.get(FULL_WINDOW).data.decode()
     assert 'Their Test' not in html, "another counselor's student leaked"
     assert 'Shadow Test' not in html, 'shadow students are aggregate-only'
     assert 'Sample Test' not in html
@@ -128,7 +136,7 @@ def test_never_shows_another_counselors_or_shadow_or_sample_students(app, att_en
 
 def test_students_without_data_are_listed_not_invented(app, att_env):
     client, ids = att_env
-    html = client.get('/reports/attendance-insights').data.decode()
+    html = client.get(FULL_WINDOW).data.decode()
     assert 'Ghost Test' in html
     assert 'No attendance data' in html
 
@@ -137,14 +145,22 @@ def test_schoolwide_baseline_includes_shadow_attendance(app, att_env):
     """The chronically-absent shadow student must drag the schoolwide mean
     below the caseload's own — that's the whole point of shadow rows."""
     client, ids = att_env
-    html = client.get('/reports/attendance-insights').data.decode()
+    html = client.get(FULL_WINDOW).data.decode()
     assert 'Schoolwide' in html
     assert 'pp vs school' in html
 
 
 def test_tier_filter_narrows_the_watchlist(app, att_env):
+    """Uses the 90-day window for the same reason as
+    test_patterns_appear_when_the_window_covers_them: the fixture's 20 school
+    days sit 12-40 days back, and the default school-year window (Aug 1) clips
+    them by an amount that depends on today's date. Friday Test's 5-of-20
+    absent days (25%, severe) read as no data at all through mid-August and as
+    2-of-14 (chronic) in early September, so a severe filter dropped the row
+    on most days of the year. The 90-day window always holds the whole
+    fixture, which pins the tier."""
     client, ids = att_env
-    html = client.get('/reports/attendance-insights?tier=severe').data.decode()
+    html = client.get(FULL_WINDOW + '&tier=severe').data.decode()
     assert 'Friday Test' in html
     assert 'Okay Test' not in html, 'satisfactory student survived a severe filter'
 
@@ -181,7 +197,7 @@ def test_the_method_footnote_names_the_thresholds(app, att_env):
     """The tier ladder must be stated on the page, because other pages count
     raw records and WILL read differently on period-level data."""
     client, ids = att_env
-    html = client.get('/reports/attendance-insights').data.decode()
+    html = client.get(FULL_WINDOW).data.decode()
     for phrase in ('chronic 10', 'severe', 'half', 'Early Warning'):
         assert phrase in html, f'method footnote lost: {phrase}'
 

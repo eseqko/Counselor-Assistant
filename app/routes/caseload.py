@@ -49,6 +49,140 @@ caseload_bp = Blueprint('caseload', __name__)
 VALID_EL_STATUSES = {'Newcomer', 'LTEL', 'RFEP', 'EO', ''}
 VALID_EL_LEVELS = {'EL 1', 'EL 2', 'EL 3', ''}
 
+# ---------- Caseload upload: header aliases + value normalizers ----------
+# Upload columns are matched BY NAME (case-insensitive), not by position, so a
+# roster exported straight from the SIS works without re-laying it out to match
+# the template: extra columns are ignored and order doesn't matter. The first
+# alias of each entry is the template's own header.
+CASELOAD_COL_ALIASES = {
+    'first_name': ('first name', 'first', 'student first name', 'firstname'),
+    'last_name':  ('last name', 'last', 'student last name', 'lastname', 'surname'),
+    'grade':      ('grade', 'grade level', 'gradelevel', 'grd', 'gr'),
+    'sid':        ('student id #', 'student id', 'studentid', 'student id number',
+                   'student number', 'student #', 'perm id', 'permid', 'perm', 'id'),
+    'email':      ('email', 'student email', 'e-mail', 'email address'),
+    'gender':     ('gender', 'sex'),
+    # A roster may title this column "English Learner" and leave it blank for
+    # students who are not ELs — blank means EO, never an error.
+    'el_status':  ('el status', 'english learner', 'english learner status',
+                   'english learners', 'english learner?', 'el', 'ell',
+                   'ell status', 'el program', 'el designation', 'lep'),
+    'el_level':   ('el level', 'eld level', 'el lvl', 'ell level',
+                   'english learner level'),
+    'iep':        ('iep', 'iep status', 'has iep', 'iep?', 'special ed', 'sped'),
+    'plan_504':   ('504 plan', '504', 'section 504', 'has 504', '504?'),
+}
+CASELOAD_REQUIRED_COLS = {
+    'first_name': 'First Name', 'last_name': 'Last Name',
+    'grade': 'Grade', 'sid': 'Student ID #',
+}
+
+# Gender: the add/edit forms' choices, plus the spellings rosters commonly use.
+GENDER_LABELS = ('Male', 'Female', 'Non-Binary', 'Other', 'Prefer not to say')
+_GENDER_ALIASES = {
+    'male': 'Male', 'm': 'Male', 'boy': 'Male',
+    'female': 'Female', 'f': 'Female', 'girl': 'Female',
+    'non-binary': 'Non-Binary', 'nonbinary': 'Non-Binary', 'non binary': 'Non-Binary',
+    'nb': 'Non-Binary', 'x': 'Non-Binary',
+    'other': 'Other', 'o': 'Other',
+    'prefer not to say': 'Prefer not to say', 'decline': 'Prefer not to say',
+    'declined': 'Prefer not to say', 'declined to state': 'Prefer not to say',
+    'unspecified': 'Prefer not to say', 'unknown': 'Prefer not to say',
+    'u': 'Prefer not to say', 'n/a': 'Prefer not to say',
+}
+
+# English Learner: spellings a roster may use for each of the app's statuses.
+_EL_STATUS_ALIASES = {
+    'eo': 'EO', 'english only': 'EO', 'english-only': 'EO', 'eng only': 'EO',
+    'not el': 'EO', 'not an el': 'EO', 'non-el': 'EO', 'non el': 'EO',
+    'no': 'EO', 'n': 'EO', 'false': 'EO', '0': 'EO', 'none': 'EO',
+    # IFEP (Initially Fluent English Proficient) tested fluent on arrival and
+    # was never an English Learner — EO is the closest of the app's statuses.
+    'ifep': 'EO', 'initially fluent english proficient': 'EO',
+    'rfep': 'RFEP', 'r-fep': 'RFEP', 'reclassified': 'RFEP', 'redesignated': 'RFEP',
+    'reclassified fluent english proficient': 'RFEP',
+    'ltel': 'LTEL', 'long-term english learner': 'LTEL',
+    'long term english learner': 'LTEL', 'long-term el': 'LTEL', 'long term el': 'LTEL',
+    'newcomer': 'Newcomer', 'new comer': 'Newcomer',
+}
+# Values that only say the student IS an English Learner without saying which
+# kind. The app splits current ELs into Newcomer (has an EL Level) and LTEL, so
+# the EL Level column decides: a level means Newcomer, no level means LTEL.
+_EL_GENERIC_MARKERS = {
+    'yes', 'y', 'x', 'true', '1', 'el', 'ell', 'lep', 'english learner',
+    'english learner student', 'el student', 'ell student', 'current el',
+}
+
+
+def _build_caseload_col_map(header_row):
+    """{canonical_key: column_index} for every recognized header (case-insensitive)."""
+    headers = [str(v or '').strip().lower() for v in header_row]
+    col_map = {}
+    for key, aliases in CASELOAD_COL_ALIASES.items():
+        for alias in aliases:
+            if alias in headers:
+                col_map[key] = headers.index(alias)
+                break
+    return col_map
+
+
+def _cell(row, col_map, key):
+    """Raw cell for a mapped column, or None when the file has no such column."""
+    idx = col_map.get(key)
+    if idx is None or idx >= len(row):
+        return None
+    return row[idx]
+
+
+def _clean(value):
+    """Stringify + strip a cell ('' for blank). 12345.0 → '12345' for numeric IDs."""
+    if value is None:
+        return ''
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return str(value).strip()
+
+
+def _yes(value):
+    """Checkbox-style cell → bool ('Yes', 'Y', 'True', '1', 'X')."""
+    return _clean(value).lower() in ('yes', 'y', 'true', '1', 'x')
+
+
+def _normalize_el_status(raw, has_level):
+    """Map an English-Learner cell to (status, inferred).
+
+    Blank means NOT an English Learner → 'EO'. Exact statuses and common
+    spellings map to Newcomer / LTEL / RFEP / EO. A value that only says
+    "yes, an EL" is resolved by the EL Level column — a level means Newcomer,
+    otherwise LTEL — and `inferred` is True so the caller can tell the
+    counselor. Returns (None, False) for a value it can't interpret.
+    """
+    key = raw.strip().lower()
+    if not key:
+        return 'EO', False
+    if key in _EL_STATUS_ALIASES:
+        return _EL_STATUS_ALIASES[key], False
+    if key in _EL_GENERIC_MARKERS:
+        return ('Newcomer' if has_level else 'LTEL'), True
+    return None, False
+
+
+def _normalize_el_level(raw):
+    """'EL 1' / 'el1' / '1' / 'Level 1' → 'EL 1'; '' → ''; None when unrecognized."""
+    key = raw.strip().lower().replace('level', '').replace('el', '').replace(' ', '')
+    if not key:
+        return ''
+    return f'EL {key}' if key in ('1', '2', '3') else None
+
+
+def _normalize_gender(raw):
+    """Map a gender cell onto the forms' labels; other spellings are kept as typed."""
+    key = raw.strip().lower()
+    if not key:
+        return ''
+    return _GENDER_ALIASES.get(key, raw.strip()[:20])
+
+
 
 # Query-string keys that define "which students am I looking at". Carried from
 # the caseload list into the profile so prev/next can walk the same filtered set
@@ -615,11 +749,18 @@ def download_template():
         ('Grade', 8, 'Grade level (6-12)'),
         ('Student ID #', 16, 'Unique school student ID'),
         ('Email', 30, 'Student email address'),
-        ('EL Status', 16, 'Newcomer, LTEL, RFEP, or EO'),
+        ('Gender', 16, 'Male, Female, Non-Binary, Other, or Prefer not to say'),
+        ('EL Status', 16, 'Newcomer, LTEL, RFEP, or EO — leave blank if not an English Learner'),
         ('EL Level', 12, 'Only if Newcomer: EL 1, EL 2, or EL 3'),
         ('IEP', 8, 'Yes or leave blank'),
         ('504 Plan', 10, 'Yes or leave blank'),
     ]
+
+    def _rng(name):
+        """'C2:C1000'-style data range for a named column, so each validation
+        follows its column wherever it sits in the layout."""
+        letter = get_column_letter([c[0] for c in columns].index(name) + 1)
+        return f'{letter}2:{letter}1000'
 
     # --- Write headers ---
     for col_idx, (name, width, _) in enumerate(columns, 1):
@@ -638,7 +779,7 @@ def download_template():
         showErrorMessage=True, errorTitle='Invalid Grade',
         error='Please enter a grade from 6-12.'
     )
-    grade_dv.sqref = 'C2:C1000'
+    grade_dv.sqref = _rng('Grade')
     ws.add_data_validation(grade_dv)
 
     # EL Status: Newcomer, LTEL, RFEP, EO
@@ -647,7 +788,7 @@ def download_template():
         showErrorMessage=True, errorTitle='Invalid EL Status',
         error='Please choose: Newcomer, LTEL, RFEP, or EO'
     )
-    el_dv.sqref = 'F2:F1000'
+    el_dv.sqref = _rng('EL Status')
     ws.add_data_validation(el_dv)
 
     # EL Level: EL 1, EL 2, EL 3 (only for Newcomers)
@@ -656,8 +797,17 @@ def download_template():
         showErrorMessage=True, errorTitle='Invalid EL Level',
         error='Please choose: EL 1, EL 2, or EL 3 (only for Newcomer students)'
     )
-    level_dv.sqref = 'G2:G1000'
+    level_dv.sqref = _rng('EL Level')
     ws.add_data_validation(level_dv)
+
+    # Gender: the add/edit forms' choices
+    gender_dv = DataValidation(
+        type='list', formula1='"' + ','.join(GENDER_LABELS) + '"', allow_blank=True,
+        showErrorMessage=True, errorTitle='Invalid Gender',
+        error='Choose: ' + ', '.join(GENDER_LABELS) + ' — or leave blank.'
+    )
+    gender_dv.sqref = _rng('Gender')
+    ws.add_data_validation(gender_dv)
 
     # IEP: Yes or blank
     iep_dv = DataValidation(
@@ -665,7 +815,7 @@ def download_template():
         showErrorMessage=True, errorTitle='Invalid IEP',
         error='Enter "Yes" or leave blank.'
     )
-    iep_dv.sqref = 'H2:H1000'
+    iep_dv.sqref = _rng('IEP')
     ws.add_data_validation(iep_dv)
 
     # 504: Yes or blank
@@ -674,7 +824,7 @@ def download_template():
         showErrorMessage=True, errorTitle='Invalid 504 Plan',
         error='Enter "Yes" or leave blank.'
     )
-    plan_dv.sqref = 'I2:I1000'
+    plan_dv.sqref = _rng('504 Plan')
     ws.add_data_validation(plan_dv)
 
     # --- Format data rows (light alternating) ---
@@ -701,7 +851,8 @@ def download_template():
         ('Grade', 'Required. Grade level from 6-12. Use the dropdown.'),
         ('Student ID #', 'Required. Must be unique. This is the school\'s student ID number.'),
         ('Email', 'Optional. Student email address.'),
-        ('EL Status', 'Required. Choose from dropdown: Newcomer, LTEL, RFEP, or EO (English Only).'),
+        ('Gender', 'Optional. Male, Female, Non-Binary, Other, or Prefer not to say (M, F and X are accepted too).'),
+        ('EL Status', 'Newcomer, LTEL, RFEP, or EO (English Only). Leave BLANK if the student is not an English Learner - it is recorded as EO. A column titled "English Learner" is recognized too; a plain "Yes" is recorded as LTEL, or Newcomer when an EL Level is given.'),
         ('EL Level', 'Only fill in if EL Status is "Newcomer". Choose: EL 1, EL 2, or EL 3.'),
         ('IEP', 'Enter "Yes" if student has an IEP. Otherwise leave blank.'),
         ('504 Plan', 'Enter "Yes" if student has a 504 Plan. Otherwise leave blank.'),
@@ -759,15 +910,24 @@ def download_template():
 # =====================================================================
 
 def _parse_caseload_file(file):
-    """Parse + validate a caseload template upload.
+    """Parse + validate a caseload roster upload.
 
-    Returns (rows, errors, fatal): `rows` are normalized dicts, `errors` are
-    per-row messages, `fatal` is a whole-file error string (bad file / wrong
-    headers) or None. Shared by the preview and apply routes so the diff the
+    Returns (rows, errors, fatal, notices): `rows` are normalized dicts,
+    `errors` are per-row messages (those rows are skipped), `fatal` is a
+    whole-file error string (bad file / required columns missing) or None,
+    and `notices` are non-blocking messages about how ambiguous values were
+    interpreted. Shared by the preview and apply routes so the diff the
     counselor previews is computed by the exact code that later applies it.
+
+    Columns are matched BY NAME (CASELOAD_COL_ALIASES), not by position, so a
+    roster exported straight from the SIS works: extra columns are ignored and
+    order doesn't matter. First Name, Last Name, Grade and Student ID # are
+    required; the others are optional and, when a column is absent from the
+    file entirely, its key is None in every row so the apply step leaves that
+    field alone on existing students.
     """
     if not file or not file.filename.endswith(('.xlsx', '.xls')):
-        return [], [], 'Please upload an Excel file (.xlsx).'
+        return [], [], 'Please upload an Excel file (.xlsx).', []
     try:
         # read_only streams the sheet instead of materializing the whole
         # decompressed workbook in memory, so a small XLSX (a ZIP) whose XML
@@ -777,21 +937,28 @@ def _parse_caseload_file(file):
         wb = load_workbook(file, data_only=True, read_only=True)
         ws = wb.active
     except Exception as e:
-        return [], [], f'Could not read Excel file: {str(e)}'
+        return [], [], f'Could not read Excel file: {str(e)}', []
 
-    expected = ['first name', 'last name', 'grade', 'student id #', 'email',
-                'el status', 'el level', 'iep', '504 plan']
     # read_only worksheets don't support ws[1] indexing — read the header via
     # iter_rows instead.
     header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
-    headers = [str(v or '').strip().lower() for v in header_row]
-    if headers[:len(expected)] != expected:
-        return [], [], ('Column headers don\'t match the template. '
-                        'Please download a fresh template and try again.')
+    col_map = _build_caseload_col_map(header_row)
+    missing = [label for key, label in CASELOAD_REQUIRED_COLS.items() if key not in col_map]
+    if missing:
+        return [], [], (
+            'Required column(s) not found: ' + ', '.join(f'"{m}"' for m in missing)
+            + '. Columns are matched by their header names, so check the header '
+            'row of your file — or download a fresh template.'), []
 
+    has = {key: key in col_map for key in CASELOAD_COL_ALIASES}
     rows, errors = [], []
-    for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_col=9, values_only=True), start=2):
-        first_name, last_name, grade, student_id, email, el_status, el_level, iep, plan_504 = row
+    inferred_names = {'LTEL': [], 'Newcomer': []}
+
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        first_name = _clean(_cell(row, col_map, 'first_name'))
+        last_name = _clean(_cell(row, col_map, 'last_name'))
+        grade = _clean(_cell(row, col_map, 'grade'))
+        student_id = _clean(_cell(row, col_map, 'sid'))
 
         # Skip empty rows
         if not first_name and not last_name and not student_id:
@@ -810,41 +977,75 @@ def _parse_caseload_file(file):
         grade_val = None
         if grade:
             try:
-                grade_val = int(grade)
+                grade_val = int(float(grade))
                 if grade_val < 6 or grade_val > 12:
                     row_errors.append(f'Grade must be 6-12, got {grade_val}')
             except (ValueError, TypeError):
                 row_errors.append(f'Invalid grade: {grade}')
 
-        el_status_clean = str(el_status or '').strip()
-        if el_status_clean and el_status_clean not in VALID_EL_STATUSES:
-            row_errors.append(f'Invalid EL Status: {el_status_clean}. Must be Newcomer, LTEL, RFEP, or EO.')
-        if not el_status_clean:
-            el_status_clean = 'EO'
+        # ── English Learner ─────────────────────────────────────────────
+        # None = the file has no EL column at all → leave existing values alone.
+        # A PRESENT column with a BLANK cell means "not an English Learner"
+        # (EO): a mixed roster of ELs and general-ed students marks only the ELs.
+        el_status_clean, el_level_clean, el_inferred = None, None, False
+        if has['el_status']:
+            raw_level = _clean(_cell(row, col_map, 'el_level')) if has['el_level'] else ''
+            level = _normalize_el_level(raw_level)          # None = unrecognized
+            raw_el = _clean(_cell(row, col_map, 'el_status'))
+            el_status_clean, el_inferred = _normalize_el_status(raw_el, bool(level))
+            if el_status_clean is None:
+                row_errors.append(
+                    f'Invalid EL Status: {raw_el}. Use Newcomer, LTEL, RFEP, or EO '
+                    '(or Yes for an English Learner; leave blank if not one).')
+            if el_status_clean == 'Newcomer':
+                if level is None:
+                    row_errors.append(
+                        f'Invalid EL Level: {raw_level}. Must be EL 1, EL 2, or EL 3.')
+                el_level_clean = level or ''
+            else:
+                el_level_clean = ''      # a level only means something for a Newcomer
 
-        el_level_clean = str(el_level or '').strip()
-        if el_status_clean == 'Newcomer' and el_level_clean and el_level_clean not in VALID_EL_LEVELS:
-            row_errors.append(f'Invalid EL Level: {el_level_clean}. Must be EL 1, EL 2, or EL 3.')
-        if el_status_clean != 'Newcomer':
-            el_level_clean = ''
+        gender_clean = (_normalize_gender(_clean(_cell(row, col_map, 'gender')))
+                        if has['gender'] else None)
+        email_clean = _clean(_cell(row, col_map, 'email')) if has['email'] else None
+        iep = _yes(_cell(row, col_map, 'iep')) if has['iep'] else None
+        plan_504 = _yes(_cell(row, col_map, 'plan_504')) if has['plan_504'] else None
 
         if row_errors:
             errors.append(f'Row {row_idx}: ' + '; '.join(row_errors))
             continue
 
+        if el_inferred:
+            inferred_names[el_status_clean].append(f'{last_name}, {first_name}')
+
         rows.append({
             'row_idx': row_idx,
-            'sid': str(student_id).strip(),
-            'first_name': str(first_name).strip(),
-            'last_name': str(last_name).strip(),
+            'sid': student_id,
+            'first_name': first_name,
+            'last_name': last_name,
             'grade_level': grade_val,
-            'email': str(email or '').strip(),
+            'email': email_clean,
+            'gender': gender_clean,
             'el_status': el_status_clean,
             'el_level': el_level_clean,
-            'iep': str(iep or '').strip().lower() in ('yes', 'y', 'true', '1'),
-            'plan_504': str(plan_504 or '').strip().lower() in ('yes', 'y', 'true', '1'),
+            'iep': iep,
+            'plan_504': plan_504,
         })
-    return rows, errors, None
+
+    notices = []
+    for status, names in inferred_names.items():
+        if not names:
+            continue
+        shown = '; '.join(names[:15]) + (f'; +{len(names) - 15} more' if len(names) > 15 else '')
+        why = 'an EL Level was given' if status == 'Newcomer' else 'no EL Level was given'
+        notices.append(
+            f'{len(names)} student(s) marked as English Learners without a specific '
+            f'status were recorded as {status} because {why}: {shown}. '
+            'Open a student to change this.')
+    if not has['el_status']:
+        notices.append('No "EL Status" / "English Learner" column was found: existing '
+                       'students keep their EL status and new students default to EO.')
+    return rows, errors, None, notices
 
 
 @caseload_bp.route('/upload/preview', methods=['POST'])
@@ -858,7 +1059,7 @@ def upload_caseload_preview():
       new       — in file, not on my caseload (brand-new / promotable / other-counselor)
       departing — on my active caseload but absent from the file
     """
-    rows, errors, fatal = _parse_caseload_file(request.files.get('file'))
+    rows, errors, fatal, notices = _parse_caseload_file(request.files.get('file'))
     if fatal:
         return jsonify({'ok': False, 'error': fatal}), 400
 
@@ -919,12 +1120,14 @@ def upload_caseload_preview():
         'new': new_students,
         'departing': departing,
         'errors': errors,
+        'notices': notices,
         'counts': {
             'returning': len(returning),
             'new': len(new_students),
             'new_blocked': sum(1 for n in new_students if n['kind'] == 'other_counselor'),
             'departing': len(departing),
             'errors': len(errors),
+            'notices': len(notices),
         },
     })
 
@@ -936,7 +1139,7 @@ def upload_caseload():
         flash('Excel support requires the openpyxl package. Install it with: pip install openpyxl', 'danger')
         return redirect(url_for('caseload.index'))
     if request.method == 'POST':
-        rows, errors, fatal = _parse_caseload_file(request.files.get('file'))
+        rows, errors, fatal, notices = _parse_caseload_file(request.files.get('file'))
         if fatal:
             flash(fatal, 'danger')
             return redirect(url_for('caseload.upload_caseload'))
@@ -964,12 +1167,22 @@ def upload_caseload():
                 existing.first_name = r['first_name']
                 existing.last_name = r['last_name']
                 existing.grade_level = r['grade_level']
-                existing.email = r['email']
-                existing.el_status = r['el_status']
-                existing.el_level = r['el_level']
-                existing.ell_status = (r['el_status'] in ('Newcomer', 'LTEL', 'RFEP'))
-                existing.iep_status = r['iep']
-                existing.section_504 = r['plan_504']
+                # Optional columns: None = not in the file → leave the field
+                # alone; a blank email/gender cell also keeps the current value
+                # (a roster rarely means "erase this"). A blank EL cell, by
+                # contrast, deliberately means "not an English Learner" (EO).
+                if r['email']:
+                    existing.email = r['email']
+                if r['gender']:
+                    existing.gender = r['gender']
+                if r['el_status'] is not None:
+                    existing.el_status = r['el_status']
+                    existing.el_level = r['el_level']
+                    existing.ell_status = (r['el_status'] in ('Newcomer', 'LTEL', 'RFEP'))
+                if r['iep'] is not None:
+                    existing.iep_status = r['iep']
+                if r['plan_504'] is not None:
+                    existing.section_504 = r['plan_504']
                 existing.assigned_counselor_id = current_user.id
                 # Promote any shadow record to a full caseload student so it stops
                 # being filtered out of UI lists. Re-activate exited students who
@@ -986,12 +1199,13 @@ def upload_caseload():
                     first_name=r['first_name'],
                     last_name=r['last_name'],
                     grade_level=r['grade_level'],
-                    email=r['email'],
-                    el_status=r['el_status'],
-                    el_level=r['el_level'],
+                    email=r['email'] or '',
+                    gender=r['gender'] or '',
+                    el_status=r['el_status'] or 'EO',
+                    el_level=r['el_level'] or '',
                     ell_status=(r['el_status'] in ('Newcomer', 'LTEL', 'RFEP')),
-                    iep_status=r['iep'],
-                    section_504=r['plan_504'],
+                    iep_status=bool(r['iep']),
+                    section_504=bool(r['plan_504']),
                     assigned_counselor_id=current_user.id,
                     status='active',
                 )
@@ -1058,6 +1272,8 @@ def upload_caseload():
         log_action('import', 'caseload', details=f'Imported caseload: {added} added, {updated} updated'
                    + (f', departing actions: {departed_counts}' if departed_counts else ''))
 
+        for note in notices:
+            flash(note, 'warning')
         msg = f'{added} students added, {updated} updated.'
         if departed_counts:
             pretty = ', '.join(f'{n} {a}' for a, n in sorted(departed_counts.items()))
@@ -1097,9 +1313,9 @@ def export_caseload():
         top=Side(style='thin'), bottom=Side(style='thin'),
     )
 
-    headers = ['First Name', 'Last Name', 'Grade', 'Student ID #', 'Email',
+    headers = ['First Name', 'Last Name', 'Grade', 'Student ID #', 'Email', 'Gender',
                'EL Status', 'EL Level', 'IEP', '504 Plan', 'Status']
-    widths = [18, 18, 8, 16, 30, 16, 12, 8, 10, 12]
+    widths = [18, 18, 8, 16, 30, 14, 16, 12, 8, 10, 12]
 
     for col_idx, (name, width) in enumerate(zip(headers, widths), 1):
         cell = ws.cell(row=1, column=col_idx, value=name)
@@ -1112,7 +1328,7 @@ def export_caseload():
     for row_idx, s in enumerate(students, 2):
         values = [
             s.first_name, s.last_name, s.grade_level, s.student_id_number,
-            s.email, s.el_status or 'EO', s.el_level or '',
+            s.email, s.gender or '', s.el_status or 'EO', s.el_level or '',
             'Yes' if s.iep_status else '', 'Yes' if s.section_504 else '',
             s.status,
         ]

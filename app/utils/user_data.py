@@ -19,6 +19,38 @@ PII_SIDECAR_FILES = ('followups.json', 'comm_templates.json', 'letter_templates.
 ORPHAN_SIDECAR_FILES = ('email_custom_templates.json',)
 
 
+def _purge_entries(name, counselor_id):
+    """Drop entries with this counselor_id from one list-of-dicts JSON store."""
+    path = os.path.join(DATA_DIR, name)
+    if not os.path.exists(path):
+        return 0
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return 0
+    if not isinstance(data, list):
+        return 0
+    kept = [e for e in data if e.get('counselor_id') != counselor_id]
+    if len(kept) != len(data):
+        try:
+            with open(path, 'w') as f:
+                json.dump(kept, f, indent=2, default=str)
+        except OSError:
+            return 0
+    return len(data) - len(kept)
+
+
+def purge_counselor_followups(counselor_id):
+    """Remove only the counselor's follow-ups (student names/IDs/notes).
+
+    Used by the caseload reset: the follow-ups are student data, but the same
+    counselor's communication and letter templates are their own authored
+    content and must survive a caseload reset. Returns entries removed.
+    """
+    return _purge_entries('followups.json', counselor_id)
+
+
 def purge_counselor_sidecars(counselor_id):
     """Remove every JSON-sidecar entry owned by ``counselor_id``.
 
@@ -28,24 +60,7 @@ def purge_counselor_sidecars(counselor_id):
     """
     removed = 0
     for name in PII_SIDECAR_FILES:
-        path = os.path.join(DATA_DIR, name)
-        if not os.path.exists(path):
-            continue
-        try:
-            with open(path) as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            continue
-        if not isinstance(data, list):
-            continue
-        kept = [e for e in data if e.get('counselor_id') != counselor_id]
-        if len(kept) != len(data):
-            removed += len(data) - len(kept)
-            try:
-                with open(path, 'w') as f:
-                    json.dump(kept, f, indent=2, default=str)
-            except OSError:
-                pass
+        removed += _purge_entries(name, counselor_id)
     return removed
 
 

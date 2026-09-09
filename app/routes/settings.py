@@ -1046,3 +1046,64 @@ def factory_reset():
     from app.routes.setup import SETUP_GRANT_KEY
     session[SETUP_GRANT_KEY] = True
     return redirect('/setup')
+
+
+@settings_bp.route('/caseload-reset', methods=['POST'])
+@login_required
+def caseload_reset():
+    """Delete MY caseload — every student assigned to me and everything
+    attached to them — and nothing else.
+
+    The other reset (factory_reset) wipes the whole database and restarts the
+    setup wizard. This one is for starting a new year's caseload from a clean
+    slate: the course catalog, school settings, calendars, staff directory,
+    templates and every account stay exactly as they are. Other counselors'
+    students are never touched (the delete is scoped to assigned_counselor_id)
+    and school-wide "shadow" records used for vs-school comparisons are left
+    in place. A full-database backup is written to data/backups first.
+    """
+    from flask import current_app
+    from app.models.rollover import RolloverSnapshot
+    from app.utils.caseload_reset import delete_students_with_dependents
+    from app.utils.user_data import purge_counselor_followups
+
+    if request.form.get('confirm', '').strip().upper() != 'CASELOAD':
+        flash('Caseload reset cancelled — the confirmation word did not match.', 'warning')
+        return redirect(url_for('settings.index'))
+
+    ids = [r[0] for r in Student.query.filter_by(
+        assigned_counselor_id=current_user.id).with_entities(Student.id).all()]
+    if not ids:
+        flash('Your caseload is already empty — nothing to reset.', 'info')
+        return redirect(url_for('caseload.index'))
+
+    # Never raises; None means no copy could be written (say so, don't claim one).
+    backup_path = snapshot_database('pre_caseload_reset')
+    try:
+        counts = delete_students_with_dependents(ids)
+        # Rollover / new-year-sync undo snapshots would resurrect these students.
+        RolloverSnapshot.query.filter_by(counselor_id=current_user.id).delete(
+            synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Caseload reset failed')
+        flash('Caseload reset failed — nothing was changed.', 'danger')
+        return redirect(url_for('settings.index'))
+    # Follow-ups live in a JSON file outside the DB and carry student names.
+    purge_counselor_followups(current_user.id)
+
+    log_action('delete', 'caseload_reset',
+               details=f'Reset caseload: {len(ids)} students and attached records deleted')
+    detail = ', '.join(
+        f'{n} {t.replace("_", " ")}' for t, n in sorted(counts.items())
+        if n and t != 'students' and not t.startswith('files:'))
+    flash(f'Caseload reset: {len(ids)} students deleted'
+          + (f' (plus {detail})' if detail else '')
+          + '. Your catalog, settings and account are untouched.'
+          + (' A backup copy of the previous database is in data/backups.'
+             if backup_path else ''), 'success')
+    if not backup_path:
+        flash('No backup copy could be written before the reset — check that '
+              'data/backups is writable.', 'warning')
+    return redirect(url_for('caseload.index'))
