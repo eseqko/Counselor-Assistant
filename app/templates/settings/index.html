@@ -389,6 +389,21 @@ function saveOllamaSettings() {
 <div class="card" style="border:1px solid #fecaca;background:#fef2f2;">
     <div class="card-header" style="color:#991b1b;">Danger Zone</div>
     <div class="card-body">
+        <p style="font-size:0.88rem;color:#7f1d1d;margin-bottom:6px;"><strong>Reset My Caseload</strong></p>
+        <p style="font-size:0.84rem;color:#7f1d1d;margin-bottom:12px;">
+            Start a new year from a clean slate: permanently deletes every student on your
+            caseload and everything attached to them &mdash; notes, meeting-note links, attendance,
+            grades, schedules, transcripts, documents, screenings, goals, referrals, interventions,
+            consents, IEP/504 records, communications, follow-ups and student appointments.
+            <strong>Keeps</strong> the course catalog, school settings, calendars, staff directory,
+            your templates and your account. Other counselors' students are never touched.
+            A backup copy of the database is saved to <code>data/backups</code> first.
+        </p>
+        <button type="button" class="btn" id="open-caseload-reset-modal"
+                style="background:#b45309;color:#fff;font-weight:600;margin-bottom:18px;">
+            Reset My Caseload
+        </button>
+        <hr style="border:0;border-top:1px solid #fecaca;margin:0 0 16px;">
         <p style="font-size:0.88rem;color:#7f1d1d;margin-bottom:6px;"><strong>Factory Reset</strong></p>
         <p style="font-size:0.84rem;color:#7f1d1d;margin-bottom:12px;">
             Permanently deletes all students, notes, calendar events, attendance, grades,
@@ -402,6 +417,64 @@ function saveOllamaSettings() {
         </button>
     </div>
 </div>
+
+<div id="caseload-reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
+     z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:24px;max-width:480px;width:90%;
+         box-shadow:0 10px 40px rgba(0,0,0,0.25);">
+        <h3 style="margin:0 0 8px 0;color:#92400e;">Reset My Caseload</h3>
+        <p style="font-size:0.88rem;color:#374151;margin-bottom:14px;">
+            Type <code style="background:#fffbeb;padding:1px 6px;border-radius:4px;
+            color:#92400e;font-weight:700;">CASELOAD</code> below to confirm. Every student on
+            your caseload and all of their records will be permanently deleted. Your school
+            setup, catalog and account stay as they are.
+        </p>
+        <form method="POST" action="{{ url_for('settings.caseload_reset') }}" id="caseload-reset-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" id="caseload-reset-input" name="confirm" autocomplete="off"
+                   placeholder="Type CASELOAD to confirm"
+                   style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:6px;
+                   font-size:0.95rem;letter-spacing:0.05em;margin-bottom:14px;">
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button type="button" id="cancel-caseload-reset" class="btn"
+                        style="background:#e5e7eb;color:#374151;">Cancel</button>
+                <button type="submit" id="confirm-caseload-reset" class="btn" disabled
+                        style="background:#b45309;color:#fff;font-weight:600;opacity:0.5;">
+                    Delete My Caseload
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    var modal = document.getElementById('caseload-reset-modal');
+    var openBtn = document.getElementById('open-caseload-reset-modal');
+    var cancelBtn = document.getElementById('cancel-caseload-reset');
+    var input = document.getElementById('caseload-reset-input');
+    var submitBtn = document.getElementById('confirm-caseload-reset');
+    if (!modal || !openBtn) return;
+
+    openBtn.addEventListener('click', function() {
+        input.value = '';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
+        modal.style.display = 'flex';
+        setTimeout(function() { input.focus(); }, 50);
+    });
+    cancelBtn.addEventListener('click', function() { modal.style.display = 'none'; });
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'flex') modal.style.display = 'none';
+    });
+    input.addEventListener('input', function() {
+        var ok = this.value.trim().toUpperCase() === 'CASELOAD';
+        submitBtn.disabled = !ok;
+        submitBtn.style.opacity = ok ? '1' : '0.5';
+    });
+})();
+</script>
 
 <div id="reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);
      z-index:9999;align-items:center;justify-content:center;">
