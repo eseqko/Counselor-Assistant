@@ -234,3 +234,20 @@ def test_template_and_export_carry_gender(app, col_env):
     # Round trip: the export's own headers import cleanly.
     r = _preview(client, exp_headers, [])
     assert r.status_code == 200 and r.get_json()['ok'] is True
+
+
+# ── file name handling ─────────────────────────────────────────────────────
+
+def test_uppercase_xlsx_extension_is_accepted(app, col_env):
+    """Windows/Excel save 'MASTER CASELOAD 26-27.XLSX'; the extension check
+    must not be case-sensitive."""
+    client, ids = col_env
+    headers = ['First Name', 'Last Name', 'Grade', 'Student ID #', 'English Learner']
+    r = client.post('/caseload/upload/preview',
+                    data={'file': (_xlsx(headers, [('Ana', 'Vega', 10, 'COL-20', '')]),
+                                   'MASTER CASELOAD 26-27.XLSX')},
+                    content_type='multipart/form-data')
+    assert r.status_code == 200, r.get_json()
+    data = r.get_json()
+    assert data['ok'] is True
+    assert [n['sid'] for n in data['new']] == ['COL-20']

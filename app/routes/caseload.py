@@ -926,7 +926,9 @@ def _parse_caseload_file(file):
     file entirely, its key is None in every row so the apply step leaves that
     field alone on existing students.
     """
-    if not file or not file.filename.endswith(('.xlsx', '.xls')):
+    # Compare the extension case-insensitively: Windows/Excel happily save
+    # 'MASTER CASELOAD 26-27.XLSX', and a plain endswith() rejected it.
+    if not file or not (file.filename or '').lower().endswith(('.xlsx', '.xlsm', '.xls')):
         return [], [], 'Please upload an Excel file (.xlsx).', []
     try:
         # read_only streams the sheet instead of materializing the whole
