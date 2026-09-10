@@ -251,3 +251,47 @@ def test_uppercase_xlsx_extension_is_accepted(app, col_env):
     data = r.get_json()
     assert data['ok'] is True
     assert [n['sid'] for n in data['new']] == ['COL-20']
+
+
+# ── the SIS export's "Idea Cur Level" column ───────────────────────────────
+
+def test_idea_cur_level_column_with_sis_wording(app, col_env):
+    """The district export titles the language-program field "Idea Cur Level"
+    and fills it with English Learners / Redesignated FEP / English Only /
+    IFEP. All four must land on the app's statuses without any renaming."""
+    client, ids = col_env
+    headers = ['Student ID #', 'Last Name', 'First Name', 'Grade', 'Idea Cur Level']
+    r = _upload(client, headers, [
+        ('COL-21', 'Vega', 'Ana', 10, 'English Learners'),
+        ('COL-22', 'Ybarra', 'Luis', 11, 'Redesignated FEP'),
+        ('COL-23', 'Zamora', 'Eva', 9, 'English Only'),
+        ('COL-24', 'Zuniga', 'Omar', 12, 'IFEP'),
+        ('COL-25', 'Villa', 'Rosa', 9, ''),          # blank → not an EL
+    ])
+    assert r.status_code in (200, 302)
+    got = {s: (_student(app, s).el_status, _student(app, s).ell_status)
+           for s in ('COL-21', 'COL-22', 'COL-23', 'COL-24', 'COL-25')}
+    assert got == {
+        'COL-21': ('LTEL', True),      # current EL, no level given → LTEL
+        'COL-22': ('RFEP', True),
+        'COL-23': ('EO', False),
+        'COL-24': ('EO', False),       # initially fluent — never an EL
+        'COL-25': ('EO', False),
+    }
+
+
+def test_idea_cur_level_english_learners_with_a_level_is_newcomer(app, col_env):
+    client, ids = col_env
+    headers = ['First Name', 'Last Name', 'Grade', 'Student ID #',
+               'Idea Cur Level', 'EL Level']
+    data = _preview(client, headers,
+                    [('Ana', 'Vega', 9, 'COL-26', 'English Learners', 'EL 1'),
+                     ('Luis', 'Ybarra', 9, 'COL-27', 'English Learners', '')]).get_json()
+    assert data['ok'] is True and not data['errors']
+    # Only the level-less one is an inference worth flagging.
+    assert any('LTEL' in n and 'Ybarra, Luis' in n for n in data['notices'])
+    _upload(client, headers,
+            [('Ana', 'Vega', 9, 'COL-26', 'English Learners', 'EL 1'),
+             ('Luis', 'Ybarra', 9, 'COL-27', 'English Learners', '')])
+    assert (_student(app, 'COL-26').el_status, _student(app, 'COL-26').el_level) == ('Newcomer', 'EL 1')
+    assert _student(app, 'COL-27').el_status == 'LTEL'

@@ -66,7 +66,9 @@ CASELOAD_COL_ALIASES = {
     # students who are not ELs — blank means EO, never an error.
     'el_status':  ('el status', 'english learner', 'english learner status',
                    'english learners', 'english learner?', 'el', 'ell',
-                   'ell status', 'el program', 'el designation', 'lep'),
+                   'ell status', 'el program', 'el designation', 'lep',
+                   # the SIS export's title for the language-program field
+                   'idea cur level', 'idea cur lvl', 'idea current level'),
     'el_level':   ('el level', 'eld level', 'el lvl', 'ell level',
                    'english learner level'),
     'iep':        ('iep', 'iep status', 'has iep', 'iep?', 'special ed', 'sped'),
@@ -101,6 +103,8 @@ _EL_STATUS_ALIASES = {
     'ifep': 'EO', 'initially fluent english proficient': 'EO',
     'rfep': 'RFEP', 'r-fep': 'RFEP', 'reclassified': 'RFEP', 'redesignated': 'RFEP',
     'reclassified fluent english proficient': 'RFEP',
+    'redesignated fep': 'RFEP', 'reclassified fep': 'RFEP',
+    'redesignated fluent english proficient': 'RFEP',
     'ltel': 'LTEL', 'long-term english learner': 'LTEL',
     'long term english learner': 'LTEL', 'long-term el': 'LTEL', 'long term el': 'LTEL',
     'newcomer': 'Newcomer', 'new comer': 'Newcomer',
@@ -110,6 +114,7 @@ _EL_STATUS_ALIASES = {
 # the EL Level column decides: a level means Newcomer, no level means LTEL.
 _EL_GENERIC_MARKERS = {
     'yes', 'y', 'x', 'true', '1', 'el', 'ell', 'lep', 'english learner',
+    'english learners', 'english language learner', 'english language learners',
     'english learner student', 'el student', 'ell student', 'current el',
 }
 
