@@ -99,18 +99,39 @@
 </div>
 {% endif %}
 
-<div style="display:flex; gap:10px; margin-top:20px;">
-    <form method="POST" action="{{ url_for('availability.auto_schedule_confirm') }}" style="display:inline;">
+<div class="card" style="margin-top:20px;">
+    <div class="card-body" style="font-size:0.9rem;">
+        {% if google_connected %}
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" name="add_to_google" value="1" form="confirm-form" checked>
+            <span><strong>Add these to my Google Calendar</strong> &mdash; one event per
+                {{ 'appointment' if proposal.mode == 'individual' else 'group meeting' }}, created the moment you confirm.
+                Cancelling an appointment in the app removes it from Google too.</span>
+        </label>
+        {% if proposal.mode == 'individual' %}
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px;">
+            <input type="checkbox" name="invite_students" value="1" form="confirm-form">
+            <span>Also send a Google Calendar invite to each student who has an email on file</span>
+        </label>
+        {% endif %}
+        {% elif google_configured %}
+        <strong>Google Calendar isn't connected.</strong> These appointments will be saved in the app; to have
+        them added to your Google Calendar automatically,
+        <a href="{{ url_for('google_auth.authorize') }}">connect Google</a> first &mdash; or confirm now and use
+        <em>Add upcoming appointments to Google Calendar</em> on the Availability page afterwards.
+        {% else %}
+        Google Calendar isn't set up on this install (no <code>data/google_credentials.json</code>). Confirmed
+        appointments can still be downloaded as an .ics file from the Availability page.
+        {% endif %}
+    </div>
+</div>
+
+<div style="display:flex; gap:10px; margin-top:16px;">
+    <form method="POST" action="{{ url_for('availability.auto_schedule_confirm') }}" style="display:inline;" id="confirm-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary" id="confirm-btn" {% if not proposal['items'] %}disabled{% endif %}>Confirm and Schedule</button>
     </form>
     <a href="{{ url_for('availability.auto_schedule_picker') }}" class="btn btn-outline">Start over</a>
-</div>
-
-<div style="margin-top:14px; font-size:0.85rem; color:var(--gray);">
-    After confirming, these appointments will appear in your subscribed Google Calendar within a few hours
-    (Google polls the feed on its own cadence). For an immediate copy, download the .ics file from the
-    Availability page and import it into Google Calendar manually.
 </div>
 
 <script>
