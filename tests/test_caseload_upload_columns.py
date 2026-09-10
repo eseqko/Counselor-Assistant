@@ -295,3 +295,34 @@ def test_idea_cur_level_english_learners_with_a_level_is_newcomer(app, col_env):
              ('Luis', 'Ybarra', 9, 'COL-27', 'English Learners', '')])
     assert (_student(app, 'COL-26').el_status, _student(app, 'COL-26').el_level) == ('Newcomer', 'EL 1')
     assert _student(app, 'COL-27').el_status == 'LTEL'
+
+
+# ── hand-entered EL Levels survive a roster refresh ────────────────────────
+
+def test_roster_refresh_keeps_hand_entered_newcomer_level(app, col_env):
+    """'English Learners' only says the student IS an EL. The counselor hand-
+    enters EL Levels for newcomers, so re-uploading the same roster must not
+    downgrade them back to LTEL."""
+    client, ids = col_env                      # COL-EXIST is Newcomer / EL 2
+    headers = ['First Name', 'Last Name', 'Grade', 'Student ID #', 'Idea Cur Level']
+    _upload(client, headers, [('Elena', 'Vargas', 10, 'COL-EXIST', 'English Learners')])
+    s = _student(app, 'COL-EXIST')
+    assert (s.el_status, s.el_level, s.ell_status) == ('Newcomer', 'EL 2', True)
+    assert s.grade_level == 10                 # the rest of the row still applied
+
+
+def test_explicit_status_in_the_file_still_wins(app, col_env):
+    client, ids = col_env
+    headers = ['First Name', 'Last Name', 'Grade', 'Student ID #', 'Idea Cur Level']
+    _upload(client, headers, [('Elena', 'Vargas', 9, 'COL-EXIST', 'Redesignated FEP')])
+    s = _student(app, 'COL-EXIST')
+    assert (s.el_status, s.el_level, s.ell_status) == ('RFEP', '', True)
+
+
+def test_generic_marker_still_upgrades_a_non_el_to_ltel(app, col_env):
+    client, ids = col_env
+    headers = ['First Name', 'Last Name', 'Grade', 'Student ID #', 'Idea Cur Level']
+    _upload(client, headers, [('Ana', 'Vega', 9, 'COL-28', '')])                 # EO first
+    assert _student(app, 'COL-28').el_status == 'EO'
+    _upload(client, headers, [('Ana', 'Vega', 9, 'COL-28', 'English Learners')])
+    assert (_student(app, 'COL-28').el_status, _student(app, 'COL-28').ell_status) == ('LTEL', True)
