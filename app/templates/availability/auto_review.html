@@ -106,12 +106,14 @@
             <input type="checkbox" name="add_to_google" value="1" form="confirm-form" checked>
             <span><strong>Add these to my Google Calendar</strong> &mdash; one event per
                 {{ 'appointment' if proposal.mode == 'individual' else 'group meeting' }}, created the moment you confirm.
-                Cancelling an appointment in the app removes it from Google too.</span>
+                {{ 'Cancelling an appointment in the app removes it from Google too.' if proposal.mode == 'individual'
+                   else 'Deleting or cancelling the meeting in the app removes it from Google too.' }}</span>
         </label>
         {% if proposal.mode == 'individual' %}
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px;">
             <input type="checkbox" name="invite_students" value="1" form="confirm-form">
-            <span>Also send a Google Calendar invite to each student who has an email on file</span>
+            <span>Also send a Google Calendar invite to each student who has an email on file
+                (the invite shows the appointment title and time; your batch notes stay off it)</span>
         </label>
         {% endif %}
         {% elif google_configured %}

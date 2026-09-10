@@ -42,15 +42,18 @@ def _push_booking_to_google(user, booking, title=None, invite_student=False):
     label = dict(Booking.MEETING_TYPES).get(booking.meeting_type, booking.meeting_type)
     who = booking.student_name or booking.booker_name
     summary = f'{title or label}: {who}'
-    description = f'Student: {who}\nType: {label}\n'
-    if title and title != label:
-        description = f'{title}\n' + description
-    if booking.notes:
-        description += f'Notes: {booking.notes}\n'
-    description += '\nScheduled with Counselor Assistant.'
     attendees = None
     if invite_student and booking.student is not None and booking.student.email:
         attendees = [booking.student.email]
+    description = f'Student: {who}\nType: {label}\n'
+    if title and title != label:
+        description = f'{title}\n' + description
+    # A Google event is one shared record: with the student invited, the
+    # counselor's batch notes would land in the student's inbox too, so they
+    # stay off the invite (they remain on the booking in the app).
+    if booking.notes and not attendees:
+        description += f'Notes: {booking.notes}\n'
+    description += '\nScheduled with Counselor Assistant.'
     start_dt, end_dt = _booking_datetimes(booking)
     event = google_calendar.create_event(
         user, summary, start_dt, end_dt, description=description,
@@ -654,8 +657,9 @@ def api_push_bookings_to_google():
 
     Catches up batches confirmed before this existed (or with the box
     unticked) and any event that failed to create. Group-meeting member
-    bookings are skipped: a group is ONE Google event, created with its
-    CalendarEvent, so pushing members would add a duplicate per student.
+    bookings are skipped — a group is ONE Google event, kept on its
+    CalendarEvent — and any such group meeting that isn't on Google yet is
+    pushed here as that one event.
     """
     if not google_client.is_connected(current_user):
         return jsonify({'error': 'Google Calendar is not connected.'}), 400
@@ -676,11 +680,25 @@ def api_push_bookings_to_google():
             pushed += 1
         else:
             failed += 1
+    pushed_groups = 0
+    pending_groups = (CalendarEvent.query
+                      .filter_by(owner_id=current_user.id, event_type='group_session')
+                      .filter(CalendarEvent.start_datetime >= datetime.now())
+                      .filter(CalendarEvent.status != 'cancelled')
+                      .filter(CalendarEvent.google_event_id.is_(None))
+                      .order_by(CalendarEvent.start_datetime)
+                      .all())
+    for ev in pending_groups:
+        if _push_event_to_google(current_user, ev):
+            pushed_groups += 1
+        else:
+            failed += 1
     db.session.commit()
     log_action('google_push', resource_type='booking',
-               details=f'pushed={pushed} failed={failed} skipped_group={skipped_group}')
-    return jsonify({'ok': True, 'pushed': pushed, 'failed': failed,
-                    'skipped_group': skipped_group})
+               details=f'pushed={pushed} groups={pushed_groups} failed={failed} '
+                       f'skipped_group={skipped_group}')
+    return jsonify({'ok': True, 'pushed': pushed, 'pushed_groups': pushed_groups,
+                    'failed': failed, 'skipped_group': skipped_group})
 
 
 @availability_bp.route('/auto/download.ics')

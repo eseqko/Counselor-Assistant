@@ -136,6 +136,35 @@ def add_event():
         event_colors=CalendarEvent.EVENT_COLORS)
 
 
+def _sync_event_to_google(event):
+    """Mirror an edit of a Google-linked CalendarEvent to Google Calendar.
+
+    Only events the app itself created on Google carry google_event_id (the
+    cohort scheduler's group meetings). Cancelling deletes the Google copy;
+    any other edit patches title/description/location/times so the two never
+    drift. Best effort: a Google failure never blocks the local save.
+    """
+    if not event.google_event_id or not google_client.is_connected(current_user):
+        return
+    if event.status == 'cancelled':
+        google_calendar.delete_event(current_user, event.google_event_id)
+        event.google_event_id = None
+        return
+    if event.all_day:
+        start = {'date': event.start_datetime.strftime('%Y-%m-%d')}
+        end = {'date': event.end_datetime.strftime('%Y-%m-%d')}
+    else:
+        start = {'dateTime': event.start_datetime.isoformat(), 'timeZone': 'America/Los_Angeles'}
+        end = {'dateTime': event.end_datetime.isoformat(), 'timeZone': 'America/Los_Angeles'}
+    google_calendar.update_event(current_user, event.google_event_id, {
+        'summary': event.title,
+        'description': event.description or '',
+        'location': event.location or '',
+        'start': start,
+        'end': end,
+    })
+
+
 @calendar_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_event(id):
@@ -161,6 +190,7 @@ def edit_event(id):
         except ValueError:
             flash('Invalid date/time.', 'danger')
 
+        _sync_event_to_google(event)
         db.session.commit()
         log_action('update', 'calendar_event', event.id)
         flash('Event updated.', 'success')
@@ -178,6 +208,10 @@ def edit_event(id):
 def delete_event(id):
     event = owned_or_404(CalendarEvent, id, owner_attr='owner_id')
     log_action('delete', 'calendar_event', event.id)
+    # Remove the linked Google Calendar event too (the cohort scheduler's
+    # group meetings store their id here), so nothing stale is left on Google.
+    if event.google_event_id and google_client.is_connected(current_user):
+        google_calendar.delete_event(current_user, event.google_event_id)
     db.session.delete(event)
     db.session.commit()
     flash('Event deleted.', 'warning')

@@ -184,7 +184,8 @@ def test_catch_up_pushes_only_what_is_missing(app, gcal_env):
         db.session.commit()
     r = client.post('/scheduling/api/bookings/push-google', json={})
     assert r.status_code == 200
-    assert r.get_json() == {'ok': True, 'pushed': 1, 'failed': 0, 'skipped_group': 1}
+    assert r.get_json() == {'ok': True, 'pushed': 1, 'pushed_groups': 0, 'failed': 0,
+                            'skipped_group': 1}
     assert len(calls) == 1 and calls[0]['summary'] == 'Academic Concern: Ana Vega'
     with app.app_context():
         pushed = Booking.query.filter_by(counselor_id=ids['me'], start_time='08:00').first()
@@ -208,3 +209,106 @@ def test_google_failure_keeps_the_appointment_and_reports_it(app, gcal_env, monk
     with app.app_context():
         bookings = Booking.query.filter_by(counselor_id=ids['me']).all()
         assert len(bookings) == 2 and all(b.google_event_id is None for b in bookings)
+
+
+def _group_proposal(ids):
+    return {
+        'mode': 'group', 'title': 'Senior Cohort', 'notes': '', 'duration': 45,
+        'days_ahead': 14, 'meeting_type': 'general',
+        'items': [{'student_ids': [ids['a'], ids['b']],
+                   'student_names': ['Ana Vega', 'Luis Ybarra'],
+                   'date': TOMORROW, 'day_name': 'Day', 'start_time': '10:00',
+                   'end_time': '10:45', 'display': 'x'}],
+        'unscheduled': [], 'created_at': 'x',
+    }
+
+
+def test_catch_up_also_pushes_a_group_meeting_that_failed(app, gcal_env, monkeypatch):
+    """The confirm message tells the counselor to use the catch-up action
+    after a Google failure — that has to work for group meetings too, whose
+    event lives on the CalendarEvent, not on the member bookings."""
+    client, ids, calls = gcal_env
+    monkeypatch.setattr(av.google_calendar, 'create_event', lambda *a, **k: None)
+    _set_proposal(client, _group_proposal(ids))
+    r = _confirm(client, add_to_google='1')
+    assert b'1 could not be added' in r.data
+    with app.app_context():
+        assert CalendarEvent.query.filter_by(owner_id=ids['me']).first().google_event_id is None
+
+    made = []
+    monkeypatch.setattr(av.google_calendar, 'create_event',
+                        lambda user, summary, s, e, **kw: (made.append(summary) or {'id': 'evt-g'}))
+    r = client.post('/scheduling/api/bookings/push-google', json={})
+    assert r.get_json() == {'ok': True, 'pushed': 0, 'pushed_groups': 1, 'failed': 0,
+                            'skipped_group': 2}
+    assert made == ['Senior Cohort']                    # ONE event for the group
+    with app.app_context():
+        assert CalendarEvent.query.filter_by(owner_id=ids['me']).first().google_event_id == 'evt-g'
+        assert all(b.google_event_id is None
+                   for b in Booking.query.filter_by(counselor_id=ids['me']).all())
+
+
+def test_invites_leave_the_batch_notes_off_the_students_copy(app, gcal_env):
+    """A Google event is one shared record: the counselor's batch notes must
+    not go out in a student's invite, but stay on the counselor-only events."""
+    client, ids, calls = gcal_env
+    _set_proposal(client, _individual_proposal(ids))    # notes: 'Bring transcript'
+    _confirm(client, add_to_google='1', invite_students='1')
+    ana = next(c for c in calls if 'Vega' in c['summary'])      # invited (has email)
+    luis = next(c for c in calls if 'Ybarra' in c['summary'])   # not invited (no email)
+    assert 'Bring transcript' not in ana['description']
+    assert 'Bring transcript' in luis['description']
+
+
+# ── the local calendar keeps a Google-linked group meeting in sync ─────────
+
+import app.routes.calendar as cal
+
+
+def _group_event(app, ids, google_id='evt-g'):
+    from datetime import datetime
+    with app.app_context():
+        ev = CalendarEvent(owner_id=ids['me'], title='Senior Cohort', description='x',
+                           start_datetime=datetime.fromisoformat(f'{TOMORROW}T10:00'),
+                           end_datetime=datetime.fromisoformat(f'{TOMORROW}T10:45'),
+                           event_type='group_session', google_event_id=google_id)
+        db.session.add(ev)
+        db.session.commit()
+        return ev.id
+
+
+def test_deleting_a_group_meeting_removes_it_from_google(app, gcal_env, monkeypatch):
+    client, ids, calls = gcal_env
+    deleted = []
+    monkeypatch.setattr(cal.google_calendar, 'delete_event',
+                        lambda user, gid: deleted.append(gid) or True)
+    ev_id = _group_event(app, ids)
+    r = client.post(f'/calendar/{ev_id}/delete')
+    assert r.status_code in (200, 302)
+    assert deleted == ['evt-g']
+    with app.app_context():
+        assert db.session.get(CalendarEvent, ev_id) is None
+
+
+def test_editing_a_group_meeting_updates_google(app, gcal_env, monkeypatch):
+    client, ids, calls = gcal_env
+    patched, deleted = [], []
+    monkeypatch.setattr(cal.google_calendar, 'update_event',
+                        lambda user, gid, body: patched.append((gid, body)) or {'id': gid})
+    monkeypatch.setattr(cal.google_calendar, 'delete_event',
+                        lambda user, gid: deleted.append(gid) or True)
+    ev_id = _group_event(app, ids)
+    form = dict(title='Senior Cohort (moved)', description='x', location='Room 12',
+                event_type='group_session', status='scheduled',
+                start_datetime=f'{TOMORROW}T11:00', end_datetime=f'{TOMORROW}T11:45')
+    r = client.post(f'/calendar/{ev_id}/edit', data=form)
+    assert r.status_code in (200, 302)
+    gid, body = patched[-1]
+    assert gid == 'evt-g' and body['summary'] == 'Senior Cohort (moved)'
+    assert body['start']['dateTime'].startswith(f'{TOMORROW}T11:00')
+    assert body['location'] == 'Room 12'
+    # Cancelling in the app removes the Google copy and forgets the link.
+    client.post(f'/calendar/{ev_id}/edit', data=dict(form, status='cancelled'))
+    assert deleted == ['evt-g']
+    with app.app_context():
+        assert db.session.get(CalendarEvent, ev_id).google_event_id is None

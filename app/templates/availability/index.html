@@ -203,12 +203,12 @@ function pushToGoogle() {
     }).then(function(r){ return r.json(); }).then(function(d){
         if (d.error) { alert(d.error); return; }
         var msg;
-        if (!d.pushed && !d.failed && !d.skipped_group) {
+        if (!d.pushed && !d.pushed_groups && !d.failed) {
             msg = 'Everything upcoming is already on your Google Calendar.';
         } else {
-            msg = d.pushed + ' added to Google Calendar.';
+            msg = d.pushed + ' appointment(s)' + (d.pushed_groups ? ' and ' + d.pushed_groups + ' group meeting(s)' : '') + ' added to Google Calendar.';
             if (d.failed) msg += ' ' + d.failed + ' could not be added - try again in a moment.';
-            if (d.skipped_group) msg += ' ' + d.skipped_group + ' group-meeting member booking(s) skipped (a group is one event, created with the meeting).';
+            if (d.skipped_group) msg += ' (Group members are covered by their meeting\'s single event.)';
         }
         alert(msg);
         location.reload();
