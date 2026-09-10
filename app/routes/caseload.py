@@ -66,7 +66,9 @@ CASELOAD_COL_ALIASES = {
     # students who are not ELs — blank means EO, never an error.
     'el_status':  ('el status', 'english learner', 'english learner status',
                    'english learners', 'english learner?', 'el', 'ell',
-                   'ell status', 'el program', 'el designation', 'lep'),
+                   'ell status', 'el program', 'el designation', 'lep',
+                   # the SIS export's title for the language-program field
+                   'idea cur level', 'idea cur lvl', 'idea current level'),
     'el_level':   ('el level', 'eld level', 'el lvl', 'ell level',
                    'english learner level'),
     'iep':        ('iep', 'iep status', 'has iep', 'iep?', 'special ed', 'sped'),
@@ -101,6 +103,8 @@ _EL_STATUS_ALIASES = {
     'ifep': 'EO', 'initially fluent english proficient': 'EO',
     'rfep': 'RFEP', 'r-fep': 'RFEP', 'reclassified': 'RFEP', 'redesignated': 'RFEP',
     'reclassified fluent english proficient': 'RFEP',
+    'redesignated fep': 'RFEP', 'reclassified fep': 'RFEP',
+    'redesignated fluent english proficient': 'RFEP',
     'ltel': 'LTEL', 'long-term english learner': 'LTEL',
     'long term english learner': 'LTEL', 'long-term el': 'LTEL', 'long term el': 'LTEL',
     'newcomer': 'Newcomer', 'new comer': 'Newcomer',
@@ -110,6 +114,7 @@ _EL_STATUS_ALIASES = {
 # the EL Level column decides: a level means Newcomer, no level means LTEL.
 _EL_GENERIC_MARKERS = {
     'yes', 'y', 'x', 'true', '1', 'el', 'ell', 'lep', 'english learner',
+    'english learners', 'english language learner', 'english language learners',
     'english learner student', 'el student', 'ell student', 'current el',
 }
 
@@ -1030,6 +1035,7 @@ def _parse_caseload_file(file):
             'gender': gender_clean,
             'el_status': el_status_clean,
             'el_level': el_level_clean,
+            'el_inferred': el_inferred,
             'iep': iep,
             'plan_504': plan_504,
         })
@@ -1040,10 +1046,12 @@ def _parse_caseload_file(file):
             continue
         shown = '; '.join(names[:15]) + (f'; +{len(names) - 15} more' if len(names) > 15 else '')
         why = 'an EL Level was given' if status == 'Newcomer' else 'no EL Level was given'
+        keep_note = ('' if status == 'Newcomer' else
+                     ' Students already on your caseload as Newcomer keep that status and level.')
         notices.append(
             f'{len(names)} student(s) marked as English Learners without a specific '
-            f'status were recorded as {status} because {why}: {shown}. '
-            'Open a student to change this.')
+            f'status were recorded as {status} because {why}: {shown}.'
+            f'{keep_note} Open a student to change this.')
     if not has['el_status']:
         notices.append('No "EL Status" / "English Learner" column was found: existing '
                        'students keep their EL status and new students default to EO.')
@@ -1178,9 +1186,17 @@ def upload_caseload():
                 if r['gender']:
                     existing.gender = r['gender']
                 if r['el_status'] is not None:
-                    existing.el_status = r['el_status']
-                    existing.el_level = r['el_level']
-                    existing.ell_status = (r['el_status'] in ('Newcomer', 'LTEL', 'RFEP'))
+                    # "English Learners" / "Yes" only says the student IS an EL.
+                    # When the file gives no EL Level and this student already
+                    # carries a hand-entered Newcomer (or LTEL) status, keep it:
+                    # a roster refresh must not downgrade a Newcomer to LTEL. An
+                    # explicit status in the file (RFEP, EO, Newcomer...) still wins.
+                    keep_specific = (r.get('el_inferred') and r['el_status'] == 'LTEL'
+                                     and existing.el_status in ('Newcomer', 'LTEL'))
+                    if not keep_specific:
+                        existing.el_status = r['el_status']
+                        existing.el_level = r['el_level']
+                    existing.ell_status = (existing.el_status in ('Newcomer', 'LTEL', 'RFEP'))
                 if r['iep'] is not None:
                     existing.iep_status = r['iep']
                 if r['plan_504'] is not None:
