@@ -469,7 +469,9 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
             'df_students': df_students,
         })
     course_rows.sort(key=lambda r: (-r['df'], -r['df_pct']))
-    top_courses = course_rows[:15]
+    # Every class goes to the chart and the table — a class with a D/F that
+    # was cut from the chart read as "not there". The chart grows to fit.
+    chart_courses = course_rows
 
     # D/F by teacher — same shape as by course
     # School-wide D/F rate across all teachers — the benchmark for flagging
@@ -521,10 +523,11 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
     dist_order = ['A', 'B', 'C', 'D', 'F', 'P/NP', 'Other']
     return {
         'df_by_course': {
-            'labels': [r['course'] for r in top_courses],
-            'f_values': [r['fail'] for r in top_courses],
-            'd_values': [r['d'] for r in top_courses],
+            'labels': [r['course'] for r in chart_courses],
+            'f_values': [r['fail'] for r in chart_courses],
+            'd_values': [r['d'] for r in chart_courses],
             'rows': course_rows,
+            'count': len(course_rows),
         },
         'df_by_period': period_payload,
         'df_by_subject': subj_payload,

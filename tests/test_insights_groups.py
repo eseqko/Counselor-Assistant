@@ -133,3 +133,24 @@ def test_breakdown_splits_the_whole_caseload(app, ins_env):
         iep, no_iep = gb[1]['rows']
         assert (iep['students'], iep['fail_pct'], iep['absences']) == (1, 100.0, 1)
         assert (no_iep['students'], no_iep['df_pct']) == (4, 50.0)     # A, B of 4
+
+
+def test_every_class_with_a_df_reaches_the_chart_and_table(app, ins_env):
+    """The D/F-by-class chart used to stop at 15 classes and the table at 30,
+    so a class with a D/F could be missing from the page entirely. Every
+    class now ships to both, worst first, with a count for the heading."""
+    client, ids = ins_env
+    with app.app_context():
+        for i in range(40):
+            db.session.add(GradeRecord(student_id=ids['a'], course_name=f'Course {i:02d}',
+                                       letter_grade='F' if i % 2 else 'D',
+                                       school_year=YEAR, quarter=1, grade_type='final'))
+        db.session.commit()
+    course = _get(client)['grades']['df_by_course']
+    # 40 seeded here + the fixture's Math (F), English (D), Science (F).
+    assert course['count'] == 43
+    assert len(course['rows']) == 43
+    assert len(course['labels']) == 43, 'chart must list every class, not the top 15'
+    assert len(course['f_values']) == len(course['d_values']) == 43
+    assert course['labels'] == [r['course'] for r in course['rows']]
+    assert [r['df'] for r in course['rows']] == sorted((r['df'] for r in course['rows']), reverse=True)
