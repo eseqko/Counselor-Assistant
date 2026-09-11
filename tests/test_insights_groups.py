@@ -154,3 +154,21 @@ def test_every_class_with_a_df_reaches_the_chart_and_table(app, ins_env):
     assert len(course['f_values']) == len(course['d_values']) == 43
     assert course['labels'] == [r['course'] for r in course['rows']]
     assert [r['df'] for r in course['rows']] == sorted((r['df'] for r in course['rows']), reverse=True)
+
+
+def test_subject_chart_only_when_the_export_has_subject_areas(app, ins_env):
+    """Without subject_area the "by subject" rollup falls back to course
+    names, so the page must know to show a note instead of a second copy of
+    the class chart."""
+    client, ids = ins_env
+    subj = _get(client)['grades']['df_by_subject']
+    assert subj['has_subject_data'] is False
+    assert subj['labels'] == ['Math', 'English', 'Science'] or set(subj['labels']) == {'Math', 'English', 'Science'}
+    with app.app_context():
+        db.session.add(GradeRecord(student_id=ids['a'], course_name='Art 1', letter_grade='D',
+                                   subject_area='Fine Arts/LOTE',
+                                   school_year=YEAR, quarter=1, grade_type='final'))
+        db.session.commit()
+    subj = _get(client)['grades']['df_by_subject']
+    assert subj['has_subject_data'] is True
+    assert 'Fine Arts/LOTE' in subj['labels']

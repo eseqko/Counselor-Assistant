@@ -384,7 +384,13 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
     caseload_graded = set()
     caseload_fail_set = set()
 
+    # Whether this export carries subject areas at all. The importer leaves
+    # subject_area empty, in which case "by subject" would just be "by class"
+    # again; the page shows a note instead of a duplicate chart.
+    has_subject = False
     for g_sid, g_letter, g_course, g_teacher, g_period, g_subject in grades:
+        if g_subject:
+            has_subject = True
         lg = (g_letter or '').strip()
         if lg:
             caseload_graded.add(g_sid)
@@ -518,6 +524,7 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
         'labels': [s for s, _ in subj_sorted],
         'f_values': [v['f'] for _, v in subj_sorted],
         'd_values': [v['d'] for _, v in subj_sorted],
+        'has_subject_data': has_subject,
     }
 
     dist_order = ['A', 'B', 'C', 'D', 'F', 'P/NP', 'Other']

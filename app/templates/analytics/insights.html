@@ -34,10 +34,11 @@
 .hbar-wrap canvas { max-height:none; }
 .table-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; font-size:0.8rem; color:var(--gray); }
 .table-tools input[type=search] { padding:5px 9px; border:1px solid var(--light-gray); border-radius:6px; font-size:0.84rem; min-width:200px; }
-.data-table tbody tr:nth-child(even) td { background:rgba(0,0,0,0.018); }
+.data-table tbody tr:nth-child(even of :not([hidden])) { background:rgba(0,0,0,0.018); }
 .data-table td.num, .data-table th.num { white-space:nowrap; }
 .data-table td.rank { color:var(--gray); font-size:0.76rem; width:1%; white-space:nowrap; }
 .data-table td.course { font-weight:600; min-width:200px; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
 .kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
 .kpi-card { background:var(--white); border-radius:10px; padding:16px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
 .kpi-value { font-size:1.5rem; font-weight:800; color:var(--primary-dark); }
@@ -58,9 +59,14 @@
 .empty-note { color:var(--gray); font-size:0.85rem; font-style:italic; padding:30px; text-align:center; }
 .loading-overlay { text-align:center; padding:60px 20px; color:var(--gray); font-size:0.95rem; }
 @media print {
-    .analytics-toolbar, .sidebar, .top-bar, .print-btn { display:none !important; }
+    .analytics-toolbar, .sidebar, .top-bar, .print-btn, .table-tools { display:none !important; }
     .chart-grid, .chart-card { break-inside:avoid; }
     .chart-card { box-shadow:none; border:1px solid #ddd; }
+    /* A canvas is one unbreakable block: taller than a page it prints as a blank
+       page and then over the table. Scale the tall bar charts to fit one page;
+       the table below carries every class in full. */
+    .hbar-wrap { height:auto !important; }
+    .hbar-wrap canvas { height:auto !important; width:auto !important; max-width:100% !important; max-height:8.4in !important; }
 }
 </style>
 {% endblock %}
@@ -302,8 +308,15 @@
         html += '<div class="section-header">Where Failing Concentrates</div>';
         html += '<div class="chart-grid">';
         html += card('c-gperiod', 'D/F by Period', 'Which periods produce the most failing marks');
-        html += hbarCard('c-gsubject', 'D/F by Subject', 'Failing/near-failing grouped by subject area',
-                         g.df_by_subject.labels.length, false);
+        if (g.df_by_subject.has_subject_data) {
+            html += hbarCard('c-gsubject', 'D/F by Subject', 'Failing/near-failing grouped by subject area',
+                             g.df_by_subject.labels.length, false);
+        } else {
+            html += '<div class="chart-card"><h3>D/F by Subject</h3>'
+                  + '<div class="chart-subtitle">Not available for this grade export</div>'
+                  + '<div class="empty-note">The grade import has no subject-area column, so classes can\u2019t be grouped by subject. '
+                  + 'Every class is in the list above.</div></div>';
+        }
         html += '</div>';
 
         /* ── By teacher (only if staff names are in the grade data) ── */
@@ -356,7 +369,7 @@
                  {label:'D', data:g.df_by_course.d_values, color:'#F39C12'}]));
         if (g.df_by_period.labels.length)
             charts.push(bar('c-gperiod', g.df_by_period.labels, g.df_by_period.df, 'D/F grades', '#E74C3C'));
-        if (g.df_by_subject.labels.length)
+        if (g.df_by_subject.has_subject_data && g.df_by_subject.labels.length)
             charts.push(stackedHBar('c-gsubject', g.df_by_subject.labels,
                 [{label:'Fail (F / NP / NM)', data:g.df_by_subject.f_values, color:'#E74C3C'},
                  {label:'D', data:g.df_by_subject.d_values, color:'#F39C12'}]));
@@ -414,10 +427,10 @@
         var h = '<div class="chart-card full" style="margin-bottom:20px;">'
             + '<div class="table-tools">'
             + '<input type="search" id="course-filter" placeholder="Filter classes\u2026" aria-label="Filter classes" oninput="filterCourses(this.value)">'
-            + '<span id="course-count">All ' + rows.length + ' class' + (rows.length === 1 ? '' : 'es') + ' shown, worst first</span>'
+            + '<span id="course-count" aria-live="polite">All ' + rows.length + ' class' + (rows.length === 1 ? '' : 'es') + ' shown, worst first</span>'
             + '</div>'
             + '<div class="table-responsive"><table class="data-table" id="course-table"><thead><tr>'
-            + '<th class="num">#</th>'
+            + '<th class="num" title="Rank, worst first"><span class="sr-only">Rank</span>#</th>'
             + '<th>Class</th>'
             + '<th class="num" title="Count of F, NP (No Pass), and NM (No Mark) grades">Fail</th>'
             + '<th class="num">D</th>'
@@ -455,7 +468,7 @@
                               + ' (' + r.school_class_size + ')</span></td>';
                 }
             }
-            h += '<tr data-course="' + esc(String(r.course).toLowerCase()) + '">'
+            h += '<tr data-course="' + esc(foldText(r.course)) + '">'
               + '<td class="rank">' + (i + 1) + '</td>'
               + '<td class="course">' + esc(r.course) + '</td>'
               + '<td class="num"><span class="pill f">' + r.fail + '</span></td>'
@@ -471,9 +484,15 @@
         return h;
     }
 
-    /* Filter the class table by name (substring, case-insensitive). */
+    /* Lower-case and strip accents so "espanol" finds "Español 2". */
+    function foldText(s){
+        s = String(s == null ? '' : s).toLowerCase();
+        try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+        return s;
+    }
+    /* Filter the class table by name (substring, case- and accent-insensitive). */
     window.filterCourses = function(q){
-        q = String(q || '').trim().toLowerCase();
+        q = foldText(q).trim();
         var rows = document.querySelectorAll('#course-table tbody tr');
         var shown = 0;
         rows.forEach(function(tr){
@@ -561,26 +580,59 @@
             return {label:d.label, data:d.data, backgroundColor:d.color+'80', borderColor:d.color, borderWidth:1};})},
             options:{responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}}});
     }
-    /* Height for a horizontal bar chart with n rows: enough per row that
-       Chart.js never has to drop a label, plus room for the axis and legend. */
-    function hbarHeight(n){ return Math.max(180, n * 30 + 80); }
+    /* ── Horizontal bar charts that never hide a label ──
+       Chart.js caps a vertical axis at half the chart width and, by default,
+       skips category labels that don't fit. These charts instead wrap each
+       label to the axis's real width (measured again on every layout pass, so
+       a phone and a desktop both read) and size the canvas so every row has
+       room for its tallest label. Labels stay plain strings, so tooltips show
+       the full name. */
+    var HBAR_FONT = 12, HBAR_LINE = 14.4, HBAR_MAX_LINES = 4, HBAR_PAD_RIGHT = 34, HBAR_MAX_LABEL_PX = 300;
+    function hbarFont(){ return HBAR_FONT + 'px ' + ((Chart.defaults.font && Chart.defaults.font.family) || 'sans-serif'); }
+    var _measureCtx = null;
+    function measureCtx(){
+        if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d');
+        _measureCtx.font = hbarFont();
+        return _measureCtx;
+    }
+    /* Wrap text to a pixel budget. A single word wider than the budget is
+       broken by character; past HBAR_MAX_LINES the rest is elided. */
+    function wrapToWidth(text, budget, ctx){
+        text = String(text == null ? '' : text);
+        var fits = function(s){ return ctx.measureText(s).width <= budget; };
+        if (budget <= 0 || fits(text)) return text;
+        var lines = [], cur = '';
+        text.split(/\s+/).forEach(function(word){
+            while (word.length > 1 && !fits(word)) {
+                var cut = word.length;
+                while (cut > 1 && !fits(word.slice(0, cut))) cut--;
+                if (cur) { lines.push(cur); cur = ''; }
+                lines.push(word.slice(0, cut)); word = word.slice(cut);
+            }
+            var t = cur ? cur + ' ' + word : word;
+            if (cur && !fits(t)) { lines.push(cur); cur = word; } else cur = t;
+        });
+        if (cur) lines.push(cur);
+        if (lines.length > HBAR_MAX_LINES) {
+            lines = lines.slice(0, HBAR_MAX_LINES);
+            var last = lines[HBAR_MAX_LINES - 1];
+            while (last.length > 1 && !fits(last + '\u2026')) last = last.slice(0, -1);
+            lines[HBAR_MAX_LINES - 1] = last + '\u2026';
+        }
+        return lines.length > 1 ? lines : (lines[0] || text);
+    }
+    /* Label budget for a canvas this wide: Chart.js gives a vertical axis at
+       most half the width left after layout padding, less tick mark + padding;
+       capped so long names wrap instead of squeezing the bars. */
+    function hbarLabelBudget(canvasWidth){
+        return Math.min(HBAR_MAX_LABEL_PX, Math.floor((canvasWidth - HBAR_PAD_RIGHT) / 2) - 14);
+    }
+    function hbarRowHeight(lines){ return Math.max(30, Math.ceil(HBAR_LINE * lines) + 12); }
+    function hbarHeight(n, lines){ return Math.max(180, n * hbarRowHeight(lines || 1) + 80); }
     function hbarCard(id, title, subtitle, n, full){
         return '<div class="chart-card' + (full ? ' full' : '') + '"><h3>' + title + '</h3>'
              + '<div class="chart-subtitle">' + subtitle + '</div>'
              + '<div class="hbar-wrap" style="height:' + hbarHeight(n) + 'px;"><canvas id="' + id + '"></canvas></div></div>';
-    }
-    /* Long class names wrap onto a second line instead of being clipped or
-       squeezing the bars. Chart.js draws an array label as multiple lines. */
-    function wrapLabel(s, width){
-        s = String(s == null ? '' : s);
-        if (s.length <= width) return s;
-        var lines = [], cur = '';
-        s.split(/\s+/).forEach(function(w){
-            if (cur && (cur + ' ' + w).length > width) { lines.push(cur); cur = w; }
-            else cur = cur ? cur + ' ' + w : w;
-        });
-        if (cur) lines.push(cur);
-        return lines.length > 1 ? lines : s;
     }
     /* Writes each bar's total at its end so the chart reads without hovering. */
     var barTotals = {
@@ -607,14 +659,39 @@
     };
     function stackedHBar(id, labels, datasets){
         var el = document.getElementById(id); if(!el) return null;
+        var wrap = el.parentElement;
+        labels = labels.map(function(l){ return String(l == null ? '' : l); });
+        /* Rows must be tall enough for the tallest wrapped label at this width.
+           Re-run on resize; the guard stops the resize observer from looping. */
+        function fitHeight(width){
+            var ctx = measureCtx(), budget = hbarLabelBudget(width);
+            var lines = labels.reduce(function(m, l){
+                var w = wrapToWidth(l, budget, ctx); return Math.max(m, Array.isArray(w) ? w.length : 1); }, 1);
+            var h = hbarHeight(labels.length, lines);
+            if (wrap && wrap.classList.contains('hbar-wrap') && Math.abs(wrap.clientHeight - h) > 1) wrap.style.height = h + 'px';
+        }
+        fitHeight((wrap && wrap.clientWidth) || el.clientWidth || 600);
         return new Chart(el, {type:'bar',
-            data:{labels:labels.map(function(l){ return wrapLabel(l, 34); }), datasets:datasets.map(function(d){
+            data:{labels:labels, datasets:datasets.map(function(d){
                 return {label:d.label, data:d.data, backgroundColor:d.color+'80', borderColor:d.color, borderWidth:1};})},
             options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
-                layout:{padding:{right:34}},
-                plugins:{legend:{position:'bottom'}},
+                layout:{padding:{right:HBAR_PAD_RIGHT}},
+                onResize:function(chart, size){ fitHeight(size.width); },
+                plugins:{legend:{position:'bottom'},
+                         /* Long names wrap in the tooltip too, so it never runs off a narrow canvas. */
+                         tooltip:{callbacks:{title:function(items){
+                             if (!items.length) return '';
+                             var chart = items[0].chart, ctx = measureCtx();
+                             ctx.font = 'bold ' + hbarFont();
+                             return wrapToWidth(chart.data.labels[items[0].dataIndex], Math.max(120, chart.width - 80), ctx);
+                         }}}},
                 scales:{x:{stacked:true, beginAtZero:true, ticks:{precision:0}},
-                        y:{stacked:true, ticks:{autoSkip:false, font:{size:12}}}}},
+                        y:{stacked:true, ticks:{autoSkip:false, font:{size:HBAR_FONT},
+                            callback:function(v){
+                                var ctx = this.ctx; ctx.save(); ctx.font = hbarFont();
+                                var out = wrapToWidth(this.getLabelForValue(v), Math.min(HBAR_MAX_LABEL_PX, this.maxWidth - 14), ctx);
+                                ctx.restore(); return out;
+                            }}}}},
             plugins:[barTotals]});
     }
     function doughnut(id, labels, values){
