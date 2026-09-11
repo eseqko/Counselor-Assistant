@@ -46,12 +46,18 @@
     {% if session.get('last_auto_batch') %}
     <a href="{{ url_for('availability.auto_schedule_download_ics') }}" class="btn btn-sm btn-outline">Download Last Batch (.ics)</a>
     {% endif %}
+    {% if google_connected %}
+    <button type="button" class="btn btn-sm btn-outline" onclick="pushToGoogle()"
+            title="Creates a Google Calendar event for every upcoming appointment that isn't on your Google Calendar yet">
+        Add upcoming appointments to Google Calendar
+    </button>
+    {% endif %}
 </div>
 
 {% if not google_connected %}
 <div style="background:#fff3cd; padding:12px 16px; border-radius:8px; margin-bottom:20px; font-size:0.88rem;">
-    <strong>Tip:</strong> Connect your Google Calendar to automatically check for conflicts when
-    parents book appointments.
+    <strong>Tip:</strong> Connect your Google Calendar to have cohort appointments added to it the
+    moment you confirm them, and to check for conflicts automatically when parents book.
     <a href="{{ url_for('google_auth.authorize') }}" class="btn btn-sm btn-outline" style="margin-left:8px;">Connect Google</a>
 </div>
 {% endif %}
@@ -188,6 +194,25 @@ function deleteSlot(id) {
     if (!confirm('Remove this availability slot?')) return;
     fetch(BASE + '/api/slots/' + id, { method:'DELETE' })
         .then(function(){ location.reload(); });
+}
+
+function pushToGoogle() {
+    if (!confirm('Add every upcoming appointment that is not on your Google Calendar yet?')) return;
+    fetch(BASE + '/api/bookings/push-google', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})
+    }).then(function(r){ return r.json(); }).then(function(d){
+        if (d.error) { alert(d.error); return; }
+        var msg;
+        if (!d.pushed && !d.pushed_groups && !d.failed) {
+            msg = 'Everything upcoming is already on your Google Calendar.';
+        } else {
+            msg = d.pushed + ' appointment(s)' + (d.pushed_groups ? ' and ' + d.pushed_groups + ' group meeting(s)' : '') + ' added to Google Calendar.';
+            if (d.failed) msg += ' ' + d.failed + ' could not be added - try again in a moment.';
+            if (d.skipped_group) msg += ' (Group members are covered by their meeting\'s single event.)';
+        }
+        alert(msg);
+        location.reload();
+    });
 }
 
 function cancelBooking(id) {

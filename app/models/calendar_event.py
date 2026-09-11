@@ -38,6 +38,10 @@ class CalendarEvent(db.Model):
     status = db.Column(db.String(20), default='scheduled')  # scheduled, completed, cancelled
     completed_notes = db.Column(db.Text)
 
+    # Linked Google Calendar event, set when the app created it there (group
+    # meetings from the cohort scheduler). Column is auto-migrated on startup.
+    google_event_id = db.Column(db.String(200))
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))

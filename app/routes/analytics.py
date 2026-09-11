@@ -72,6 +72,76 @@ _NEAR_FAILING = {'D+', 'D', 'D-'}
 _DF = _FAIL | _NEAR_FAILING
 
 
+# ── Student-group filter for Insights 360 ─────────────────────────────
+# A mixed caseload (e.g. every English Learner plus a slice of general ed)
+# needs its risk numbers split by group. Each key is a stable query-string
+# value mapped to a predicate over a Student. "Current EL" means an active EL
+# status (Newcomer / LTEL); RFEP students are reclassified and so count as
+# non-EL for risk splits, but get their own cut because schools monitor them.
+
+def _is_current_el(s):
+    return (s.el_status or '').strip() not in ('', 'EO', 'RFEP')
+
+
+def _el(s):
+    return (s.el_status or '').strip()
+
+
+INSIGHTS_GROUPS = [
+    ('all',      'All students',               lambda s: True),
+    ('el',       'English Learners (current)', _is_current_el),
+    ('non_el',   'Non-EL (EO + RFEP)',         lambda s: not _is_current_el(s)),
+    ('newcomer', 'Newcomers',                  lambda s: _el(s) == 'Newcomer'),
+    ('ltel',     'LTEL',                       lambda s: _el(s) == 'LTEL'),
+    ('rfep',     'RFEP (reclassified)',        lambda s: _el(s) == 'RFEP'),
+    ('eo',       'English Only',               lambda s: _el(s) in ('', 'EO')),
+    ('iep',      'IEP (special education)',    lambda s: bool(s.iep_status)),
+    ('no_iep',   'No IEP',                     lambda s: not s.iep_status),
+    ('plan_504', '504 plan',                   lambda s: bool(s.section_504)),
+    ('any_plan', 'IEP or 504',                 lambda s: bool(s.iep_status or s.section_504)),
+    ('no_plan',  'Neither IEP nor 504',        lambda s: not (s.iep_status or s.section_504)),
+]
+_GROUP_BY_KEY = {k: (label, pred) for k, label, pred in INSIGHTS_GROUPS}
+# The side-by-side splits in the "By student group" table.
+INSIGHTS_SPLITS = [('EL status', ('el', 'non_el')),
+                   ('Special education', ('iep', 'no_iep'))]
+
+
+def _group_breakdown(students, grades_payload, attend_payload):
+    """Headline rates for each side of the EL / non-EL and IEP / no-IEP
+    splits, from the per-student rollups the main helpers already build."""
+    graded = grades_payload['_caseload_graded']
+    fail = grades_payload['_caseload_fail']
+    df = grades_payload['_failing_students']
+    per_df = grades_payload['_per_student_df']
+    per_abs = attend_payload['_per_student_absent']
+
+    def delta(a, b):
+        return round(a - b, 1) if a is not None and b is not None else None
+
+    splits = []
+    for title, keys in INSIGHTS_SPLITS:
+        rows = []
+        for key in keys:
+            label, pred = _GROUP_BY_KEY[key]
+            ids = {s.id for s in students if pred(s)}
+            n, g = len(ids), len(graded & ids)
+            absences = sum(per_abs.get(i, 0) for i in ids)
+            rows.append({
+                'key': key, 'label': label, 'students': n, 'graded': g,
+                'fail_pct': round(len(fail & ids) / g * 100, 1) if g else None,
+                'df_pct': round(len(df & ids) / g * 100, 1) if g else None,
+                'df_grades': sum(per_df.get(i, 0) for i in ids),
+                'absences': absences,
+                'absences_per_student': round(absences / n, 1) if n else None,
+            })
+        a, b = rows
+        splits.append({'title': title, 'rows': rows,
+                       'fail_delta': delta(a['fail_pct'], b['fail_pct']),
+                       'df_delta': delta(a['df_pct'], b['df_pct'])})
+    return splits
+
+
 @analytics_bp.route('/insights')
 @login_required
 def insights():
@@ -87,17 +157,36 @@ def api_insights():
     uid = current_user.id
     today = date.today()
 
-    students = Student.query.filter_by(
-        assigned_counselor_id=uid, status='active').all()
+    all_students = (Student.query
+                    .filter_by(assigned_counselor_id=uid, status='active')
+                    .filter(Student.is_sample == False).all())  # noqa: E712
+    all_ids = [s.id for s in all_students]
+    if not all_ids:
+        return jsonify({'empty': True})
+
+    # Student-group filter (EL / non-EL, IEP / no IEP, ...). Everything on
+    # the page is computed for the chosen group; the year/period dropdowns
+    # and the "By student group" table stay whole-caseload so they don't
+    # shift under the counselor as they switch groups.
+    group_key = request.args.get('group', 'all')
+    if group_key not in _GROUP_BY_KEY:
+        group_key = 'all'
+    group_label, group_pred = _GROUP_BY_KEY[group_key]
+    group_filters = {
+        'group': group_key, 'group_label': group_label,
+        'group_counts': {k: sum(1 for s in all_students if pred(s))
+                         for k, _, pred in INSIGHTS_GROUPS},
+        'groups': [{'key': k, 'label': lbl} for k, lbl, _ in INSIGHTS_GROUPS],
+    }
+    students = [s for s in all_students if group_pred(s)]
     student_ids = [s.id for s in students]
     name_by_id = {s.id: s for s in students}
-
     if not student_ids:
-        return jsonify({'empty': True})
+        return jsonify({'empty_group': True, 'filters': group_filters})
 
     # School-year filter. Default to the most recent year present in grades.
     years = sorted({y[0] for y in db.session.query(GradeRecord.school_year)
-                    .filter(GradeRecord.student_id.in_(student_ids),
+                    .filter(GradeRecord.student_id.in_(all_ids),
                             GradeRecord.school_year.isnot(None)).distinct().all()},
                    reverse=True)
     year = request.args.get('year') or (years[0] if years else None)
@@ -112,7 +201,7 @@ def api_insights():
     except (TypeError, ValueError):
         quarter = None
     # Which quarters actually have final grades for this year (drives the dropdown).
-    qfilter = [GradeRecord.student_id.in_(student_ids), GradeRecord.quarter.isnot(None)]
+    qfilter = [GradeRecord.student_id.in_(all_ids), GradeRecord.quarter.isnot(None)]
     if final_only:
         qfilter.append(GradeRecord.grade_type == 'final')
     if year:
@@ -211,15 +300,27 @@ def api_insights():
                 'shadow_students_in_school': school_wide['overall']['shadow_students_in_set'],
             }
 
+    # "By student group": the same headline rates for each side of the
+    # EL / non-EL and IEP / no-IEP splits, always over the WHOLE caseload so
+    # the table reads the same whichever group is selected. Free for "All
+    # students" (reuses the payloads above); one extra pass for a subgroup.
+    if group_key == 'all':
+        full_grades, full_att = grades_payload, attend_payload
+    else:
+        full_grades = _insights_grades(all_ids, year, final_only, quarter)
+        full_att = _insights_attendance(all_ids, today - timedelta(days=365), today)
+    group_breakdown = _group_breakdown(all_students, full_grades, full_att)
+
     # Drop internal scratch keys before serializing.
-    grades_payload.pop('_per_student_df', None)
-    grades_payload.pop('caseload_graded_count', None)
-    grades_payload.pop('caseload_fail_count', None)
+    for key in ('_per_student_df', '_caseload_graded', '_caseload_fail',
+                '_failing_students', 'caseload_graded_count', 'caseload_fail_count'):
+        grades_payload.pop(key, None)
     attend_payload.pop('_per_student_absent', None)
 
     return jsonify({
         'filters': {'year': year, 'years': years, 'final_only': final_only,
-                    'quarter': quarter, 'quarters': quarters},
+                    'quarter': quarter, 'quarters': quarters, **group_filters},
+        'group_breakdown': group_breakdown,
         'summary': summary,
         'quarter_trend': quarter_trend,
         'caseload_vs_school': caseload_vs_school,
@@ -283,7 +384,13 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
     caseload_graded = set()
     caseload_fail_set = set()
 
+    # Whether this export carries subject areas at all. The importer leaves
+    # subject_area empty, in which case "by subject" would just be "by class"
+    # again; the page shows a note instead of a duplicate chart.
+    has_subject = False
     for g_sid, g_letter, g_course, g_teacher, g_period, g_subject in grades:
+        if g_subject:
+            has_subject = True
         lg = (g_letter or '').strip()
         if lg:
             caseload_graded.add(g_sid)
@@ -368,7 +475,9 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
             'df_students': df_students,
         })
     course_rows.sort(key=lambda r: (-r['df'], -r['df_pct']))
-    top_courses = course_rows[:15]
+    # Every class goes to the chart and the table — a class with a D/F that
+    # was cut from the chart read as "not there". The chart grows to fit.
+    chart_courses = course_rows
 
     # D/F by teacher — same shape as by course
     # School-wide D/F rate across all teachers — the benchmark for flagging
@@ -415,15 +524,17 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
         'labels': [s for s, _ in subj_sorted],
         'f_values': [v['f'] for _, v in subj_sorted],
         'd_values': [v['d'] for _, v in subj_sorted],
+        'has_subject_data': has_subject,
     }
 
     dist_order = ['A', 'B', 'C', 'D', 'F', 'P/NP', 'Other']
     return {
         'df_by_course': {
-            'labels': [r['course'] for r in top_courses],
-            'f_values': [r['fail'] for r in top_courses],
-            'd_values': [r['d'] for r in top_courses],
+            'labels': [r['course'] for r in chart_courses],
+            'f_values': [r['fail'] for r in chart_courses],
+            'd_values': [r['d'] for r in chart_courses],
             'rows': course_rows,
+            'count': len(course_rows),
         },
         'df_by_period': period_payload,
         'df_by_subject': subj_payload,
@@ -447,6 +558,10 @@ def _insights_grades(student_ids, year, final_only, quarter=None):
         # Caseload-wide rollups for the vs-school headline KPIs (scratch).
         'caseload_graded_count': len(caseload_graded),
         'caseload_fail_count': len(caseload_fail_set),
+        # Per-student sets for the "By student group" split (scratch).
+        '_caseload_graded': caseload_graded,
+        '_caseload_fail': caseload_fail_set,
+        '_failing_students': failing_students,
     }
 
 

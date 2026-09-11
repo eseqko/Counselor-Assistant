@@ -18,6 +18,65 @@ from app.utils.scheduling import (find_available_slots, has_upcoming_booking,
 availability_bp = Blueprint('availability', __name__)
 
 
+# ── Google Calendar push ──────────────────────────────────────────
+# The cohort scheduler used to rely on the counselor having subscribed to the
+# app's iCal feed, which Google refreshes on its own hours-long cadence — so
+# confirmed appointments took most of a day to appear, if the feed was even
+# subscribed. The public booking page already creates events through the
+# Calendar API; these helpers give the cohort scheduler the same path.
+
+def _booking_datetimes(booking):
+    start_dt = datetime.combine(booking.appointment_date,
+                                datetime.strptime(booking.start_time, '%H:%M').time())
+    end_dt = datetime.combine(booking.appointment_date,
+                              datetime.strptime(booking.end_time, '%H:%M').time())
+    return start_dt, end_dt
+
+
+def _push_booking_to_google(user, booking, title=None, invite_student=False):
+    """Create the Google Calendar event for one booking and store its id.
+
+    Returns True on success. The stored id is what api_cancel_booking uses to
+    remove the event from Google when the appointment is cancelled.
+    """
+    label = dict(Booking.MEETING_TYPES).get(booking.meeting_type, booking.meeting_type)
+    who = booking.student_name or booking.booker_name
+    summary = f'{title or label}: {who}'
+    attendees = None
+    if invite_student and booking.student is not None and booking.student.email:
+        attendees = [booking.student.email]
+    description = f'Student: {who}\nType: {label}\n'
+    if title and title != label:
+        description = f'{title}\n' + description
+    # A Google event is one shared record: with the student invited, the
+    # counselor's batch notes would land in the student's inbox too, so they
+    # stay off the invite (they remain on the booking in the app).
+    if booking.notes and not attendees:
+        description += f'Notes: {booking.notes}\n'
+    description += '\nScheduled with Counselor Assistant.'
+    start_dt, end_dt = _booking_datetimes(booking)
+    event = google_calendar.create_event(
+        user, summary, start_dt, end_dt, description=description,
+        attendees=attendees, send_updates='all' if attendees else 'none')
+    if not event:
+        return False
+    booking.google_event_id = event.get('id')
+    return True
+
+
+def _push_event_to_google(user, event):
+    """Create one Google Calendar event mirroring a local CalendarEvent (a
+    group meeting) and store its id on the event."""
+    gcal = google_calendar.create_event(
+        user, event.title, event.start_datetime, event.end_datetime,
+        description=event.description or '', location=event.location or '',
+        send_updates='none')
+    if not gcal:
+        return False
+    event.google_event_id = gcal.get('id')
+    return True
+
+
 # ── Counselor: manage availability ────────────────────────────────
 
 @availability_bp.route('/')
@@ -387,7 +446,9 @@ def auto_schedule_preview():
         })
 
     session['auto_proposal'] = proposal
-    return render_template('availability/auto_review.html', proposal=proposal)
+    return render_template('availability/auto_review.html', proposal=proposal,
+                           google_connected=google_client.is_connected(current_user),
+                           google_configured=google_client.credentials_configured())
 
 
 @availability_bp.route('/auto/remove', methods=['POST'])
@@ -436,6 +497,8 @@ def auto_schedule_confirm():
     notes = proposal.get('notes') or None
     meeting_type = proposal.get('meeting_type', 'general')
     title = proposal.get('title') or 'Check-in'
+    add_to_google = request.form.get('add_to_google') == '1'
+    invite_students = request.form.get('invite_students') == '1'
     scheduled = 0
     skipped_taken = 0
     created_booking_ids = []
@@ -537,6 +600,29 @@ def auto_schedule_confirm():
 
     db.session.commit()
 
+    # Push to Google Calendar AFTER the local commit: a Google hiccup must
+    # never lose the appointments themselves. Event ids are stored so a later
+    # cancel removes the event from Google too (api_cancel_booking).
+    google_pushed = google_failed = 0
+    google_connected = add_to_google and google_client.is_connected(current_user)
+    if google_connected:
+        if mode == 'individual' and created_booking_ids:
+            for b in (Booking.query.filter(Booking.id.in_(created_booking_ids))
+                      .order_by(Booking.id).all()):
+                if _push_booking_to_google(current_user, b, title=title,
+                                           invite_student=invite_students):
+                    google_pushed += 1
+                else:
+                    google_failed += 1
+        elif mode == 'group' and created_event_ids:
+            ev = db.session.get(CalendarEvent, created_event_ids[0])
+            if ev is not None:
+                if _push_event_to_google(current_user, ev):
+                    google_pushed += 1
+                else:
+                    google_failed += 1
+        db.session.commit()
+
     session.pop('auto_proposal', None)
     session['last_auto_batch'] = {
         'booking_ids': created_booking_ids,
@@ -550,8 +636,69 @@ def auto_schedule_confirm():
         msg = f'Group meeting scheduled with {len(created_booking_ids)} student{"s" if len(created_booking_ids) != 1 else ""}'
     if skipped_taken:
         msg += f' ({skipped_taken} skipped — slot taken)'
+    if google_connected:
+        msg += f'. {google_pushed} added to your Google Calendar'
+        if google_failed:
+            msg += (f' ({google_failed} could not be added — use '
+                    '"Add upcoming appointments to Google Calendar" to retry)')
     flash(msg + '.', 'success')
+    if add_to_google and not google_connected:
+        flash('Google Calendar is not connected, so nothing was added there. Use '
+              '"Connect Google" on this page, then "Add upcoming appointments to '
+              'Google Calendar".', 'warning')
     return redirect(url_for('availability.index'))
+
+
+@availability_bp.route('/api/bookings/push-google', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_push_bookings_to_google():
+    """Add every upcoming appointment that isn't on Google Calendar yet.
+
+    Catches up batches confirmed before this existed (or with the box
+    unticked) and any event that failed to create. Group-meeting member
+    bookings are skipped — a group is ONE Google event, kept on its
+    CalendarEvent — and any such group meeting that isn't on Google yet is
+    pushed here as that one event.
+    """
+    if not google_client.is_connected(current_user):
+        return jsonify({'error': 'Google Calendar is not connected.'}), 400
+    invite = (request.get_json(silent=True) or {}).get('invite_students') is True
+    pending = (Booking.query
+               .filter_by(counselor_id=current_user.id)
+               .filter(Booking.appointment_date >= date.today())
+               .filter(Booking.status != 'cancelled')
+               .filter(Booking.google_event_id.is_(None))
+               .order_by(Booking.appointment_date, Booking.start_time)
+               .all())
+    pushed = failed = skipped_group = 0
+    for b in pending:
+        if (b.notes or '').startswith('(Part of group:'):
+            skipped_group += 1
+            continue
+        if _push_booking_to_google(current_user, b, invite_student=invite):
+            pushed += 1
+        else:
+            failed += 1
+    pushed_groups = 0
+    pending_groups = (CalendarEvent.query
+                      .filter_by(owner_id=current_user.id, event_type='group_session')
+                      .filter(CalendarEvent.start_datetime >= datetime.now())
+                      .filter(CalendarEvent.status != 'cancelled')
+                      .filter(CalendarEvent.google_event_id.is_(None))
+                      .order_by(CalendarEvent.start_datetime)
+                      .all())
+    for ev in pending_groups:
+        if _push_event_to_google(current_user, ev):
+            pushed_groups += 1
+        else:
+            failed += 1
+    db.session.commit()
+    log_action('google_push', resource_type='booking',
+               details=f'pushed={pushed} groups={pushed_groups} failed={failed} '
+                       f'skipped_group={skipped_group}')
+    return jsonify({'ok': True, 'pushed': pushed, 'pushed_groups': pushed_groups,
+                    'failed': failed, 'skipped_group': skipped_group})
 
 
 @availability_bp.route('/auto/download.ics')
