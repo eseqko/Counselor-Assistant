@@ -64,6 +64,9 @@
     <label class="toolbar-toggle">Period:
         <select id="quarter-select" onchange="reload()"><option value="">Whole Year</option></select>
     </label>
+    <label class="toolbar-toggle">Group:
+        <select id="group-select" onchange="reload()"><option value="all">All students</option></select>
+    </label>
     <label class="toolbar-toggle">
         <input type="checkbox" id="final-only" checked onchange="reload()"> Final grades only
     </label>
@@ -92,10 +95,12 @@
         var year = document.getElementById('year-select').value;
         var quarter = document.getElementById('quarter-select').value;
         var finalOnly = document.getElementById('final-only').checked ? '1' : '0';
+        var group = document.getElementById('group-select').value || 'all';
         document.getElementById('insights-content').innerHTML =
             '<div class="loading-overlay">Loading insights…</div>';
         charts.forEach(function(c){ c.destroy(); }); charts = [];
-        fetch(API + '?year=' + encodeURIComponent(year) + '&quarter=' + encodeURIComponent(quarter) + '&final_only=' + finalOnly)
+        fetch(API + '?year=' + encodeURIComponent(year) + '&quarter=' + encodeURIComponent(quarter)
+              + '&final_only=' + finalOnly + '&group=' + encodeURIComponent(group))
             .then(function(r){ return r.json(); })
             .then(render)
             .catch(function(){ document.getElementById('insights-content').innerHTML =
@@ -114,7 +119,45 @@
         });
     }
 
+    var GROUP_SECTIONS = [
+        ['English learner status', ['el', 'non_el', 'newcomer', 'ltel', 'rfep', 'eo']],
+        ['Special education', ['iep', 'no_iep', 'plan_504', 'any_plan', 'no_plan']],
+    ];
+    function populateGroups(data){
+        var sel = document.getElementById('group-select');
+        var f = data.filters || {};
+        var counts = f.group_counts || {};
+        var labels = {};
+        (f.groups || []).forEach(function(g){ labels[g.key] = g.label; });
+        var current = f.group || 'all';
+        sel.innerHTML = '';
+        var all = document.createElement('option');
+        all.value = 'all'; all.textContent = 'All students (' + (counts.all == null ? '' : counts.all) + ')';
+        sel.appendChild(all);
+        GROUP_SECTIONS.forEach(function(sec){
+            var og = document.createElement('optgroup'); og.label = sec[0];
+            sec[1].forEach(function(key){
+                if (!labels[key]) return;
+                var o = document.createElement('option');
+                o.value = key; o.textContent = labels[key] + ' (' + (counts[key] || 0) + ')';
+                og.appendChild(o);
+            });
+            sel.appendChild(og);
+        });
+        sel.value = current;
+    }
+    function pct(v){ return v == null ? '\u2014' : v + '%'; }
+    function fmtDelta(d){ return (d > 0 ? '+' : '') + d + 'pp'; }
+
     function render(data){
+        if (data.empty_group) {
+            populateGroups(data);
+            var f = data.filters || {};
+            document.getElementById('insights-content').innerHTML =
+                '<div class="empty-note">No students in the group \u201c' + esc(f.group_label || f.group) + '\u201d on your caseload. '
+                + 'Pick another group above.</div>';
+            return;
+        }
         if (data.empty) {
             document.getElementById('insights-content').innerHTML =
                 '<div class="empty-note">No active students on your caseload yet. Import a caseload and grade/attendance data to see insights.</div>';
@@ -135,15 +178,21 @@
             yearsLoaded = true;
         }
         populateQuarters(data);
+        populateGroups(data);
 
         var g = data.grades, at = data.attendance, sm = data.summary;
         var trend = data.quarter_trend || [];
         var scopeLabel = data.filters.quarter ? ('Quarter ' + data.filters.quarter) : 'Whole Year';
+        var isAll = !data.filters.group || data.filters.group === 'all';
+        var groupLabel = isAll ? 'your caseload' : data.filters.group_label;
+        var groupN = (data.filters.group_counts || {})[data.filters.group || 'all'];
         var html = '';
 
         /* Scope banner */
         html += '<div style="font-size:0.82rem;color:var(--gray);margin-bottom:10px;">'
               + 'Showing: <strong style="color:var(--text);">' + scopeLabel + '</strong>'
+              + (isAll ? '' : ' &middot; <strong style="color:var(--text);">' + esc(groupLabel) + '</strong>'
+                            + (groupN != null ? ' (' + groupN + ' students)' : ''))
               + ' &middot; ' + (data.filters.final_only ? 'final grades' : 'all grades')
               + ' &middot; ' + esc(data.filters.year || '')
               + (data.filters.quarters && data.filters.quarters.length
@@ -164,22 +213,51 @@
         /* ── Your Caseload vs. The School ── */
         var vs = data.caseload_vs_school;
         if (vs) {
-            html += '<div class="section-header">Your Caseload vs. The School'
-                  + '<span class="hint">School-wide data from grade rows for students not on your caseload (kept aggregate-only)</span></div>';
+            var who = isAll ? 'caseload' : 'group';
+            html += '<div class="section-header">' + (isAll ? 'Your Caseload' : 'Your ' + esc(groupLabel)) + ' vs. The School'
+                  + '<span class="hint">School-wide data from grade rows for students not on your caseload (kept aggregate-only)'
+                  + (isAll ? '' : ' &mdash; the school pool stays school-wide; school records carry no EL/IEP status')
+                  + '</span></div>';
             html += '<div class="kpi-row">'
-                  + comparisonKPI('% Fail (caseload)', vs.caseload_fail_pct, vs.caseload_graded)
+                  + comparisonKPI('% Fail (' + who + ')', vs.caseload_fail_pct, vs.caseload_graded)
                   + comparisonKPI('% Fail (school)', vs.school_fail_pct, vs.school_graded)
                   + deltaKPI('Δ % Fail', vs.fail_delta)
-                  + comparisonKPI('% D/F (caseload)', vs.caseload_df_pct, vs.caseload_graded)
+                  + comparisonKPI('% D/F (' + who + ')', vs.caseload_df_pct, vs.caseload_graded)
                   + comparisonKPI('% D/F (school)', vs.school_df_pct, vs.school_graded)
                   + deltaKPI('Δ % D/F', vs.df_delta)
                   + '</div>';
             html += '<div style="font-size:0.78rem;color:var(--gray);margin:-6px 0 16px;">'
-                  + '<strong>How to read:</strong> Δ is your caseload minus the school. '
+                  + '<strong>How to read:</strong> Δ is your ' + who + ' minus the school. '
                   + 'Negative (green) means your students are doing <em>better</em> than the school-wide average. '
                   + 'Positive (red) means your students are struggling more. '
                   + 'School-wide pool includes ' + vs.school_graded + ' students ('
                   + vs.shadow_students_in_school + ' not on any caseload — names never shown).</div>';
+        }
+
+        /* ── By Student Group: EL vs non-EL, IEP vs no IEP (whole caseload) ── */
+        var gb = data.group_breakdown || [];
+        if (gb.length) {
+            html += '<div class="section-header">By Student Group'
+                  + '<span class="hint">Same year/period filters, whole caseload, split by EL status and special education</span></div>';
+            html += '<div class="table-responsive"><table class="data-table"><thead><tr>'
+                  + '<th>Group</th><th>Students</th><th>Graded</th><th>% Fail</th><th>% D/F</th>'
+                  + '<th>D/F grades</th><th>Absences (1 yr)</th><th>Absences / student</th></tr></thead><tbody>';
+            gb.forEach(function(split){
+                html += '<tr><td colspan="8" style="font-weight:600;background:var(--bg);">' + esc(split.title)
+                      + (split.df_delta != null
+                          ? ' <span class="hint" style="font-weight:400;">\u0394 % D/F (' + esc(split.rows[0].label) + ' minus ' + esc(split.rows[1].label) + '): '
+                            + '<strong>' + fmtDelta(split.df_delta) + '</strong></span>'
+                          : '')
+                      + '</td></tr>';
+                split.rows.forEach(function(r){
+                    html += '<tr><td>' + esc(r.label) + '</td><td>' + r.students + '</td><td>' + r.graded + '</td>'
+                          + '<td>' + pct(r.fail_pct) + '</td><td>' + pct(r.df_pct) + '</td><td>' + r.df_grades + '</td>'
+                          + '<td>' + r.absences + '</td><td>' + (r.absences_per_student == null ? '\u2014' : r.absences_per_student) + '</td></tr>';
+                });
+            });
+            html += '</tbody></table></div>';
+            html += '<div style="font-size:0.78rem;color:var(--gray);margin:6px 0 16px;">'
+                  + 'Use the <strong>Group</strong> filter above to see every chart on this page for one group.</div>';
         }
 
         /* ── Across the Year: per-quarter trend (whole-year analysis) ── */
