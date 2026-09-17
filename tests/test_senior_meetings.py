@@ -1,7 +1,7 @@
 """Senior / Post-Secondary 1:1 meetings: scoping, the live page, autosave,
 the checklist syncing the College & Career plan, deadlines, completion into a
 Note + calendar reminder, the handout, and the school-wide deadline list."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -206,12 +206,13 @@ def test_checklist_persists_per_student_and_syncs_the_plan(app, env):
     # unknown keys are rejected
     assert client.post(f'/senior-meetings/api/student/{ids["b"]}/checklist',
                        json={'key': 'not_a_thing', 'done': True}).status_code == 400
-    # un-ticking steps the plan back and drops it from the meeting
+    # un-ticking puts back what the tick changed (the plan was created by the
+    # tick, so its status returns to the default) and drops it from the meeting
     client.post(f'/senior-meetings/api/student/{ids["b"]}/checklist',
                 json={'key': 'fafsa_submitted', 'done': False, 'meeting_id': mid})
     with app.app_context():
         plan = CollegeCareerPlan.query.filter_by(student_id=ids['b']).first()
-        assert plan.fafsa_status == 'in_progress' and plan.fafsa_submitted_date is None
+        assert plan.fafsa_status == 'not_started' and plan.fafsa_submitted_date is None
         assert db.session.get(SeniorMeeting, mid).checked_keys == []
     # state is per student, visible on the history page without any meeting
     client.post(f'/senior-meetings/api/student/{ids["b"]}/checklist', json={'key': 'resume_done', 'done': True})
@@ -356,3 +357,196 @@ def test_caseload_reset_removes_meetings_and_checklist_rows(app, env):
         assert counts.get('senior_meetings') == 1 and counts.get('senior_checklist_items') == 1
         assert SeniorMeeting.query.filter_by(student_id=ids['a']).count() == 0
         assert db.session.get(Student, ids['a']) is None
+
+
+# ── from the adversarial review ──
+
+def test_handout_never_prints_counselor_private_text(app, env):
+    """The take-home is the student's: school dates, their applications and
+    their step. Never the counselor's follow-up notes, calendar titles or
+    goal wording, and only the two 'people' prompts that are names."""
+    client, ids = env
+    with app.app_context():
+        db.session.add(Note(student_id=ids['a'], author_id=ids['me'], note_type='crisis', content='x',
+                            is_confidential=True, follow_up_needed=True,
+                            follow_up_date=TODAY + timedelta(days=5),
+                            follow_up_notes='Call CPS back re: home situation'))
+        db.session.add(CalendarEvent(owner_id=ids['me'], student_id=ids['a'], title='504 eligibility mtg - ADHD meds',
+                                     start_datetime=datetime.combine(TODAY + timedelta(days=9), datetime.min.time()),
+                                     end_datetime=datetime.combine(TODAY + timedelta(days=9), datetime.min.time()),
+                                     event_type='deadline'))
+        db.session.commit()
+    mid = _start(client, ids['a'])
+    client.post(f'/senior-meetings/api/{mid}/save', json={
+        'follow_up_date': (TODAY + timedelta(days=14)).isoformat(),
+        'follow_up_notes': 'Mom mentioned bruises; watch',
+        'answers': {'sup_go_to_adult': 'Ms. Lee, room 12',
+                    'sup_forms_helper': 'Uncle files with an ITIN, do not raise with dad',
+                    'close_next_meeting': 'Two weeks from today, at lunch'}})
+    for when in ('before', 'after'):
+        if when == 'after':
+            client.post(f'/senior-meetings/{mid}/complete')
+        html = client.get(f'/senior-meetings/{mid}/handout').data.decode()
+        for private in ('Call CPS', '504 eligibility', 'ADHD', 'bruises', 'ITIN', 'Finish PIQs'):
+            assert private not in html, f'{private!r} leaked on the handout ({when})'
+        assert 'Ms. Lee, room 12' in html and 'Cal Poly SLO application' in html
+        assert 'Two weeks from today' in html
+    # ...while the counselor's own page still shows all of it
+    page = client.get(f'/senior-meetings/{mid}').data.decode()
+    assert 'Call CPS' in page and 'Finish PIQs' in page
+
+
+def test_meetings_by_another_counselor_stay_out_of_history_kind_and_last_time(app, env):
+    """After a reassignment the new counselor can't open the old counselor's
+    meetings, so they must not be listed, counted, or shown as 'Last time'."""
+    client, ids = env
+    with app.app_context():
+        old = SeniorMeeting(student_id=ids['a'], counselor_id=ids['other'], meeting_date=TODAY - timedelta(days=30),
+                            status='completed', scale_plan=2, next_step='Old step')
+        db.session.add(old)
+        db.session.commit()
+    html = client.get(f'/senior-meetings/student/{ids["a"]}').data.decode()
+    assert 'Old step' not in html and 'Meetings (0)' in html
+    mid = _start(client, ids['a'])
+    html = client.get(f'/senior-meetings/{mid}').data.decode()
+    assert 'Last time' not in html and 'Since Last Time' not in html
+    with app.app_context():
+        assert db.session.get(SeniorMeeting, mid).meeting_kind == 'first'
+
+
+def test_admin_can_read_but_not_complete_another_counselors_meeting(app, env):
+    client, ids = env
+    with app.app_context():
+        theirs = SeniorMeeting(student_id=ids['theirs'], counselor_id=ids['other'], meeting_date=TODAY)
+        db.session.add(theirs)
+        User.query.filter_by(id=ids['me']).update({'role': 'admin'})
+        db.session.commit()
+        tid = theirs.id
+    html = client.get(f'/senior-meetings/{tid}').data.decode()
+    assert 'Complete meeting' not in html
+    for path in ('complete', 'reopen', 'delete'):
+        assert client.post(f'/senior-meetings/{tid}/{path}').status_code == 404, path
+    with app.app_context():
+        assert Note.query.filter_by(student_id=ids['theirs']).count() == 0
+        assert db.session.get(SeniorMeeting, tid).status == 'in_progress'
+
+
+def test_json_endpoints_reject_bad_bodies_instead_of_crashing(app, env):
+    client, ids = env
+    mid = _start(client, ids['a'])
+    for bad in ('[1,2]', '"abc"', '5'):
+        r = client.post(f'/senior-meetings/api/{mid}/save', data=bad, content_type='application/json')
+        assert r.status_code == 400, bad
+        r = client.post(f'/senior-meetings/api/student/{ids["a"]}/checklist', data=bad, content_type='application/json')
+        assert r.status_code == 400, bad
+    r = client.post(f'/senior-meetings/api/{mid}/save', json={
+        'note_type': [], 'next_step_due': 5, 'meeting_date': [1], 'scale_plan': 1e400,
+        'answers': {'scale_stress': [9], '3': 'x', 'open_best_hopes': {'a': 1}}, 'pathway': ['4year']})
+    assert r.status_code == 200 and r.get_json()['ok']
+    r = client.post(f'/senior-meetings/api/student/{ids["a"]}/checklist',
+                    json={'key': 'brag_sheet', 'done': True, 'meeting_id': [1, 2]})
+    assert r.status_code == 200
+
+
+def test_reopen_and_recomplete_keeps_the_calendar_reminder_in_step(app, env):
+    client, ids = env
+    mid = _start(client, ids['a'])
+    client.post(f'/senior-meetings/{mid}/complete')                      # no follow-up date yet
+    with app.app_context():
+        assert CalendarEvent.query.filter_by(student_id=ids['a'], event_type='follow_up').count() == 0
+    client.post(f'/senior-meetings/{mid}/reopen')
+    d1 = TODAY + timedelta(days=10)
+    client.post(f'/senior-meetings/api/{mid}/save', json={'follow_up_date': d1.isoformat()})
+    client.post(f'/senior-meetings/{mid}/complete')
+    with app.app_context():
+        evs = CalendarEvent.query.filter_by(student_id=ids['a'], event_type='follow_up').all()
+        assert len(evs) == 1 and evs[0].start_datetime.date() == d1
+    client.post(f'/senior-meetings/{mid}/reopen')
+    d2 = TODAY + timedelta(days=20)
+    client.post(f'/senior-meetings/api/{mid}/save', json={'follow_up_date': d2.isoformat()})
+    client.post(f'/senior-meetings/{mid}/complete')
+    with app.app_context():
+        evs = CalendarEvent.query.filter_by(student_id=ids['a'], event_type='follow_up').all()
+        assert len(evs) == 1 and evs[0].start_datetime.date() == d2, 'moved, not duplicated'
+    client.post(f'/senior-meetings/{mid}/reopen')
+    client.post(f'/senior-meetings/api/{mid}/save', json={'follow_up_date': ''})
+    client.post(f'/senior-meetings/{mid}/complete')
+    with app.app_context():
+        assert CalendarEvent.query.filter_by(student_id=ids['a'], event_type='follow_up').count() == 0
+        assert not db.session.get(Note, db.session.get(SeniorMeeting, mid).note_id).follow_up_needed
+
+
+def test_checklist_tick_never_downgrades_and_untick_restores(app, env):
+    client, ids = env
+    with app.app_context():
+        plan = CollegeCareerPlan.query.filter_by(student_id=ids['a']).first()
+        plan.fafsa_status = 'verified'
+        plan.fafsa_submitted_date = TODAY - timedelta(days=40)
+        db.session.commit()
+    client.post(f'/senior-meetings/api/student/{ids["a"]}/checklist', json={'key': 'fafsa_submitted', 'done': True})
+    with app.app_context():
+        plan = CollegeCareerPlan.query.filter_by(student_id=ids['a']).first()
+        assert plan.fafsa_status == 'verified', 'a tick must not move a field backwards'
+    client.post(f'/senior-meetings/api/student/{ids["a"]}/checklist', json={'key': 'fafsa_submitted', 'done': False})
+    with app.app_context():
+        plan = CollegeCareerPlan.query.filter_by(student_id=ids['a']).first()
+        assert plan.fafsa_status == 'verified' and plan.fafsa_submitted_date == TODAY - timedelta(days=40)
+        plan.fafsa_status = 'in_progress'
+        db.session.commit()
+    client.post(f'/senior-meetings/api/student/{ids["a"]}/checklist', json={'key': 'fafsa_submitted', 'done': True})
+    client.post(f'/senior-meetings/api/student/{ids["a"]}/checklist', json={'key': 'fafsa_submitted', 'done': False})
+    with app.app_context():
+        plan = CollegeCareerPlan.query.filter_by(student_id=ids['a']).first()
+        assert plan.fafsa_status == 'in_progress', 'untick restores exactly what the tick changed'
+
+
+def test_dream_act_filer_is_not_asked_for_a_fafsa(app, env):
+    client, ids = env
+    client.post(f'/senior-meetings/api/student/{ids["a"]}/checklist', json={'key': 'cadaa_submitted', 'done': True})
+    mid = _start(client, ids['a'])
+    html = client.get(f'/senior-meetings/{mid}').data.decode()
+    assert 'data-item="cadaa_submitted" checked' in html
+    assert 'Submit the FAFSA' not in html and 'Create FSA IDs' not in html
+    handout = client.get(f'/senior-meetings/{mid}/handout').data.decode()
+    assert 'Submit the FAFSA' not in handout and 'Create FSA IDs' not in handout
+
+
+def test_same_day_meetings_never_treat_a_later_one_as_last_time(app, env):
+    client, ids = env
+    from app.routes.senior_meetings import _previous_meeting
+    first = _start(client, ids['a'])
+    client.post(f'/senior-meetings/{first}/complete')
+    second = _start(client, ids['a'])
+    client.post(f'/senior-meetings/{second}/complete')
+    with app.app_context(), app.test_request_context():
+        from flask_login import login_user
+        login_user(db.session.get(User, ids['me']))
+        m1, m2 = db.session.get(SeniorMeeting, first), db.session.get(SeniorMeeting, second)
+        assert _previous_meeting(m1.student, m1) is None
+        assert _previous_meeting(m2.student, m2).id == first
+
+
+def test_hiding_every_school_date_does_not_bring_the_defaults_back(app, env):
+    client, ids = env
+    with app.app_context():
+        User.query.filter_by(id=ids['me']).update({'role': 'admin'})
+        db.session.commit()
+    client.post('/senior-meetings/deadlines', data={'action': 'load_defaults'})
+    with app.app_context():
+        PostSecondaryDeadline.query.update({'is_active': False})
+        db.session.commit()
+    html = client.get('/senior-meetings/').data.decode()
+    assert 'Showing built-in' not in html and 'UC application deadline' not in html
+
+
+def test_follow_up_scale_prompt_is_the_only_plan_scale_on_return_visits(app, env):
+    client, ids = env
+    first = _start(client, ids['a'])
+    client.post(f'/senior-meetings/{first}/complete')
+    second = _start(client, ids['a'])
+    html = client.get(f'/senior-meetings/{second}').data.decode()
+    assert 'data-answer="fu_scale_again"' in html and 'data-answer="scale_plan_progress"' not in html
+    # a stale first-meeting prompt cannot write the headline number on a follow-up
+    client.post(f'/senior-meetings/api/{second}/save', json={'answers': {'scale_plan_progress': 2, 'fu_scale_again': 7}})
+    with app.app_context():
+        assert db.session.get(SeniorMeeting, second).scale_plan == 7

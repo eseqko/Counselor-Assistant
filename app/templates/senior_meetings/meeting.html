@@ -12,7 +12,7 @@
 .save-dot.error { background:var(--danger); }
 @keyframes smpulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 .sm-layout { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr); gap:20px; align-items:start; }
-.sm-side { position:sticky; top:12px; max-height:calc(100vh - 24px); overflow:auto; }
+.sm-side { position:sticky; top:calc(var(--header-height, 60px) + 12px); max-height:calc(100vh - var(--header-height, 60px) - 24px); overflow:auto; }
 @media (max-width:1024px) { .sm-layout { grid-template-columns:1fr; } .sm-side { position:static; max-height:none; } }
 .sm-card { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:16px 18px; margin-bottom:16px; }
 .sm-card h3 { margin:0 0 4px; font-size:0.95rem; color:var(--primary-dark); }
@@ -109,10 +109,10 @@ details.sm-section[open] > summary { border-bottom:1px solid var(--light-gray); 
         <span class="sm-toolbar">
             <button type="button" class="btn btn-sm btn-outline" onclick="copySummary()">Copy summary</button>
             {% if meeting.note_id %}<a href="{{ url_for('notes.view_note', id=meeting.note_id) }}" class="btn btn-sm btn-outline">Open the note</a>{% endif %}
-            <form method="POST" action="{{ url_for('senior_meetings.reopen', meeting_id=meeting.id) }}" style="display:inline;">
+            {% if is_owner %}<form method="POST" action="{{ url_for('senior_meetings.reopen', meeting_id=meeting.id) }}" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-sm btn-outline">Reopen to edit</button>
-            </form>
+            </form>{% endif %}
         </span>
     </div>
     {% if asca_touched %}<div class="hint">ASCA Mindsets &amp; Behaviors touched:
@@ -191,7 +191,8 @@ details.sm-section[open] > summary { border-bottom:1px solid var(--light-gray); 
                     <span class="val" id="qval-{{ q.key }}" style="font-weight:800;min-width:2ch;">{{ answers.get(q.key, '—') }}</span>
                 </div>
                 {% elif q.answer_type == 'text' %}
-                <textarea class="form-control" rows="2" data-answer="{{ q.key }}" placeholder="Their answer, in their words…" {{ 'disabled' if readonly }}>{{ answers.get(q.key, '') }}</textarea>
+                <textarea class="form-control" rows="2" data-answer="{{ q.key }}" placeholder="{{ 'Names only — this prints on the student handout under “My people”' if q.key in handout_support_keys else 'Their answer, in their words…' }}" {{ 'disabled' if readonly }}>{{ answers.get(q.key, '') }}</textarea>
+                {% if q.key in handout_support_keys %}<div class="hint" style="margin:2px 0 0;">Printed on the student handout under “My people” — names only.</div>{% endif %}
                 {% endif %}
                 {% if not readonly %}<button type="button" class="sm-insert" data-text="{{ q.text }}">&#8627; Add to notes</button>{% endif %}
             </div>
@@ -241,7 +242,7 @@ details.sm-section[open] > summary { border-bottom:1px solid var(--light-gray); 
                 <input type="number" min="1" max="600" class="form-control" data-field="duration_minutes" value="{{ meeting.duration_minutes or '' }}" {{ 'disabled' if readonly }}>
             </div>
         </div>
-        {% if not readonly %}
+        {% if not readonly and is_owner %}
         <div class="sm-toolbar" style="margin-top:6px;">
             <form method="POST" action="{{ url_for('senior_meetings.complete', meeting_id=meeting.id) }}" onsubmit="return flushThen(this)">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -325,33 +326,60 @@ details.sm-section[open] > summary { border-bottom:1px solid var(--light-gray); 
         tick(); setInterval(tick, 1000);
     }
 
-    /* ── autosave ── */
-    var pending = {}, timer = null, inflight = false;
+    /* ── autosave ──
+       One request in flight at a time (so an older save can never land after
+       a newer one), newer keystrokes win over a failed body, and anything
+       waiting on "everything saved" (Complete, pathway reload) runs only once
+       nothing is pending or in flight. */
+    var pending = {}, timer = null, inflight = false, afterFlush = null;
     var dot = document.getElementById('sm-save-dot'), txt = document.getElementById('sm-save-text');
     function mark(state, label){ if (!dot) return; dot.className = 'save-dot' + (state ? ' ' + state : ''); txt.textContent = label; }
+    function merge(into, patch){
+        if (patch.answers) { into.answers = Object.assign(into.answers || {}, patch.answers); }
+        Object.keys(patch).forEach(function(k){ if (k !== 'answers') into[k] = patch[k]; });
+        return into;
+    }
     function queue(patch){
         if (READONLY) return;
-        if (patch.answers) { pending.answers = Object.assign(pending.answers || {}, patch.answers); delete patch.answers; }
-        Object.assign(pending, patch);
+        merge(pending, patch);
         mark('unsaved', 'Saving…');
-        clearTimeout(timer); timer = setTimeout(flush, 700);
+        clearTimeout(timer); timer = setTimeout(function(){ flush(); }, 700);
     }
     function flush(cb){
-        if (!Object.keys(pending).length) { if (cb) cb(); return; }
+        if (cb) afterFlush = cb;
+        if (inflight) return;                       // the in-flight save re-runs flush when it lands
+        if (!Object.keys(pending).length) { if (afterFlush) { var f = afterFlush; afterFlush = null; f(); } return; }
         var body = pending; pending = {}; inflight = true;
-        fetch(SAVE_URL, {method:'POST', headers:{'Content-Type':'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify(body)})
+        fetch(SAVE_URL, {method:'POST', headers:{'Content-Type':'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify(body), keepalive: true})
             .then(function(r){ return r.json(); })
             .then(function(d){
                 inflight = false;
-                if (!d.ok) { mark('error', d.error || 'Not saved'); return; }
+                if (!d.ok) {
+                    mark('error', d.error || 'Not saved');
+                    if (afterFlush) { afterFlush = null; alert(d.error || 'Your last changes were not saved. Try again.'); }
+                    return;
+                }
                 ['scale_plan','scale_stress','scale_confidence'].forEach(function(k){
-                    var v = document.getElementById('val-' + k); if (v && d[k] != null) v.textContent = d[k];
+                    if (d[k] == null) return;
+                    var v = document.getElementById('val-' + k); if (v) v.textContent = d[k];
+                    var r = document.querySelector('[data-scale="' + k + '"]'); if (r) r.value = d[k];
                 });
-                mark('', 'Saved'); if (cb) cb();
+                mark('', 'Saved');
+                flush();                             // drain anything typed meanwhile, then run afterFlush
             })
-            .catch(function(){ inflight = false; mark('error', 'Offline — will retry'); Object.assign(pending, body); timer = setTimeout(flush, 4000); });
+            .catch(function(){
+                inflight = false; mark('error', 'Offline — will retry');
+                pending = merge(body, pending);      // newer keystrokes win over the failed body
+                clearTimeout(timer); timer = setTimeout(function(){ flush(); }, 4000);
+            });
     }
-    window.flushThen = function(form){ clearTimeout(timer); if (!Object.keys(pending).length && !inflight) return true; flush(function(){ form.submit(); }); return false; };
+    window.flushThen = function(form){
+        clearTimeout(timer);
+        if (!Object.keys(pending).length && !inflight) return true;
+        var btn = form.querySelector('button[type=submit]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        flush(function(){ form.submit(); });
+        return false;
+    };
     window.addEventListener('beforeunload', function(){ if (Object.keys(pending).length) { clearTimeout(timer); try { navigator.sendBeacon(SAVE_URL, new Blob([JSON.stringify(pending)], {type:'application/json'})); } catch(e){} } });
 
     document.querySelectorAll('[data-field]').forEach(function(el){
@@ -361,14 +389,17 @@ details.sm-section[open] > summary { border-bottom:1px solid var(--light-gray); 
     var notes = document.getElementById('sm-notes');
     if (notes) notes.addEventListener('input', function(){ queue({notes: notes.value}); });
     var pw = document.getElementById('sm-pathway');
-    if (pw) pw.addEventListener('change', function(){ queue({pathway: pw.value}); setTimeout(function(){ location.reload(); }, 900); });
+    if (pw) pw.addEventListener('change', function(){ queue({pathway: pw.value}); clearTimeout(timer); flush(function(){ location.reload(); }); });
     document.querySelectorAll('[data-scale]').forEach(function(el){
         el.addEventListener('input', function(){ var p = {}; p[el.dataset.scale] = el.value; document.getElementById('val-' + el.dataset.scale).textContent = el.value; queue(p); });
     });
+    var SCALE_COLUMNS = {{ scale_columns|tojson }};
     document.querySelectorAll('[data-answer]').forEach(function(el){
         el.addEventListener('input', function(){
             var a = {}; a[el.dataset.answer] = el.value; queue({answers: a});
             var v = document.getElementById('qval-' + el.dataset.answer); if (v) v.textContent = el.value;
+            var col = el.type === 'range' && SCALE_COLUMNS[el.dataset.answer];
+            if (col) { var hv = document.getElementById('val-' + col); if (hv) hv.textContent = el.value; var hr = document.querySelector('[data-scale="' + col + '"]'); if (hr) hr.value = el.value; }
             el.dataset.set = '1';
             var q = el.closest('.sm-section'); if (q) { var n = q.querySelectorAll('[data-answer]'); var c = 0; n.forEach(function(x){ if (x.type === 'range' ? x.dataset.set === '1' : x.value.trim()) c++; }); q.querySelector('.count').textContent = c + '/' + n.length; }
         });
@@ -410,7 +441,9 @@ details.sm-section[open] > summary { border-bottom:1px solid var(--light-gray); 
     var prevStep = document.getElementById('sm-prev-step');
     if (prevStep) prevStep.addEventListener('change', function(){
         prevStep.closest('.sm-item').classList.toggle('done', prevStep.checked);
-        fetch("{{ url_for('senior_meetings.api_step_done', meeting_id=previous.id) if previous else '' }}", {method:'POST', headers:{'Content-Type':'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify({done: prevStep.checked})});
+        fetch("{{ url_for('senior_meetings.api_step_done', meeting_id=previous.id) if previous else '' }}", {method:'POST', headers:{'Content-Type':'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify({done: prevStep.checked})})
+            .then(function(r){ if (!r.ok) throw new Error(); })
+            .catch(function(){ prevStep.checked = !prevStep.checked; prevStep.closest('.sm-item').classList.toggle('done', prevStep.checked); });
     });
 
     window.copySummary = function(){

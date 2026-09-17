@@ -11,6 +11,7 @@ Ownership: every read goes through owned_or_404 / caseload_student_or_404
 (404, never 403). The per-counselor Sample Student may open a meeting so the
 tool can be tried, but never appears on the roster.
 """
+import json
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
@@ -47,16 +48,25 @@ NOTE_TYPES = [
     ('student_conference', 'Student Conference'),
     ('four_year_plan', 'Four-Year Plan/Graduation'),
 ]
-# When a checklist box is un-ticked, the synced plan field steps back to this.
-_REVERT = {
-    'fafsa_status': 'in_progress',
-    'dream_act_status': 'not_started',
-    'css_profile_status': 'not_started',
-    'personal_statement_status': 'reviewed',
-    'transcript_sent': False,
-}
 DEADLINE_HORIZON_DAYS = 300   # the rest of a senior's year, not just the next few months
 DEADLINE_GRACE_DAYS = 21      # how long an overdue date stays on the panel
+# The student handout only carries dates and people that are theirs to see:
+# never the counselor's follow-up notes, calendar titles or goal wording.
+HANDOUT_KINDS = ('school', 'application', 'decision', 'next_step')
+HANDOUT_SUPPORT_KEYS = ('sup_go_to_adult', 'sup_peer_checkin')
+# A Dream Act filer can't file a FAFSA (and vice versa): ticking one side
+# takes the other side's items off the list.
+_AID_ALTERNATES = {'cadaa_submitted': ('fafsa_submitted', 'fsa_ids_created'),
+                   'fafsa_submitted': ('cadaa_submitted',)}
+# Status ladders for the synced plan fields: a tick never moves a field
+# backwards (a 'verified' FAFSA stays verified).
+_STATUS_RANK = {
+    'fafsa_status': [k for k, _ in CollegeCareerPlan.FAFSA_STATUSES],
+    'dream_act_status': [k for k, _ in CollegeCareerPlan.AID_STATUSES],
+    'css_profile_status': [k for k, _ in CollegeCareerPlan.AID_STATUSES],
+    'personal_statement_status': [k for k, _ in CollegeCareerPlan.STATEMENT_STATUSES],
+    'transcript_sent': [False, True],
+}
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -67,6 +77,27 @@ def _student(student_id):
 
 def _meeting(meeting_id):
     return owned_or_404(SeniorMeeting, meeting_id)
+
+
+def _own_meeting(meeting_id):
+    """The meeting, and only if the viewer is its counselor: completing,
+    reopening and deleting create records in the counselor's own name, so an
+    admin's read access doesn't extend to them."""
+    m = _meeting(meeting_id)
+    if m.counselor_id != current_user.id:
+        abort(404)
+    return m
+
+
+def _mine(query):
+    """Meetings the viewer can actually open (admins see every counselor's)."""
+    if getattr(current_user, 'role', None) == 'admin':
+        return query
+    return query.filter(SeniorMeeting.counselor_id == current_user.id)
+
+
+def _is_dict(data):
+    return isinstance(data, dict)
 
 
 def _pathway(student):
@@ -88,18 +119,34 @@ def _get_or_create_plan(student):
 def _int_or_none(value, lo=0, hi=10):
     if value in (None, ''):
         return None
+    if isinstance(value, bool):
+        return None
     try:
         v = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return v if lo <= v <= hi else None
+
+
+def _text(value, limit):
+    return str(value if isinstance(value, (str, int, float)) else '')[:limit]
+
+
+def _applicable_items(done_keys, pathway, show_all=False):
+    """Checklist items for the pathway, minus the other side of an
+    either/or pair the student has already done (FAFSA vs. Dream Act)."""
+    items = content.CHECKLIST if show_all else content.items_for_pathway(pathway)
+    skip = {alt for k, alts in _AID_ALTERNATES.items() if k in done_keys
+            for alt in alts if alt not in done_keys}
+    return [i for i in items if i['key'] not in skip]
 
 
 def _checklist_groups(student, pathway, show_all=False):
     """Checklist items for the pathway, grouped, with this student's state."""
     state = {i.key: i for i in student.senior_checklist_items.all()}
     deadlines = {d['key']: d for d in _school_deadlines()}
-    items = content.CHECKLIST if show_all else content.items_for_pathway(pathway)
+    done_keys = {k for k, r in state.items() if r.done}
+    items = _applicable_items(done_keys, pathway, show_all)
     groups, done, total = [], 0, 0
     for gkey, gtitle in content.CHECKLIST_GROUPS:
         rows = []
@@ -109,13 +156,15 @@ def _checklist_groups(student, pathway, show_all=False):
             row = state.get(it['key'])
             is_done = bool(row and row.done)
             dl = deadlines.get(it['deadline_key']) if it['deadline_key'] else None
+            applies = 'all' in it['pathways'] or pathway in it['pathways']
             rows.append({**it, 'done': is_done,
                          'done_at': row.done_at if row else None,
                          'item_note': row.note if row else '',
                          'deadline': dl['date'] if dl else None,
-                         'applies': 'all' in it['pathways'] or pathway in it['pathways']})
-            total += 1
-            done += 1 if is_done else 0
+                         'applies': applies})
+            if applies:   # the header count always means "for this pathway"
+                total += 1
+                done += 1 if is_done else 0
         if rows:
             groups.append({'key': gkey, 'title': gtitle, 'items': rows,
                            'done': sum(1 for r in rows if r['done']), 'total': len(rows)})
@@ -123,21 +172,20 @@ def _checklist_groups(student, pathway, show_all=False):
 
 
 def _checklist_counts(student, pathway):
-    keys = {i['key'] for i in content.items_for_pathway(pathway)}
-    done = student.senior_checklist_items.filter(
-        SeniorChecklistItem.done == True,  # noqa: E712
-        SeniorChecklistItem.key.in_(keys)).count() if keys else 0
-    return done, len(keys)
+    done_keys = {i.key for i in student.senior_checklist_items.filter(
+        SeniorChecklistItem.done == True).all()}  # noqa: E712
+    keys = {i['key'] for i in _applicable_items(done_keys, pathway)}
+    return len(done_keys & keys), len(keys)
 
 
 def _school_deadlines():
     """Active school-wide deadlines; the content bank's defaults until any are saved."""
-    rows = (PostSecondaryDeadline.query.filter_by(is_active=True)
-            .order_by(PostSecondaryDeadline.date).all())
-    if rows:
+    rows = PostSecondaryDeadline.query.order_by(PostSecondaryDeadline.date).all()
+    if rows:   # a school that hid every date gets none, not the defaults back
         return [{'key': r.key, 'label': r.label, 'date': r.date, 'pathways': r.pathway_list,
                  'category': r.category, 'source': r.source, 'note': r.note,
-                 'verify': bool(r.verify), 'from_defaults': False} for r in rows]
+                 'verify': bool(r.verify), 'from_defaults': False}
+                for r in rows if r.is_active]
     return [{'key': d['key'], 'label': d['label'], 'date': date.fromisoformat(d['date']),
              'pathways': list(d['pathways']), 'category': d['category'], 'source': d['source'],
              'note': d['note'], 'verify': bool(d['verify']), 'from_defaults': True}
@@ -206,9 +254,13 @@ def _prompt_sections(kind, show_all=False):
 
 
 def _previous_meeting(student, before):
-    return (student.senior_meetings.filter(
+    """The viewer's most recent completed meeting strictly before ``before``
+    (same-day meetings order by id, so a later one is never 'last time')."""
+    return (_mine(student.senior_meetings).filter(
         SeniorMeeting.id != before.id, SeniorMeeting.status == 'completed',
-        SeniorMeeting.meeting_date <= before.meeting_date)
+        db.or_(SeniorMeeting.meeting_date < before.meeting_date,
+               db.and_(SeniorMeeting.meeting_date == before.meeting_date,
+                       SeniorMeeting.id < before.id)))
         .order_by(SeniorMeeting.meeting_date.desc(), SeniorMeeting.id.desc()).first())
 
 
@@ -234,6 +286,17 @@ def _asca_touched(meeting):
     codes = [c for c, _ in counts.most_common()]
     domain = domains.most_common(1)[0][0] if domains else 'career'
     return codes, domain
+
+
+def _asca_field(codes, limit=100):
+    """Comma list of whole codes that fits Note.asca_standard (no mid-code cut)."""
+    out = ''
+    for c in codes:
+        nxt = f'{out}, {c}' if out else c
+        if len(nxt) > limit:
+            break
+        out = nxt
+    return out
 
 
 def _summary_text(meeting, student, previous=None):
@@ -279,20 +342,68 @@ def _summary_text(meeting, student, previous=None):
     return '\n'.join(lines)
 
 
-def _sync_plan_field(student, item, done):
-    """Mirror a checked box onto the College & Career plan field it stands for."""
+def _sync_plan_field(student, item, done, row):
+    """Mirror a checked box onto the College & Career plan field it stands for.
+
+    A tick never moves the field backwards; it records what it changed on
+    the checklist row, and an un-tick puts exactly that back."""
     if not item['maps_to']:
         return
     field, value = item['maps_to']
-    plan = _get_or_create_plan(student)
     if done:
-        setattr(plan, field, value)
+        plan = _get_or_create_plan(student)
+        ladder = _STATUS_RANK.get(field, [])
+        current = getattr(plan, field, None)
+        if current not in ladder:
+            current = ladder[0] if ladder else current
+        if ladder.index(current) >= ladder.index(value):
+            return   # already there or further along
+        prev = {field: getattr(plan, field, None)}
         if field == 'fafsa_status':
+            prev['fafsa_submitted_date'] = (plan.fafsa_submitted_date.isoformat()
+                                            if plan.fafsa_submitted_date else None)
             plan.fafsa_submitted_date = plan.fafsa_submitted_date or date.today()
-    elif getattr(plan, field, None) == value:
-        setattr(plan, field, _REVERT.get(field))
-        if field == 'fafsa_status':
-            plan.fafsa_submitted_date = None
+        setattr(plan, field, value)
+        row.synced_prev = json.dumps(prev)
+    else:
+        plan = student.college_career_plan
+        if not plan or not row.synced_prev:
+            return
+        try:
+            prev = json.loads(row.synced_prev)
+        except (TypeError, ValueError):
+            prev = {}
+        row.synced_prev = None
+        if not isinstance(prev, dict) or getattr(plan, field, None) != value:
+            return   # someone changed it since; leave it alone
+        setattr(plan, field, prev.get(field))
+        if field == 'fafsa_status' and 'fafsa_submitted_date' in prev:
+            d = prev['fafsa_submitted_date']
+            plan.fafsa_submitted_date = date.fromisoformat(d) if d else None
+
+
+def _sync_follow_up_event(m, note):
+    """Keep the calendar reminder in step with the meeting's follow-up date:
+    create it, move it, or remove it. Returns True when one was created."""
+    ev = m.follow_up_event
+    if ev and ev.status == 'cancelled':
+        ev = None
+    if not m.follow_up_date:
+        if m.follow_up_event:
+            db.session.delete(m.follow_up_event)
+            m.follow_up_event_id = None
+        return False
+    if ev is None:
+        ev = _create_follow_up_event(note)
+        if ev:
+            db.session.flush()
+            m.follow_up_event_id = ev.id
+        return ev is not None
+    start_dt = datetime.combine(m.follow_up_date, datetime.min.time().replace(hour=9))
+    ev.start_datetime = start_dt
+    ev.end_datetime = start_dt + timedelta(minutes=30)
+    ev.description = note.follow_up_notes or ev.description
+    return False
 
 
 def _create_follow_up_event(note):
@@ -316,7 +427,7 @@ def index():
                 .order_by(Student.last_name, Student.first_name).all())
     ids = [s.id for s in students]
 
-    meetings = (SeniorMeeting.query.filter(SeniorMeeting.student_id.in_(ids))
+    meetings = (_mine(SeniorMeeting.query).filter(SeniorMeeting.student_id.in_(ids))
                 .order_by(SeniorMeeting.meeting_date.desc(), SeniorMeeting.id.desc()).all()
                 if ids else [])
     latest, open_by_student, last_done = {}, {}, {}
@@ -389,7 +500,7 @@ def student(student_id):
     pathway = _pathway(s)
     show_all = request.args.get('all') == '1'
     groups, done, total = _checklist_groups(s, pathway, show_all=show_all)
-    meetings = s.senior_meetings.order_by(
+    meetings = _mine(s.senior_meetings).order_by(
         SeniorMeeting.meeting_date.desc(), SeniorMeeting.id.desc()).all()
     open_meeting = next((m for m in meetings if m.status != 'completed'), None)
     return render_template('senior_meetings/student.html', student=s, pathway=pathway,
@@ -403,13 +514,11 @@ def student(student_id):
 @login_required
 def start(student_id):
     s = _student(student_id)
-    existing = s.senior_meetings.filter(
-        SeniorMeeting.counselor_id == current_user.id,
-        SeniorMeeting.status != 'completed').first()
+    existing = _mine(s.senior_meetings).filter(SeniorMeeting.status != 'completed').first()
     if existing:
         flash('Picking up the meeting you already had open.', 'info')
         return redirect(url_for('senior_meetings.meeting', meeting_id=existing.id))
-    prior = s.senior_meetings.filter(SeniorMeeting.status == 'completed').count()
+    prior = _mine(s.senior_meetings).filter(SeniorMeeting.status == 'completed').count()
     m = SeniorMeeting(student_id=s.id, counselor_id=current_user.id,
                       meeting_date=date.today(),
                       meeting_kind='followup' if prior else 'first',
@@ -445,6 +554,7 @@ def meeting(meeting_id):
         deadlines=_student_deadlines(s, pathway), previous=previous,
         readonly=readonly, summary=summary, asca=content.ASCA_STANDARDS,
         asca_touched=codes, scale_columns=SCALE_COLUMNS, note_types=NOTE_TYPES,
+        handout_support_keys=HANDOUT_SUPPORT_KEYS, is_owner=(m.counselor_id == current_user.id),
         today=date.today(), answers=m.answers, checked=set(m.checked_keys))
 
 
@@ -456,44 +566,49 @@ def api_save(meeting_id):
     if m.status == 'completed':
         return jsonify({'ok': False, 'error': 'This meeting is completed. Reopen it to edit.'}), 409
     data = request.get_json(silent=True) or {}
+    if not _is_dict(data):
+        return jsonify({'ok': False, 'error': 'Bad request'}), 400
     s = m.student
+    kind = m.meeting_kind or 'first'
+    q_when = {q['key']: q['when'] for q in content.QUESTIONS}
 
     if 'notes' in data:
-        m.notes = str(data.get('notes') or '')[:20000]
+        m.notes = _text(data.get('notes'), 20000)
     if isinstance(data.get('answers'), dict):
         answers = m.answers
         for key, value in data['answers'].items():
-            if key not in content.QUESTION_KEYS:
+            if not isinstance(key, str) or key not in content.QUESTION_KEYS:
                 continue
-            if value in (None, ''):
+            if value in (None, '') or not isinstance(value, (str, int, float)):
                 answers.pop(key, None)
+                value = None
             else:
                 answers[key] = str(value)[:4000]
             col = SCALE_COLUMNS.get(key)
-            if col:
+            if col and q_when.get(key) in ('any', kind):
                 setattr(m, col, _int_or_none(value))
         m.answers = answers
     for col in ('scale_plan', 'scale_stress', 'scale_confidence'):
         if col in data:
             setattr(m, col, _int_or_none(data[col]))
-    if 'pathway' in data and data['pathway'] in content.PATHWAYS:
+    if isinstance(data.get('pathway'), str) and data['pathway'] in content.PATHWAYS:
         m.pathway = data['pathway']
         if s.college_career_plan or data['pathway'] != 'undecided':
             _get_or_create_plan(s).pathway = data['pathway']
     if 'next_step' in data:
-        m.next_step = str(data.get('next_step') or '')[:2000]
+        m.next_step = _text(data.get('next_step'), 2000)
     if 'next_step_due' in data:
-        m.next_step_due = parse_date(data.get('next_step_due') or '')
+        m.next_step_due = parse_date(_text(data.get('next_step_due'), 20))
     if 'follow_up_date' in data:
-        m.follow_up_date = parse_date(data.get('follow_up_date') or '')
+        m.follow_up_date = parse_date(_text(data.get('follow_up_date'), 20))
     if 'follow_up_notes' in data:
-        m.follow_up_notes = str(data.get('follow_up_notes') or '')[:2000]
-    if 'note_type' in data and data['note_type'] in dict(NOTE_TYPES):
+        m.follow_up_notes = _text(data.get('follow_up_notes'), 2000)
+    if isinstance(data.get('note_type'), str) and data['note_type'] in dict(NOTE_TYPES):
         m.note_type = data['note_type']
     if 'duration_minutes' in data:
         m.duration_minutes = _int_or_none(data['duration_minutes'], 1, 600)
     if 'meeting_date' in data:
-        m.meeting_date = parse_date(data.get('meeting_date') or '') or m.meeting_date
+        m.meeting_date = parse_date(_text(data.get('meeting_date'), 20)) or m.meeting_date
     db.session.commit()
     return jsonify({'ok': True, 'saved_at': datetime.now(timezone.utc).isoformat(),
                     'scale_plan': m.scale_plan, 'scale_stress': m.scale_stress,
@@ -506,15 +621,17 @@ def api_save(meeting_id):
 def api_checklist(student_id):
     s = _student(student_id)
     data = request.get_json(silent=True) or {}
+    if not _is_dict(data):
+        return jsonify({'ok': False, 'error': 'Bad request'}), 400
     key = data.get('key')
     item = next((i for i in content.CHECKLIST if i['key'] == key), None)
     if item is None:
         return jsonify({'ok': False, 'error': 'Unknown checklist item.'}), 400
     done = bool(data.get('done'))
-    meeting_id = data.get('meeting_id')
+    meeting_id = _int_or_none(data.get('meeting_id'), 1, 2 ** 31)
     m = None
     if meeting_id:
-        m = SeniorMeeting.query.get(meeting_id)
+        m = db.session.get(SeniorMeeting, meeting_id)
         if not m or m.student_id != s.id or (
                 m.counselor_id != current_user.id and getattr(current_user, 'role', None) != 'admin'):
             abort(404)
@@ -527,8 +644,8 @@ def api_checklist(student_id):
     row.done_at = datetime.now(timezone.utc) if done else None
     row.meeting_id = m.id if (done and m) else (None if not done else row.meeting_id)
     if 'note' in data:
-        row.note = str(data.get('note') or '')[:300]
-    _sync_plan_field(s, item, done)
+        row.note = _text(data.get('note'), 300)
+    _sync_plan_field(s, item, done, row)
     if m and m.status != 'completed':
         keys = set(m.checked_keys)
         (keys.add if done else keys.discard)(key)
@@ -545,8 +662,10 @@ def api_checklist(student_id):
 @login_required
 def api_step_done(meeting_id):
     """Mark the student's next step from a PREVIOUS meeting as done (or not)."""
-    m = _meeting(meeting_id)
+    m = _own_meeting(meeting_id)
     data = request.get_json(silent=True) or {}
+    if not _is_dict(data):
+        return jsonify({'ok': False, 'error': 'Bad request'}), 400
     m.next_step_done = bool(data.get('done', True))
     db.session.commit()
     return jsonify({'ok': True, 'done': m.next_step_done})
@@ -555,7 +674,7 @@ def api_step_done(meeting_id):
 @senior_meetings_bp.route('/<int:meeting_id>/complete', methods=['POST'])
 @login_required
 def complete(meeting_id):
-    m = _meeting(meeting_id)
+    m = _own_meeting(meeting_id)
     s = m.student
     if m.duration_minutes is None and m.started_at:
         started = m.started_at if m.started_at.tzinfo else m.started_at.replace(tzinfo=timezone.utc)
@@ -564,8 +683,8 @@ def complete(meeting_id):
     previous = _previous_meeting(s, m)
     summary = _summary_text(m, s, previous)
     codes, domain = _asca_touched(m)
+    standard = _asca_field(codes)
     kind = 'Follow-up' if m.meeting_kind == 'followup' else 'First meeting'
-    created_event = None
     if m.note is None:
         note = Note(
             student_id=s.id, author_id=current_user.id,
@@ -573,7 +692,7 @@ def complete(meeting_id):
             title=f'Senior / Post-Secondary Meeting ({kind})',
             content=summary, session_date=m.meeting_date,
             duration_minutes=m.duration_minutes,
-            asca_domain=domain, asca_standard=', '.join(codes)[:100],
+            asca_domain=domain, asca_standard=standard,
             delivery_method='in_person', topic_category='Post-secondary planning',
             follow_up_needed=bool(m.follow_up_date), follow_up_date=m.follow_up_date,
             follow_up_notes=(m.follow_up_notes or '') or (
@@ -582,7 +701,6 @@ def complete(meeting_id):
         )
         db.session.add(note)
         db.session.flush()
-        created_event = _create_follow_up_event(note)
         m.note_id = note.id
     else:
         note = m.note
@@ -590,10 +708,12 @@ def complete(meeting_id):
         note.note_type = m.note_type or note.note_type
         note.duration_minutes = m.duration_minutes
         note.session_date = m.meeting_date
-        note.asca_domain, note.asca_standard = domain, ', '.join(codes)[:100]
+        note.asca_domain, note.asca_standard = domain, standard
         note.follow_up_needed = bool(m.follow_up_date)
         note.follow_up_date = m.follow_up_date
-        note.follow_up_notes = m.follow_up_notes or note.follow_up_notes
+        note.follow_up_notes = (m.follow_up_notes or '') or (
+            f'Check in on: {m.next_step}' if m.next_step and m.follow_up_date else '')
+    created_event = _sync_follow_up_event(m, note)
     m.status = 'completed'
     m.completed_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -608,7 +728,7 @@ def complete(meeting_id):
 @senior_meetings_bp.route('/<int:meeting_id>/reopen', methods=['POST'])
 @login_required
 def reopen(meeting_id):
-    m = _meeting(meeting_id)
+    m = _own_meeting(meeting_id)
     m.status = 'in_progress'
     m.completed_at = None
     db.session.commit()
@@ -619,7 +739,7 @@ def reopen(meeting_id):
 @senior_meetings_bp.route('/<int:meeting_id>/delete', methods=['POST'])
 @login_required
 def delete(meeting_id):
-    m = _meeting(meeting_id)
+    m = _own_meeting(meeting_id)
     sid = m.student_id
     SeniorChecklistItem.query.filter_by(meeting_id=m.id).update(
         {'meeting_id': None}, synchronize_session=False)
@@ -643,8 +763,9 @@ def handout(meeting_id):
     season_rank = {'fall': 0, 'winter': 1, 'spring': 2, 'any': 3}
     todo = sorted([i for g in groups for i in g['items'] if not i['done']],
                   key=lambda i: (i['deadline'] or date.max, season_rank.get(i['season'], 9)))[:14]
-    deadlines = [d for d in _student_deadlines(s, pathway) if d['days'] >= 0][:10]
-    support = [a for q, a in _answered(m) if q['section'] == 'support_relationships']
+    deadlines = [d for d in _student_deadlines(s, pathway)
+                 if d['days'] >= 0 and d['kind'] in HANDOUT_KINDS][:10]
+    support = [a for q, a in _answered(m) if q['key'] in HANDOUT_SUPPORT_KEYS]
     return render_template('senior_meetings/handout.html', meeting=m, student=s,
                            pathway_label=dict(CollegeCareerPlan.PATHWAYS).get(pathway, 'Undecided'),
                            todo=todo, done=done, total=total, deadlines=deadlines,

@@ -57,6 +57,7 @@ class SeniorMeeting(db.Model):
     # How the meeting is logged in the counselor's notes timeline.
     note_type = db.Column(db.String(50), default='college_career')
     note_id = db.Column(db.Integer, db.ForeignKey('notes.id'))
+    follow_up_event_id = db.Column(db.Integer, db.ForeignKey('calendar_events.id'))
 
     created_at = db.Column(db.DateTime, default=_now)
     updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
@@ -65,6 +66,7 @@ class SeniorMeeting(db.Model):
         'senior_meetings', lazy='dynamic', order_by='SeniorMeeting.meeting_date.desc()'))
     counselor = db.relationship('User', backref='senior_meetings')
     note = db.relationship('Note', foreign_keys=[note_id])
+    follow_up_event = db.relationship('CalendarEvent', foreign_keys=[follow_up_event_id])
 
     KINDS = [('first', 'First meeting'), ('followup', 'Follow-up')]
 
@@ -113,6 +115,9 @@ class SeniorChecklistItem(db.Model):
     done_at = db.Column(db.DateTime)
     meeting_id = db.Column(db.Integer, db.ForeignKey('senior_meetings.id'))  # where it was ticked
     note = db.Column(db.String(300))
+    # What the synced College & Career plan field held before this tick (JSON),
+    # so an un-tick restores it instead of guessing.
+    synced_prev = db.Column(db.Text)
     updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
 
     student = db.relationship('Student', backref=db.backref('senior_checklist_items', lazy='dynamic'))

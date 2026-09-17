@@ -56,7 +56,7 @@ li { margin: 3px 0; }
 
 <div class="sign">
     <div>Counselor: {{ current_user.display_name or current_user.username }}{% if current_user.email %} · {{ current_user.email }}{% endif %}</div>
-    <div>Our next meeting: {{ meeting.follow_up_date|smartdate('%B %-d') if meeting.follow_up_date else '______________' }}</div>
+    <div>Our next meeting: {{ meeting.answers.get('close_next_meeting') or '______________' }}</div>
 </div>
 </body>
 </html>

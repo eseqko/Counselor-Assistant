@@ -423,7 +423,7 @@ CHECKLIST = [
     },
     {
         'key': 'css_profile_submitted', 'label': 'Submit CSS Profile (if a college requires it)', 'group': 'financial_aid',
-        'pathways': ['4year'], 'maps_to': ('css_profile_status', 'submitted'), 'deadline_key': 'css_profile_open', 'season': 'fall',
+        'pathways': ['4year'], 'maps_to': ('css_profile_status', 'submitted'), 'deadline_key': None, 'season': 'fall',
         'help': "Only some private colleges want the CSS Profile; it has a fee, but fee waivers are automatic for lower-income families, and each college sets its own deadline.",
     },
     {
@@ -461,11 +461,11 @@ CHECKLIST = [
     {
         'key': 'sat_act_decision', 'label': 'Decide whether to take or send SAT/ACT', 'group': 'testing_records',
         'pathways': ['4year', 'undecided'], 'maps_to': None, 'deadline_key': 'sat_oct', 'season': 'fall',
-        'help': "UC and CSU don't look at SAT or ACT scores at all, and most other colleges are test-optional - take it only if it helps you somewhere specific, and send scores only where they help.",
+        'help': "UC and CSU don't use SAT or ACT scores for admission (a high ACT English score can still clear UC's writing requirement, and both use scores for course placement), and most other colleges are test-optional - take it only if it helps you somewhere specific, and send scores only where they help.",
     },
     {
         'key': 'ap_ib_scores_sent', 'label': 'Send AP / IB scores to your college', 'group': 'testing_records',
-        'pathways': ['4year', '2year', 'undecided'], 'maps_to': None, 'deadline_key': 'ap_exams', 'season': 'spring',
+        'pathways': ['4year', '2year', 'undecided'], 'maps_to': None, 'deadline_key': None, 'season': 'spring',
         'help': "After you commit, send AP scores through College Board (IB through your coordinator) - many colleges give credit for a 3 or higher, and one free score send is included each year.",
     },
     {
@@ -503,7 +503,7 @@ CHECKLIST = [
     {
         'key': 'orientation_and_placement', 'label': 'Sign up for orientation and finish placement steps', 'group': 'after_acceptance',
         'pathways': ['4year', '2year', 'cte_trade'], 'maps_to': None, 'deadline_key': None, 'season': 'spring',
-        'help': "Register for orientation the day it opens, and check for placement steps (UC's Analytical Writing exam, CSU Early Start, or a college's self-placement) - skipping them can block registration.",
+        'help': "Register for orientation the day it opens, and check for placement steps (UC's Entry Level Writing Requirement and your campus's writing/math placement, a CSU's first-year placement steps, or a college's self-placement) - skipping them can block registration.",
     },
     {
         'key': 'summer_melt_checkin', 'label': 'Set up portal, email and a summer check-in', 'group': 'after_acceptance',
@@ -677,7 +677,7 @@ QUESTIONS = [
         'key': 'scale_plan_progress', 'section': 'scaling',
         'text': "On a scale of 0 to 10, where 10 means your plan for after high school is completely handled and 0 means you haven't started, where are you today?",
         'framework': ['SFBT:scaling'], 'asca': ['M 4', 'B-SMS 5'], 'domain': 'career',
-        'answer_type': 'scale', 'when': 'any', 'pathways': ['all'],
+        'answer_type': 'scale', 'when': 'first', 'pathways': ['all'],
         'coach': "Accept the number without arguing; every follow-up question uses it.",
     },
     {
@@ -777,7 +777,7 @@ QUESTIONS = [
     },
     {
         'key': 'goal_one_year_out', 'section': 'goals_future',
-        'text': "Picture yourself a year from now, September 2027. Where are you living, and what does a normal Tuesday look like?",
+        'text': "Picture yourself the fall after graduation, a few months after you walk. Where are you living, and what does a normal Tuesday look like?",
         'framework': ['SFBT:goal'], 'asca': ['B-LS 7', 'M 6'], 'domain': 'career',
         'answer_type': 'text', 'when': 'first', 'pathways': ['all'],
         'coach': "Work backward from that Tuesday to what has to be true by June - that's the checklist in their language.",
@@ -1061,6 +1061,14 @@ def validate():
                 problems.append('QUESTIONS %s: bad pathway %r' % (k, p))
         if not q['text'] or not q['coach']:
             problems.append('QUESTIONS %s: missing text or coach' % k)
+
+    import re as _re
+    for q in QUESTIONS:
+        if _re.search(r'\b20\d\d\b', q['text']):
+            problems.append('QUESTIONS %s: text embeds a calendar year' % q['key'])
+    for c in CHECKLIST:
+        if _re.search(r'\b20\d\d\b', c['help']):
+            problems.append('CHECKLIST %s: help embeds a calendar year' % c['key'])
 
     prev = ''
     for d in DEADLINE_DEFAULTS:
