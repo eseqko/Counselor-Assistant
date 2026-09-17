@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Senior Meetings{% endblock %}
+{% block page_title %}Senior / Post-Secondary Meetings{% endblock %}
+{% block head %}
+<style>
+.smr-layout { display:grid; grid-template-columns:minmax(0,3fr) minmax(240px,1fr); gap:20px; align-items:start; }
+@media (max-width:1300px) { .smr-layout { grid-template-columns:1fr; } }
+.smr-filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; font-size:0.85rem; }
+.smr-filters a { padding:4px 10px; border-radius:12px; border:1px solid var(--light-gray); color:var(--text); text-decoration:none; }
+.smr-filters a.on { background:var(--primary); color:var(--white); border-color:var(--primary); }
+.smr-bar { height:6px; background:var(--bg); border-radius:3px; overflow:hidden; min-width:70px; }
+.smr-bar > div { height:100%; background:var(--success); }
+.smr-muted { color:var(--gray); font-size:0.78rem; }
+.smr-dl { list-style:none; margin:0; padding:0; }
+.smr-dl li { padding:6px 0; border-bottom:1px solid var(--light-gray); font-size:0.84rem; display:flex; gap:10px; }
+.smr-dl li:last-child { border-bottom:0; }
+.smr-dl .when { min-width:60px; font-weight:700; }
+.data-table td.num { white-space:nowrap; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="smr-layout">
+<div>
+    <div class="smr-filters">
+        <span class="smr-muted">Grades:</span>
+        <a href="{{ url_for('senior_meetings.index', grades='12', only=only or none) }}" class="{{ 'on' if grades != 'all' }}">12</a>
+        <a href="{{ url_for('senior_meetings.index', grades='all', only=only or none) }}" class="{{ 'on' if grades == 'all' }}">11 &amp; 12</a>
+        <span class="smr-muted" style="margin-left:8px;">Show:</span>
+        {% for key, label in [('', 'Everyone'), ('never_met', 'Never met'), ('in_progress', 'Meeting open'), ('open_step', 'Step pending'), ('no_pathway', 'No pathway yet')] %}
+        <a href="{{ url_for('senior_meetings.index', grades=grades, only=key or none) }}" class="{{ 'on' if only == key }}">{{ label }}</a>
+        {% endfor %}
+        <span class="smr-muted" style="margin-left:auto;">{{ total_students }} student{{ '' if total_students == 1 else 's' }} · {{ never_met }} never met</span>
+    </div>
+
+    <div class="card">
+        <div class="card-body" style="padding:0;">
+        {% if rows %}
+        <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr>
+                <th>Student</th><th>Pathway</th><th>Meetings</th><th>Plan 0–10</th><th>Checklist</th><th>Their next step</th><th>Next date</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for r in rows %}
+            <tr>
+                <td><a href="{{ url_for('senior_meetings.student', student_id=r.student.id) }}"><strong>{{ r.student.full_name }}</strong></a>
+                    <div class="smr-muted">Gr {{ r.student.grade_level or '—' }}{% if r.student.is_el %} · EL{% endif %}{% if r.student.iep_status %} · IEP{% endif %}</div></td>
+                <td>{% if r.pathway == 'undecided' %}<span class="badge badge-warning">Undecided</span>{% else %}{{ r.pathway_label }}{% endif %}</td>
+                <td class="num">{{ r.meetings }}{% if r.latest %}<div class="smr-muted">{{ r.latest.meeting_date|smartdate('%b %-d') }}{% if r.open %} · <span class="badge badge-warning">open</span>{% endif %}</div>{% else %}<div class="smr-muted">never</div>{% endif %}</td>
+                <td class="num">{% if r.last_done and r.last_done.scale_plan is not none %}<strong>{{ r.last_done.scale_plan }}</strong>{% else %}<span class="smr-muted">—</span>{% endif %}</td>
+                <td><div class="smr-bar" title="{{ r.done }} of {{ r.total }}"><div style="width:{{ r.pct }}%;"></div></div><div class="smr-muted">{{ r.done }}/{{ r.total }}</div></td>
+                <td style="max-width:260px;">
+                    {% if r.last_done and r.last_done.next_step %}
+                        <span class="{{ 'smr-muted' if r.last_done.next_step_done }}">{{ r.last_done.next_step|truncate(80) }}</span>
+                        <div class="smr-muted">{% if r.last_done.next_step_done %}done{% elif r.last_done.next_step_due %}by {{ r.last_done.next_step_due|smartdate('%b %-d') }}{% if r.step_overdue %} <span class="badge badge-danger">overdue</span>{% endif %}{% endif %}</div>
+                    {% else %}<span class="smr-muted">—</span>{% endif %}
+                </td>
+                <td>{% if r.next_deadline %}<strong>{{ r.next_deadline.date|smartdate('%b %-d') }}</strong><div class="smr-muted">{{ r.next_deadline.label|truncate(34) }}</div>{% else %}<span class="smr-muted">—</span>{% endif %}</td>
+                <td class="num">
+                    <form method="POST" action="{{ url_for('senior_meetings.start', student_id=r.student.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm {{ 'btn-outline' if r.open else 'btn-primary' }}">{{ 'Continue' if r.open else 'Start' }}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:30px;"><p>{% if total_students %}No students match that filter.{% else %}No active grade-{{ '11–12' if grades == 'all' else '12' }} students on your caseload.{% endif %}</p></div>
+        {% endif %}
+        </div>
+    </div>
+    <p class="smr-muted" style="margin-top:8px;">Each meeting has live notes, the pathway checklist, this student's dates, and ASCA / Solution-Focused prompts. Completing one saves a note to the student's timeline.</p>
+</div>
+
+<aside>
+    <div class="card">
+        <div class="card-header">Coming up school-wide
+            <a href="{{ url_for('senior_meetings.deadlines') }}" class="btn btn-sm btn-outline">Manage</a>
+        </div>
+        <div class="card-body">
+            {% if from_defaults %}<div class="alert alert-info" style="font-size:0.8rem;padding:8px 10px;">Showing built-in 2026–27 defaults. <a href="{{ url_for('senior_meetings.deadlines') }}">Load and verify them</a> for your school.</div>{% endif %}
+            {% if upcoming %}
+            <ul class="smr-dl">
+                {% for d in upcoming %}
+                <li><span class="when">{{ d.date|smartdate('%b %-d') }}</span><span>{{ d.label }}{% if d.verify %} <span class="badge badge-warning" style="font-size:0.66rem;">verify</span>{% endif %}<div class="smr-muted">{{ d.source or '' }}</div></span></li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>No upcoming dates.</p></div>{% endif %}
+        </div>
+    </div>
+</aside>
+</div>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Post-Secondary Deadlines{% endblock %}
+{% block page_title %}Post-Secondary Deadlines{% endblock %}
+{% block head %}
+<style>
+.dl-muted { color:var(--gray); font-size:0.8rem; }
+.dl-edit { display:none; }
+.dl-edit.show { display:table-row; }
+.dl-edit td { background:var(--bg); }
+.dl-form { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:8px; align-items:end; }
+@media (max-width:900px) { .dl-form { grid-template-columns:1fr 1fr; } }
+.dl-form .form-group { margin:0; }
+.dl-paths { display:flex; flex-wrap:wrap; gap:6px; font-size:0.8rem; }
+.dl-paths label { display:inline-flex; gap:4px; align-items:center; }
+tr.inactive td { opacity:.5; }
+</style>
+{% endblock %}
+{% block content %}
+<p class="dl-muted" style="margin:0 0 12px;">School-wide dates that show on every senior meeting for the pathways they apply to. Built-in defaults are for 2026–27; anything marked <span class="badge badge-warning" style="font-size:0.66rem;">verify</span> should be confirmed with its source each year. <a href="{{ url_for('senior_meetings.index') }}">Back to Senior Meetings</a></p>
+
+{% if not can_edit %}<div class="alert alert-info">Only an admin can change the school-wide list. You can still see it here and on every meeting.</div>{% endif %}
+
+{% if can_edit and missing %}
+<div class="card"><div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <span>{{ missing|length }} built-in default{{ '' if missing|length == 1 else 's' }} {{ 'is' if missing|length == 1 else 'are' }} not in your list yet{% if not rows %} — until you load them the meetings show the defaults as-is{% endif %}.</span>
+    <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="load_defaults">
+        <button type="submit" class="btn btn-primary btn-sm">Load {{ missing|length }} default{{ '' if missing|length == 1 else 's' }}</button></form>
+</div></div>
+{% endif %}
+
+{% macro fields(row) %}
+    <div class="dl-form">
+        <div class="form-group"><label>Label</label><input type="text" name="label" class="form-control" required maxlength="200" value="{{ row.label if row else '' }}"></div>
+        <div class="form-group"><label>Date</label><input type="date" name="date" class="form-control" required value="{{ row.date.isoformat() if row else '' }}"></div>
+        <div class="form-group"><label>Category</label><select name="category" class="form-control">{% for v, l in categories %}<option value="{{ v }}" {{ 'selected' if row and row.category == v }}>{{ l }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label>Source</label><input type="text" name="source" class="form-control" maxlength="200" value="{{ row.source if row else '' }}" placeholder="Who sets it"></div>
+        <div class="form-group" style="grid-column:1 / -1;"><label>Note</label><input type="text" name="note" class="form-control" maxlength="400" value="{{ row.note if row else '' }}"></div>
+        <div class="dl-paths" style="grid-column:1 / -1;">
+            <label><input type="checkbox" name="pathways" value="all" {{ 'checked' if (not row) or 'all' in row.pathway_list }}> Everyone</label>
+            {% for v, l in pathways %}<label><input type="checkbox" name="pathways" value="{{ v }}" {{ 'checked' if row and v in row.pathway_list }}> {{ l }}</label>{% endfor %}
+            <label style="margin-left:auto;"><input type="checkbox" name="verify" {{ 'checked' if row and row.verify }}> Still needs verifying</label>
+        </div>
+    </div>
+{% endmacro %}
+
+{% if can_edit %}
+<div class="card">
+    <div class="card-header">Add a date <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('dl-add').hidden = !document.getElementById('dl-add').hidden">Show / hide</button></div>
+    <div class="card-body" id="dl-add" hidden>
+        <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add">
+            {{ fields(None) }}
+            <div style="margin-top:10px;"><button type="submit" class="btn btn-primary btn-sm">Add deadline</button></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">Your list ({{ rows|length }})</div>
+    <div class="card-body" style="padding:0;">
+    {% if rows %}
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Date</th><th>Deadline</th><th>Applies to</th><th>Category</th><th>Source</th><th></th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+        <tr class="{{ 'inactive' if not r.is_active }}">
+            <td style="white-space:nowrap;"><strong>{{ r.date|smartdate('%b %-d, %Y') }}</strong>{% if r.date < today %}<div class="dl-muted">past</div>{% endif %}</td>
+            <td>{{ r.label }}{% if r.verify %} <span class="badge badge-warning" style="font-size:0.66rem;">verify</span>{% endif %}{% if not r.is_active %} <span class="badge badge-info" style="font-size:0.66rem;">hidden</span>{% endif %}{% if r.note %}<div class="dl-muted">{{ r.note }}</div>{% endif %}</td>
+            <td class="dl-muted">{% if 'all' in r.pathway_list %}Everyone{% else %}{% for p in r.pathway_list %}{{ dict(pathways).get(p, p) }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</td>
+            <td>{{ r.category_label }}</td>
+            <td class="dl-muted">{{ r.source or '' }}</td>
+            <td style="white-space:nowrap;">
+                {% if can_edit %}
+                <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('dl-edit-{{ r.id }}').classList.toggle('show')">Edit</button>
+                <form method="POST" style="display:inline;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="{{ r.id }}"><button type="submit" class="btn btn-sm btn-outline">{{ 'Show' if not r.is_active else 'Hide' }}</button></form>
+                <form method="POST" style="display:inline;" onsubmit="return confirm('Remove this deadline?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ r.id }}"><button type="submit" class="btn btn-sm btn-outline">Remove</button></form>
+                {% endif %}
+            </td>
+        </tr>
+        {% if can_edit %}
+        <tr class="dl-edit" id="dl-edit-{{ r.id }}"><td colspan="6">
+            <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="{{ r.id }}">
+                {{ fields(r) }}
+                <div style="margin-top:10px;"><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+            </form>
+        </td></tr>
+        {% endif %}
+        {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state" style="padding:24px;"><p>No dates saved yet. Meetings are using the built-in 2026–27 defaults{% if can_edit %} — load them above, then fix any that differ for your school{% endif %}.</p></div>
+    {% endif %}
+    </div>
+</div>
+{% endblock %}

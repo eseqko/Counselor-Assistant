@@ -38,6 +38,9 @@ THEMES_CSS = STATIC / 'css' / 'themes.css'
 # Each entry: (category, file_path_fragment, hex_or_selector). Match is substr.
 # ----------------------------------------------------------------------------
 ALLOWLIST = {
+    # Senior-meeting student handout: a standalone print page (no base.html,
+    # no theme switcher) that must print white on paper.
+    ('B', 'senior_meetings/handout.html', None),
     # Meeting Notes flow-area tag buttons: intentional semantic pastels.
     ('B', 'meeting_notes/_partials/_flow_area.html', None),
     # Meeting Notes styles: tag/badge palette is intentionally branded light.

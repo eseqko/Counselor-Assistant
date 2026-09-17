@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ student.first_name }}'s plan — {{ meeting.meeting_date|smartdate('%b %-d, %Y') }}</title>
+<style>
+@page { margin: 0.6in; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #222; background: #fff; margin: 0; padding: 24px; line-height: 1.45; max-width: 820px; margin-inline: auto; }
+h1 { font-size: 1.4rem; margin: 0 0 2px; }
+h2 { font-size: 1rem; margin: 18px 0 6px; text-transform: uppercase; letter-spacing: .5px; color: #555; border-bottom: 2px solid #ddd; padding-bottom: 3px; }
+.muted { color: #666; font-size: 0.85rem; }
+.step { border: 2px solid #222; border-radius: 10px; padding: 12px 14px; font-size: 1.05rem; margin-top: 6px; break-inside: avoid; }
+.step .by { font-weight: 700; margin-top: 4px; }
+ul { padding-left: 20px; margin: 4px 0; }
+li { margin: 3px 0; }
+.box { display: inline-block; width: 12px; height: 12px; border: 1.5px solid #333; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.dates li { display: flex; gap: 12px; }
+.dates .when { min-width: 72px; font-weight: 700; }
+.no-print { display: flex; gap: 8px; margin-bottom: 14px; }
+.no-print button, .no-print a { font: inherit; padding: 6px 12px; border: 1px solid #999; border-radius: 6px; background: #f6f6f6; color: #222; text-decoration: none; cursor: pointer; }
+.sign { margin-top: 26px; display: flex; gap: 30px; flex-wrap: wrap; font-size: 0.85rem; }
+.sign div { flex: 1; min-width: 200px; border-top: 1px solid #333; padding-top: 4px; }
+@media print { .no-print { display: none !important; } body { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="no-print"><button onclick="window.print()">Print</button><a href="{{ url_for('senior_meetings.meeting', meeting_id=meeting.id) }}">Back to the meeting</a></div>
+
+<h1>{{ student.first_name }}'s plan after high school</h1>
+<div class="muted">{{ school_name or '' }}{% if school_name %} · {% endif %}{{ meeting.meeting_date|smartdate('%B %-d, %Y') }} · Pathway: {{ pathway_label }}{% if done or total %} · {{ done }} of {{ total }} steps done{% endif %}</div>
+
+<h2>My next step</h2>
+{% if meeting.next_step %}
+<div class="step">{{ meeting.next_step }}{% if meeting.next_step_due %}<div class="by">By {{ meeting.next_step_due|smartdate('%A, %B %-d') }}</div>{% endif %}</div>
+{% else %}<div class="step muted">Write your next small step here: ____________________________________________</div>{% endif %}
+
+{% if deadlines %}
+<h2>Dates that matter to me</h2>
+<ul class="dates">
+    {% for d in deadlines %}<li><span class="when">{{ d.date|smartdate('%b %-d') }}</span><span>{{ d.label }}</span></li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if todo %}
+<h2>Still on my list</h2>
+<ul style="list-style:none;padding-left:0;">
+    {% for it in todo %}<li><span class="box"></span>{{ it.label }}{% if it.deadline %} <span class="muted">(by {{ it.deadline|smartdate('%b %-d') }})</span>{% endif %}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if support %}
+<h2>My people</h2>
+<ul>{% for a in support %}<li>{{ a }}</li>{% endfor %}</ul>
+{% endif %}
+
+<div class="sign">
+    <div>Counselor: {{ current_user.display_name or current_user.username }}{% if current_user.email %} · {{ current_user.email }}{% endif %}</div>
+    <div>Our next meeting: {{ meeting.follow_up_date|smartdate('%B %-d') if meeting.follow_up_date else '______________' }}</div>
+</div>
+</body>
+</html>
