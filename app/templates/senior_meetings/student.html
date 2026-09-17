@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Senior Meetings — {{ student.display_name }}{% endblock %}
+{% block page_title %}Senior Meetings · {{ student.display_name }}{% endblock %}
+{% block head %}
+<style>
+.sms-layout { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(280px,1fr); gap:20px; align-items:start; }
+@media (max-width:1024px) { .sms-layout { grid-template-columns:1fr; } }
+.sms-muted { color:var(--gray); font-size:0.8rem; }
+.sms-item { display:flex; align-items:flex-start; gap:8px; padding:5px 0; font-size:0.86rem; cursor:pointer; }
+.sms-item input { margin-top:3px; }
+.sms-item.done .lbl { text-decoration:line-through; color:var(--gray); }
+.sms-item.na { opacity:.55; }
+.sms-item .due { margin-left:auto; font-size:0.7rem; color:var(--gray); white-space:nowrap; }
+.sms-group h4 { margin:10px 0 2px; font-size:0.78rem; text-transform:uppercase; letter-spacing:.4px; color:var(--gray); display:flex; justify-content:space-between; }
+.sms-progress { height:8px; background:var(--bg); border-radius:4px; overflow:hidden; margin:6px 0 10px; }
+.sms-progress > div { height:100%; background:var(--success); }
+.sms-dl { list-style:none; margin:0; padding:0; }
+.sms-dl li { display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--light-gray); font-size:0.84rem; }
+.sms-dl li:last-child { border-bottom:0; }
+.sms-dl .when { min-width:60px; font-weight:700; }
+.sms-dl .days { margin-left:auto; font-size:0.7rem; white-space:nowrap; }
+</style>
+{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div>
+        <strong>{{ student.display_name }}</strong> <span class="badge badge-info">Grade {{ student.grade_level or '—' }}</span> <span class="badge badge-info">{{ pathway_label }}</span>
+        <div class="sms-muted"><a href="{{ url_for('caseload.view_student', id=student.id) }}">Profile</a> · <a href="{{ url_for('college_career.student_plan', student_id=student.id) }}">College &amp; Career plan</a> · <a href="{{ url_for('senior_meetings.index') }}">All seniors</a></div>
+    </div>
+    <form method="POST" action="{{ url_for('senior_meetings.start', student_id=student.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary">{{ 'Continue open meeting' if open_meeting else 'Start a meeting' }}</button>
+    </form>
+</div>
+
+<div class="sms-layout">
+<div>
+    <div class="card">
+        <div class="card-header">Meetings ({{ meetings|length }})</div>
+        <div class="card-body">
+            {% if meetings %}
+            <div class="table-responsive"><table class="data-table">
+                <thead><tr><th>Date</th><th>Kind</th><th>Plan</th><th>Stress</th><th>Their next step</th><th></th></tr></thead>
+                <tbody>
+                {% for m in meetings %}
+                <tr>
+                    <td><a href="{{ url_for('senior_meetings.meeting', meeting_id=m.id) }}">{{ m.meeting_date|smartdate('%b %-d, %Y') }}</a>{% if m.status != 'completed' %} <span class="badge badge-warning">open</span>{% endif %}</td>
+                    <td>{{ m.kind_label }}</td>
+                    <td>{{ m.scale_plan if m.scale_plan is not none else '—' }}</td>
+                    <td>{{ m.scale_stress if m.scale_stress is not none else '—' }}</td>
+                    <td style="max-width:280px;">{% if m.next_step %}<span class="{{ 'sms-muted' if m.next_step_done }}">{{ m.next_step|truncate(90) }}</span>{% if m.next_step_due %}<div class="sms-muted">by {{ m.next_step_due|smartdate('%b %-d') }}{% if m.next_step_done %} · done{% elif m.next_step_due < today %} · <span class="badge badge-danger">overdue</span>{% endif %}</div>{% endif %}{% else %}<span class="sms-muted">—</span>{% endif %}</td>
+                    <td style="white-space:nowrap;"><a href="{{ url_for('senior_meetings.handout', meeting_id=m.id) }}" class="btn btn-sm btn-outline" target="_blank">Handout</a></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table></div>
+            {% else %}<div class="empty-state"><p>No meetings yet. Start one to take notes with {{ student.first_name }}.</p></div>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Coming up <a href="{{ url_for('senior_meetings.deadlines') }}" class="btn btn-sm btn-outline">Manage dates</a></div>
+        <div class="card-body">
+            {% if deadlines %}
+            <ul class="sms-dl">
+                {% for d in deadlines %}
+                <li><span class="when">{{ d.date|smartdate('%b %-d') }}</span><span>{% if d.url %}<a href="{{ d.url }}">{{ d.label }}</a>{% else %}{{ d.label }}{% endif %}{% if d.verify %} <span class="badge badge-warning" style="font-size:0.66rem;">verify</span>{% endif %}</span>
+                    <span class="days badge {{ 'badge-danger' if d.days < 0 else ('badge-warning' if d.days <= 14 else 'badge-info') }}">{% if d.days < 0 %}{{ -d.days }}d ago{% elif d.days == 0 %}today{% else %}{{ d.days }}d{% endif %}</span></li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty-state"><p>Nothing dated in the next few months.</p></div>{% endif %}
+        </div>
+    </div>
+</div>
+
+<aside>
+    <div class="card">
+        <div class="card-header">Checklist <span class="sms-muted" id="sms-count">{{ done }}/{{ total }}</span>
+            {% if show_all %}<a href="{{ url_for('senior_meetings.student', student_id=student.id) }}" class="btn btn-sm btn-outline">Only this pathway</a>
+            {% else %}<a href="{{ url_for('senior_meetings.student', student_id=student.id, all=1) }}" class="btn btn-sm btn-outline">All pathways</a>{% endif %}
+        </div>
+        <div class="card-body">
+            <div class="sms-progress"><div id="sms-bar" style="width:{{ (done / total * 100)|round if total else 0 }}%;"></div></div>
+            {% for g in groups %}
+            <div class="sms-group">
+                <h4><span>{{ g.title }}</span><span>{{ g.done }}/{{ g.total }}</span></h4>
+                {% for it in g['items'] %}
+                <label class="sms-item {{ 'done' if it.done }} {{ 'na' if not it.applies }}" title="{{ it.help }}">
+                    <input type="checkbox" data-item="{{ it.key }}" {{ 'checked' if it.done }}>
+                    <span class="lbl">{{ it.label }}</span>
+                    {% if it.deadline %}<span class="due">{{ it.deadline|smartdate('%b %-d') }}</span>{% endif %}
+                </label>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+    var URL = "{{ url_for('senior_meetings.api_checklist', student_id=student.id) }}", CSRF = "{{ csrf_token() }}";
+    document.querySelectorAll('[data-item]').forEach(function(box){
+        box.addEventListener('change', function(){
+            var label = box.closest('.sms-item'); label.classList.toggle('done', box.checked);
+            fetch(URL, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body: JSON.stringify({key: box.dataset.item, done: box.checked})})
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (!d.ok) { box.checked = !box.checked; label.classList.toggle('done', box.checked); return; }
+                    document.getElementById('sms-count').textContent = d.counts.done + '/' + d.counts.total;
+                    document.getElementById('sms-bar').style.width = (d.counts.total ? Math.round(d.counts.done / d.counts.total * 100) : 0) + '%';
+                    var grp = label.closest('.sms-group'); if (grp) { var boxes = grp.querySelectorAll('[data-item]'); var n = 0; boxes.forEach(function(b){ if (b.checked) n++; }); grp.querySelector('h4 span:last-child').textContent = n + '/' + boxes.length; }
+                })
+                .catch(function(){ box.checked = !box.checked; label.classList.toggle('done', box.checked); });
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -349,7 +349,7 @@ def build_action_plan(student, grad_data=None, today=None):
                 'Build the college list and log applications with deadlines.',
                 url=f'/college-career/student/{student.id}'))
         for a in apps:
-            if a.deadline and a.status in ('planning', 'in_progress', None, ''):
+            if a.deadline and a.status in ('planned', 'planning', 'in_progress', None, ''):
                 days = (a.deadline - today).days
                 if days < 0:
                     items.append(_item(

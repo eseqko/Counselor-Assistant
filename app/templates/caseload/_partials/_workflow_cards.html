@@ -21,6 +21,34 @@
         </div>
     </div>
 
+    {% if (student.grade_level or 0) >= 11 %}
+    <div class="card">
+        <div class="card-header">
+            Senior Meetings ({{ student.senior_meetings.count() }})
+            <form method="POST" action="{{ url_for('senior_meetings.start', student_id=student.id) }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-primary">Start meeting</button>
+            </form>
+        </div>
+        <div class="card-body">
+            {% set sms = student.senior_meetings.limit(4).all() %}
+            {% if sms %}
+            <ul style="margin:0;padding-left:18px;">
+                {% for m in sms %}
+                <li style="margin-bottom:6px;">
+                    <a href="{{ url_for('senior_meetings.meeting', meeting_id=m.id) }}">{{ m.meeting_date|smartdate('%b %-d, %Y') }}</a>
+                    <span class="badge {{ 'badge-warning' if m.status != 'completed' else 'badge-info' }}" style="margin-left:6px;">{{ 'Open' if m.status != 'completed' else m.kind_label }}</span>
+                    {% if m.scale_plan is not none %}<span style="color:var(--gray);font-size:0.78rem;"> · plan {{ m.scale_plan }}/10</span>{% endif %}
+                    {% if m.next_step and not m.next_step_done %}<div style="font-size:0.8rem;color:var(--gray);">Step: {{ m.next_step|truncate(70) }}{% if m.next_step_due %} · by {{ m.next_step_due|smartdate('%b %-d') }}{% endif %}</div>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            <div style="margin-top:6px;font-size:0.8rem;"><a href="{{ url_for('senior_meetings.student', student_id=student.id) }}">All meetings, checklist &amp; dates</a></div>
+            {% else %}<div class="empty-state"><p>No senior meetings yet. <a href="{{ url_for('senior_meetings.student', student_id=student.id) }}">See the checklist and dates.</a></p></div>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card">
         <div class="card-header">
             Referrals ({{ student.referrals.count() }})

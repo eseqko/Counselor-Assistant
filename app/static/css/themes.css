@@ -1071,6 +1071,8 @@
    treatment as the main .card override (the main rule already covers .card,
    .stat-card, .kpi-card, .chart-card; this extends to the per-template names). */
 [data-theme^="glass"] .class-block,
+[data-theme^="glass"] .sm-card,
+[data-theme^="glass"] details.sm-section,
 [data-theme^="glass"] .split-card,
 [data-theme^="glass"] .plan-table,
 [data-theme^="glass"] .section,
@@ -1101,6 +1103,12 @@
    on glass that's solid near-black. Use the soft glass hover tint instead. */
 [data-theme^="glass"] .ac-item:hover,
 [data-theme^="glass"] .alert-item:hover,
+[data-theme^="glass"] .sm-tag,
+[data-theme^="glass"] .sm-progress,
+[data-theme^="glass"] .sm-summary,
+[data-theme^="glass"] .smr-bar,
+[data-theme^="glass"] .sms-progress,
+[data-theme^="glass"] .dl-edit td,
 [data-theme^="glass"] .attendee-chip,
 [data-theme^="glass"] .class-head,
 [data-theme^="glass"] .comm-tab:hover,

@@ -70,6 +70,7 @@ def delete_students_with_dependents(student_ids):
     from app.models.availability import Booking
     from app.models.ai_tool_history import AIToolHistory
     from app.models.meeting_note import meeting_note_students
+    from app.models.senior_meeting import SeniorMeeting, SeniorChecklistItem
 
     ids = [int(i) for i in student_ids]
     counts = {}
@@ -131,6 +132,8 @@ def delete_students_with_dependents(student_ids):
 
     # ── rows that point at a student (linkers before what they link to) ──
     for model, col in (
+        (SeniorChecklistItem, SeniorChecklistItem.student_id),   # points at meetings
+        (SeniorMeeting, SeniorMeeting.student_id),               # points at notes
         (ScreeningResult, ScreeningResult.student_id),
         (Referral, Referral.student_id),
         (InterventionPlan, InterventionPlan.student_id),

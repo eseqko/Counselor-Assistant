@@ -151,7 +151,7 @@ def test_senior_fafsa_and_deadline_pressure(app, env):
         db.session.flush()
         db.session.add(CollegeApplication(
             plan_id=plan_row.id, college_name='CSU East Bay',
-            status='in_progress', deadline=TODAY + timedelta(days=10)))
+            status='planned', deadline=TODAY + timedelta(days=10)))  # the model default
         db.session.commit()
 
         plan = build_action_plan(s, grad_data=None, today=TODAY)

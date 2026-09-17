@@ -226,6 +226,7 @@ def create_app(config_class=Config):
     from app.routes.student_portal import student_portal_bp
     from app.routes.referrals import referrals_bp
     from app.routes.goals import goals_bp
+    from app.routes.senior_meetings import senior_meetings_bp
     from app.routes.communications import communications_bp
     from app.routes.groups import groups_bp
     from app.routes.consents import consents_bp
@@ -272,6 +273,7 @@ def create_app(config_class=Config):
     app.register_blueprint(student_portal_bp, url_prefix='/student-portal')
     app.register_blueprint(referrals_bp, url_prefix='/referrals')
     app.register_blueprint(goals_bp, url_prefix='/goals')
+    app.register_blueprint(senior_meetings_bp, url_prefix='/senior-meetings')
     app.register_blueprint(communications_bp, url_prefix='/communications')
     app.register_blueprint(groups_bp, url_prefix='/groups')
     app.register_blueprint(consents_bp, url_prefix='/consents')
@@ -484,6 +486,7 @@ def create_app(config_class=Config):
         from app.models import asca_program
         from app.models import rollover
         from app.models import school_calendar
+        from app.models import senior_meeting
         from app.models import staff
         from app.utils.alert_engine import AlertCache  # noqa: F401 — register table
         db.create_all()

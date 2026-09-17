@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+{% block title %}Senior Meeting — {{ student.display_name }}{% endblock %}
+{% block page_title %}Senior / Post-Secondary Meeting{% endblock %}
+{% block head %}
+<style>
+.sm-top { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.sm-top h2 { margin:0; font-size:1.25rem; }
+.sm-top .sub { color:var(--gray); font-size:0.85rem; }
+.sm-status { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:0.85rem; color:var(--gray); }
+.save-dot { width:9px; height:9px; border-radius:50%; background:var(--success); display:inline-block; }
+.save-dot.unsaved { background:var(--warning, #f59e0b); animation:smpulse 1.5s infinite; }
+.save-dot.error { background:var(--danger); }
+@keyframes smpulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+.sm-layout { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr); gap:20px; align-items:start; }
+.sm-side { position:sticky; top:calc(var(--header-height, 60px) + 12px); max-height:calc(100vh - var(--header-height, 60px) - 24px); overflow:auto; }
+@media (max-width:1024px) { .sm-layout { grid-template-columns:1fr; } .sm-side { position:static; max-height:none; } }
+.sm-card { background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:16px 18px; margin-bottom:16px; }
+.sm-card h3 { margin:0 0 4px; font-size:0.95rem; color:var(--primary-dark); }
+.sm-card .hint { color:var(--gray); font-size:0.78rem; margin-bottom:10px; }
+.sm-scales { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+.sm-scale label { display:block; font-size:0.82rem; font-weight:600; margin-bottom:4px; }
+.sm-scale input[type=range] { width:100%; }
+.sm-scale .val { font-weight:800; font-size:1.2rem; min-width:2ch; display:inline-block; }
+.sm-scale .prev { color:var(--gray); font-size:0.78rem; }
+details.sm-section { border:1px solid var(--light-gray); border-radius:10px; margin-bottom:10px; background:var(--white); }
+details.sm-section > summary { cursor:pointer; padding:10px 14px; font-weight:700; list-style:none; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+details.sm-section > summary::-webkit-details-marker { display:none; }
+details.sm-section > summary .sub { font-weight:400; color:var(--gray); font-size:0.78rem; display:block; }
+details.sm-section > summary .count { font-size:0.74rem; color:var(--gray); white-space:nowrap; }
+details.sm-section[open] > summary { border-bottom:1px solid var(--light-gray); }
+.sm-q { padding:10px 14px; border-bottom:1px dashed var(--light-gray); }
+.sm-q:last-child { border-bottom:0; }
+.sm-q-text { font-size:0.95rem; line-height:1.45; }
+.sm-q-meta { display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin:6px 0; }
+.sm-tag { font-size:0.68rem; padding:1px 7px; border-radius:10px; background:var(--bg); color:var(--gray); border:1px solid var(--light-gray); }
+.sm-tag.sfbt { color:var(--info, #0A6E8A); background:transparent; border-color:currentColor; }
+.sm-tag.asca { color:var(--primary); background:transparent; border-color:currentColor; cursor:help; }
+.sm-coach-btn { background:none; border:0; color:var(--primary); font-size:0.74rem; cursor:pointer; padding:0 4px; }
+.sm-coach { display:none; font-size:0.8rem; color:var(--gray); font-style:italic; margin:2px 0 6px; padding-left:8px; border-left:2px solid var(--light-gray); }
+.sm-coach.show { display:block; }
+.sm-q textarea { width:100%; min-height:44px; resize:vertical; }
+.sm-q .sm-scale-row { display:flex; align-items:center; gap:10px; }
+.sm-q .sm-scale-row input[type=range] { flex:1; }
+.sm-insert { background:none; border:0; color:var(--primary); font-size:0.74rem; cursor:pointer; padding:2px 0; }
+#sm-notes { width:100%; min-height:220px; font-size:0.95rem; line-height:1.5; resize:vertical; }
+.sm-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.sm-dl { list-style:none; margin:0; padding:0; }
+.sm-dl li { display:flex; gap:10px; align-items:flex-start; padding:7px 0; border-bottom:1px solid var(--light-gray); font-size:0.84rem; }
+.sm-dl li:last-child { border-bottom:0; }
+.sm-dl .when { min-width:64px; font-weight:700; }
+.sm-dl .days { font-size:0.7rem; white-space:nowrap; }
+.sm-dl .kind { font-size:0.68rem; color:var(--gray); text-transform:uppercase; letter-spacing:.3px; }
+.sm-progress { height:8px; background:var(--bg); border-radius:4px; overflow:hidden; margin:6px 0 10px; }
+.sm-progress > div { height:100%; background:var(--success); }
+.sm-group { margin-bottom:10px; }
+.sm-group h4 { margin:8px 0 4px; font-size:0.8rem; text-transform:uppercase; letter-spacing:.4px; color:var(--gray); display:flex; justify-content:space-between; }
+.sm-item { display:flex; align-items:flex-start; gap:8px; padding:5px 0; font-size:0.86rem; line-height:1.35; cursor:pointer; }
+.sm-item input { margin-top:3px; flex:none; }
+.sm-item.done .lbl { text-decoration:line-through; color:var(--gray); }
+.sm-item.na { opacity:.55; }
+.sm-item .due { font-size:0.7rem; color:var(--gray); white-space:nowrap; margin-left:auto; }
+.sm-item .help { color:var(--gray); font-size:0.75rem; cursor:help; }
+.sm-summary { white-space:pre-wrap; font-family:inherit; font-size:0.88rem; line-height:1.5; background:var(--bg); padding:12px; border-radius:8px; max-height:420px; overflow:auto; }
+.sm-prev { border-left:4px solid var(--primary); }
+@media print { .sidebar, .top-bar, .sm-toolbar, .sm-side, .sm-insert, .sm-coach-btn, .print-btn, .demo-banner { display:none !important; } .sm-layout { grid-template-columns:1fr; } details.sm-section { break-inside:avoid; } }
+</style>
+{% endblock %}
+{% block content %}
+{% set pathway_label = dict(pathways).get(pathway, 'Undecided') %}
+<div class="sm-top">
+    <div>
+        <h2>{{ student.display_name }}
+            <span class="badge badge-info" style="margin-left:6px;">Grade {{ student.grade_level or '—' }}</span>
+            <span class="badge {{ 'badge-success' if readonly else 'badge-warning' }}" style="margin-left:4px;">{{ 'Completed' if readonly else 'In progress' }}</span>
+        </h2>
+        <div class="sub">
+            {{ meeting.kind_label }} · {{ meeting.meeting_date|smartdate('%A, %b %-d, %Y') }}
+            · <a href="{{ url_for('caseload.view_student', id=student.id) }}">Profile</a>
+            · <a href="{{ url_for('college_career.student_plan', student_id=student.id) }}">College &amp; Career plan</a>
+            · <a href="{{ url_for('senior_meetings.student', student_id=student.id) }}">All meetings</a>
+            {% if plan and plan.best_test_display %} · {{ plan.best_test_display }}{% endif %}
+            {% if plan and plan.gpa_weighted %} · GPA {{ plan.gpa_weighted }}{% endif %}
+        </div>
+    </div>
+    <div class="sm-status">
+        {% if not readonly %}
+        <label style="display:flex;align-items:center;gap:6px;">Pathway
+            <select id="sm-pathway" class="form-control" style="width:auto;padding:4px 8px;font-size:0.85rem;">
+                {% for val, label in pathways %}<option value="{{ val }}" {{ 'selected' if val == pathway }}>{{ label }}</option>{% endfor %}
+            </select>
+        </label>
+        <span title="Elapsed">&#9201; <span id="sm-timer">0:00</span></span>
+        <span><span class="save-dot" id="sm-save-dot"></span> <span id="sm-save-text">Saved</span></span>
+        {% else %}
+        <span class="badge badge-info">{{ pathway_label }}</span>
+        {% if meeting.duration_minutes %}<span>{{ meeting.duration_minutes }} min</span>{% endif %}
+        {% endif %}
+        <span class="sm-toolbar">
+            <a href="{{ url_for('senior_meetings.handout', meeting_id=meeting.id) }}" class="btn btn-sm btn-outline" target="_blank">Student handout</a>
+            <button type="button" class="btn btn-sm btn-outline print-btn" onclick="window.print()">Print</button>
+        </span>
+    </div>
+</div>
+
+{% if readonly %}
+<div class="sm-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <h3>Meeting summary</h3>
+        <span class="sm-toolbar">
+            <button type="button" class="btn btn-sm btn-outline" onclick="copySummary()">Copy summary</button>
+            {% if meeting.note_id %}<a href="{{ url_for('notes.view_note', id=meeting.note_id) }}" class="btn btn-sm btn-outline">Open the note</a>{% endif %}
+            {% if is_owner %}<form method="POST" action="{{ url_for('senior_meetings.reopen', meeting_id=meeting.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline">Reopen to edit</button>
+            </form>{% endif %}
+        </span>
+    </div>
+    {% if asca_touched %}<div class="hint">ASCA Mindsets &amp; Behaviors touched:
+        {% for code in asca_touched %}<span class="sm-tag asca" title="{{ asca.get(code, '') }}">{{ code }}</span> {% endfor %}</div>{% endif %}
+    <pre class="sm-summary" id="sm-summary">{{ summary }}</pre>
+</div>
+{% endif %}
+
+<div class="sm-layout">
+<div class="sm-main">
+
+    {% if previous %}
+    <div class="sm-card sm-prev">
+        <h3>Last time — {{ previous.meeting_date|smartdate('%b %-d, %Y') }}</h3>
+        <div class="hint">
+            {% if previous.scale_plan is not none %}Plan handled: <strong>{{ previous.scale_plan }}/10</strong>{% endif %}
+            {% if previous.scale_stress is not none %} · Stress: {{ previous.scale_stress }}/10{% endif %}
+            · <a href="{{ url_for('senior_meetings.meeting', meeting_id=previous.id) }}">open that meeting</a>
+        </div>
+        {% if previous.next_step %}
+        <label class="sm-item {{ 'done' if previous.next_step_done }}" style="font-size:0.92rem;">
+            <input type="checkbox" id="sm-prev-step" {{ 'checked' if previous.next_step_done }} {{ 'disabled' if readonly }}>
+            <span class="lbl">Their step: {{ previous.next_step }}{% if previous.next_step_due %} <span style="color:var(--gray);">(by {{ previous.next_step_due|smartdate('%b %-d') }})</span>{% endif %}</span>
+        </label>
+        <div class="hint" style="margin:2px 0 0 26px;">Ask how it went before anything else. If it didn't happen, no lecture: what part did happen, what got in the way, then shrink the step.</div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="sm-card">
+        <h3>Scaling (0–10)</h3>
+        <div class="hint">Accept the number without arguing. Then: what makes it that and not two lower? What would one point higher look like?</div>
+        <div class="sm-scales">
+            <div class="sm-scale">
+                <label>"My plan for after high school is handled"
+                    <span class="val" id="val-scale_plan">{{ meeting.scale_plan if meeting.scale_plan is not none else '—' }}</span>
+                    {% if previous and previous.scale_plan is not none %}<span class="prev">last {{ previous.scale_plan }}</span>{% endif %}
+                </label>
+                <input type="range" min="0" max="10" data-scale="scale_plan" value="{{ meeting.scale_plan if meeting.scale_plan is not none else 5 }}" {{ 'disabled' if readonly }}>
+            </div>
+            <div class="sm-scale">
+                <label>"How much is this weighing on me"
+                    <span class="val" id="val-scale_stress">{{ meeting.scale_stress if meeting.scale_stress is not none else '—' }}</span>
+                </label>
+                <input type="range" min="0" max="10" data-scale="scale_stress" value="{{ meeting.scale_stress if meeting.scale_stress is not none else 5 }}" {{ 'disabled' if readonly }}>
+                <div class="prev">7 or above: pause the checklist, go to Barriers &amp; Coping.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sm-card" style="padding-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <h3>Prompts <span class="hint" style="display:inline;margin:0;font-weight:400;">ASCA Mindsets &amp; Behaviors · Solution-Focused Brief Therapy</span></h3>
+            <span class="hint" style="margin:0;">
+                {% if show_all_prompts %}<a href="{{ url_for('senior_meetings.meeting', meeting_id=meeting.id, items='all' if show_all_items else none) }}">Only {{ 'follow-up' if meeting.meeting_kind == 'followup' else 'first-meeting' }} prompts</a>
+                {% else %}<a href="{{ url_for('senior_meetings.meeting', meeting_id=meeting.id, prompts='all', items='all' if show_all_items else none) }}">Show all prompts</a>{% endif %}
+            </span>
+        </div>
+        <div class="hint">Type the answer under a prompt, or click "Add to notes" to drop the question into your notes. Coach tips are for you, not the student.</div>
+        {% for sec in sections %}
+        {% set answered = sec.questions|selectattr('key', 'in', answers)|list|length %}
+        <details class="sm-section" {{ 'open' if loop.index <= 2 or answered }}>
+            <summary><span>{{ sec.title }}<span class="sub">{{ sec.subtitle }}</span></span><span class="count">{{ answered }}/{{ sec.questions|length }}</span></summary>
+            {% for q in sec.questions %}
+            <div class="sm-q" data-key="{{ q.key }}">
+                <div class="sm-q-text">{{ q.text }}</div>
+                <div class="sm-q-meta">
+                    {% for tag in q.framework %}{% if tag != 'ASCA' %}<span class="sm-tag sfbt">SFBT · {{ tag.replace('SFBT:', '').replace('_', ' ') }}</span>{% endif %}{% endfor %}
+                    {% for code in q.asca %}<span class="sm-tag asca" title="{{ asca.get(code, '') }}">{{ code }}</span>{% endfor %}
+                    <button type="button" class="sm-coach-btn" onclick="this.closest('.sm-q').querySelector('.sm-coach').classList.toggle('show')">coach tip</button>
+                </div>
+                <div class="sm-coach">{{ q.coach }}</div>
+                {% if q.answer_type == 'scale' %}
+                <div class="sm-scale-row">
+                    <input type="range" min="0" max="10" data-answer="{{ q.key }}" data-set="{{ '1' if q.key in answers else '0' }}" value="{{ answers.get(q.key) if q.key in answers else 5 }}" {{ 'disabled' if readonly }}>
+                    <span class="val" id="qval-{{ q.key }}" style="font-weight:800;min-width:2ch;">{{ answers.get(q.key, '—') }}</span>
+                </div>
+                {% elif q.answer_type == 'text' %}
+                <textarea class="form-control" rows="2" data-answer="{{ q.key }}" placeholder="{{ 'Names only — this prints on the student handout under “My people”' if q.key in handout_support_keys else 'Their answer, in their words…' }}" {{ 'disabled' if readonly }}>{{ answers.get(q.key, '') }}</textarea>
+                {% if q.key in handout_support_keys %}<div class="hint" style="margin:2px 0 0;">Printed on the student handout under “My people” — names only.</div>{% endif %}
+                {% endif %}
+                {% if not readonly %}<button type="button" class="sm-insert" data-text="{{ q.text }}">&#8627; Add to notes</button>{% endif %}
+            </div>
+            {% endfor %}
+        </details>
+        {% endfor %}
+    </div>
+
+    <div class="sm-card">
+        <h3>Notes</h3>
+        <div class="hint">Saves as you type. Kept confidential with the meeting's note.</div>
+        <textarea id="sm-notes" class="form-control" placeholder="What they said, what you noticed, what you agreed…" {{ 'disabled' if readonly }}>{{ meeting.notes or '' }}</textarea>
+        {% if not readonly %}<div class="sm-toolbar" style="margin-top:6px;"><button type="button" class="sm-insert" onclick="insertStamp()">&#8627; Insert time stamp</button></div>{% endif %}
+    </div>
+
+    <div class="sm-card">
+        <h3>Next step &amp; follow-up</h3>
+        <div class="hint">One small, student-owned step with a date. Then your own reminder.</div>
+        <div class="grid-2">
+            <div class="form-group">
+                <label>Their next small step</label>
+                <textarea class="form-control" rows="2" data-field="next_step" placeholder="e.g. Make my FSA ID with my mom Thursday after dinner" {{ 'disabled' if readonly }}>{{ meeting.next_step or '' }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>They'll do it by</label>
+                <input type="date" class="form-control" data-field="next_step_due" value="{{ meeting.next_step_due.isoformat() if meeting.next_step_due else '' }}" {{ 'disabled' if readonly }}>
+                <label style="margin-top:8px;">How sure are they (0–10)? <span class="val" id="val-scale_confidence" style="font-weight:800;">{{ meeting.scale_confidence if meeting.scale_confidence is not none else '—' }}</span></label>
+                <input type="range" min="0" max="10" data-scale="scale_confidence" value="{{ meeting.scale_confidence if meeting.scale_confidence is not none else 5 }}" style="width:100%;" {{ 'disabled' if readonly }}>
+                <div class="hint">Under 7: shrink the step or move the date until they're at 8+.</div>
+            </div>
+            <div class="form-group">
+                <label>My follow-up date <span style="color:var(--gray);font-weight:400;">(adds a reminder to your calendar)</span></label>
+                <input type="date" class="form-control" data-field="follow_up_date" value="{{ meeting.follow_up_date.isoformat() if meeting.follow_up_date else '' }}" {{ 'disabled' if readonly }}>
+            </div>
+            <div class="form-group">
+                <label>Follow-up note to myself</label>
+                <input type="text" class="form-control" data-field="follow_up_notes" value="{{ meeting.follow_up_notes or '' }}" placeholder="e.g. Check FAFSA confirmation; ask about the Cal Poly essay" {{ 'disabled' if readonly }}>
+            </div>
+            <div class="form-group">
+                <label>Log this meeting as</label>
+                <select class="form-control" data-field="note_type" {{ 'disabled' if readonly }}>
+                    {% for val, label in note_types %}<option value="{{ val }}" {{ 'selected' if val == (meeting.note_type or 'college_career') }}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Duration (minutes) <span style="color:var(--gray);font-weight:400;">blank = timed automatically</span></label>
+                <input type="number" min="1" max="600" class="form-control" data-field="duration_minutes" value="{{ meeting.duration_minutes or '' }}" {{ 'disabled' if readonly }}>
+            </div>
+        </div>
+        {% if not readonly and is_owner %}
+        <div class="sm-toolbar" style="margin-top:6px;">
+            <form method="POST" action="{{ url_for('senior_meetings.complete', meeting_id=meeting.id) }}" onsubmit="return flushThen(this)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">Complete meeting &amp; save to notes</button>
+            </form>
+            <form method="POST" action="{{ url_for('senior_meetings.delete', meeting_id=meeting.id) }}" onsubmit="return confirm('Delete this meeting? Checklist boxes stay ticked.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline">Delete</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<aside class="sm-side">
+    <div class="sm-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3>Coming up for {{ student.first_name }}</h3>
+            <a href="{{ url_for('senior_meetings.deadlines') }}" class="hint" style="margin:0;">Manage dates</a>
+        </div>
+        <div class="hint">School-wide dates for the {{ pathway_label|lower }} pathway, plus their applications, goals and follow-ups.</div>
+        {% if deadlines %}
+        <ul class="sm-dl">
+            {% for d in deadlines %}
+            <li>
+                <span class="when">{{ d.date|smartdate('%b %-d') }}</span>
+                <span style="flex:1;">
+                    {% if d.url %}<a href="{{ d.url }}">{{ d.label }}</a>{% else %}{{ d.label }}{% endif %}
+                    {% if d.verify %}<span class="sm-tag" title="Default date — confirm with the source">verify</span>{% endif %}
+                    <div class="kind">{{ {'school':'School-wide','application':'Their application','decision':'Decision','goal':'Goal','follow_up':'My follow-up','calendar':'Calendar','next_step':'Their step'}.get(d.kind, d.kind) }}{% if d.source %} · {{ d.source }}{% endif %}</div>
+                </span>
+                <span class="days badge {{ 'badge-danger' if d.days < 0 else ('badge-warning' if d.days <= 14 else 'badge-info') }}">{% if d.days < 0 %}{{ -d.days }}d ago{% elif d.days == 0 %}today{% else %}{{ d.days }}d{% endif %}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}<div class="empty-state"><p>Nothing dated in the next few months for this pathway.</p></div>{% endif %}
+    </div>
+
+    <div class="sm-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3>Checklist <span class="hint" style="display:inline;margin:0;font-weight:400;" id="sm-count">{{ done }}/{{ total }}</span></h3>
+            <span class="hint" style="margin:0;">
+                {% if show_all_items %}<a href="{{ url_for('senior_meetings.meeting', meeting_id=meeting.id, prompts='all' if show_all_prompts else none) }}">Only this pathway</a>
+                {% else %}<a href="{{ url_for('senior_meetings.meeting', meeting_id=meeting.id, items='all', prompts='all' if show_all_prompts else none) }}">All pathways</a>{% endif %}
+            </span>
+        </div>
+        <div class="sm-progress"><div id="sm-bar" style="width:{{ (done / total * 100)|round if total else 0 }}%;"></div></div>
+        {% for g in groups %}
+        <div class="sm-group">
+            <h4><span>{{ g.title }}</span><span>{{ g.done }}/{{ g.total }}</span></h4>
+            {% for it in g['items'] %}
+            <label class="sm-item {{ 'done' if it.done }} {{ 'na' if not it.applies }}" title="{{ it.help }}">
+                <input type="checkbox" data-item="{{ it.key }}" {{ 'checked' if it.done }} {{ 'disabled' if readonly }}>
+                <span class="lbl">{{ it.label }}{% if it.key in checked %} <span class="sm-tag" title="Checked off in this meeting">this meeting</span>{% endif %}</span>
+                {% if it.deadline %}<span class="due">{{ it.deadline|smartdate('%b %-d') }}</span>{% endif %}
+            </label>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var MEETING_ID = {{ meeting.id }};
+    var STUDENT_ID = {{ student.id }};
+    var READONLY = {{ 'true' if readonly else 'false' }};
+    var SAVE_URL = "{{ url_for('senior_meetings.api_save', meeting_id=meeting.id) }}";
+    var CHECK_URL = "{{ url_for('senior_meetings.api_checklist', student_id=student.id) }}";
+    var STARTED = "{{ meeting.started_at.isoformat() if meeting.started_at else '' }}";
+    var CSRF = "{{ csrf_token() }}";
+
+    /* ── elapsed timer ── */
+    if (!READONLY && STARTED) {
+        var t0 = new Date(STARTED.endsWith('Z') || /[+-]\d\d:\d\d$/.test(STARTED) ? STARTED : STARTED + 'Z').getTime();
+        var el = document.getElementById('sm-timer');
+        function tick(){ var s = Math.max(0, Math.floor((Date.now() - t0) / 1000)); el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+        tick(); setInterval(tick, 1000);
+    }
+
+    /* ── autosave ──
+       One request in flight at a time (so an older save can never land after
+       a newer one), newer keystrokes win over a failed body, and anything
+       waiting on "everything saved" (Complete, pathway reload) runs only once
+       nothing is pending or in flight. */
+    var pending = {}, timer = null, inflight = false, afterFlush = null;
+    var dot = document.getElementById('sm-save-dot'), txt = document.getElementById('sm-save-text');
+    function mark(state, label){ if (!dot) return; dot.className = 'save-dot' + (state ? ' ' + state : ''); txt.textContent = label; }
+    function merge(into, patch){
+        if (patch.answers) { into.answers = Object.assign(into.answers || {}, patch.answers); }
+        Object.keys(patch).forEach(function(k){ if (k !== 'answers') into[k] = patch[k]; });
+        return into;
+    }
+    function queue(patch){
+        if (READONLY) return;
+        merge(pending, patch);
+        mark('unsaved', 'Saving…');
+        clearTimeout(timer); timer = setTimeout(function(){ flush(); }, 700);
+    }
+    function flush(cb){
+        if (cb) afterFlush = cb;
+        if (inflight) return;                       // the in-flight save re-runs flush when it lands
+        if (!Object.keys(pending).length) { if (afterFlush) { var f = afterFlush; afterFlush = null; f(); } return; }
+        var body = pending; pending = {}; inflight = true;
+        fetch(SAVE_URL, {method:'POST', headers:{'Content-Type':'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify(body), keepalive: true})
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                inflight = false;
+                if (!d.ok) {
+                    mark('error', d.error || 'Not saved');
+                    if (afterFlush) { afterFlush = null; alert(d.error || 'Your last changes were not saved. Try again.'); }
+                    return;
+                }
+                ['scale_plan','scale_stress','scale_confidence'].forEach(function(k){
+                    if (d[k] == null) return;
+                    var v = document.getElementById('val-' + k); if (v) v.textContent = d[k];
+                    var r = document.querySelector('[data-scale="' + k + '"]'); if (r) r.value = d[k];
+                });
+                mark('', 'Saved');
+                flush();                             // drain anything typed meanwhile, then run afterFlush
+            })
+            .catch(function(){
+                inflight = false; mark('error', 'Offline — will retry');
+                pending = merge(body, pending);      // newer keystrokes win over the failed body
+                clearTimeout(timer); timer = setTimeout(function(){ flush(); }, 4000);
+            });
+    }
+    window.flushThen = function(form){
+        clearTimeout(timer);
+        if (!Object.keys(pending).length && !inflight) return true;
+        var btn = form.querySelector('button[type=submit]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        flush(function(){ form.submit(); });
+        return false;
+    };
+    window.addEventListener('beforeunload', function(){ if (Object.keys(pending).length) { clearTimeout(timer); try { navigator.sendBeacon(SAVE_URL, new Blob([JSON.stringify(pending)], {type:'application/json'})); } catch(e){} } });
+
+    document.querySelectorAll('[data-field]').forEach(function(el){
+        el.addEventListener('input', function(){ var p = {}; p[el.dataset.field] = el.value; queue(p); });
+        el.addEventListener('change', function(){ var p = {}; p[el.dataset.field] = el.value; queue(p); });
+    });
+    var notes = document.getElementById('sm-notes');
+    if (notes) notes.addEventListener('input', function(){ queue({notes: notes.value}); });
+    var pw = document.getElementById('sm-pathway');
+    if (pw) pw.addEventListener('change', function(){ queue({pathway: pw.value}); clearTimeout(timer); flush(function(){ location.reload(); }); });
+    document.querySelectorAll('[data-scale]').forEach(function(el){
+        el.addEventListener('input', function(){ var p = {}; p[el.dataset.scale] = el.value; document.getElementById('val-' + el.dataset.scale).textContent = el.value; queue(p); });
+    });
+    var SCALE_COLUMNS = {{ scale_columns|tojson }};
+    document.querySelectorAll('[data-answer]').forEach(function(el){
+        el.addEventListener('input', function(){
+            var a = {}; a[el.dataset.answer] = el.value; queue({answers: a});
+            var v = document.getElementById('qval-' + el.dataset.answer); if (v) v.textContent = el.value;
+            var col = el.type === 'range' && SCALE_COLUMNS[el.dataset.answer];
+            if (col) { var hv = document.getElementById('val-' + col); if (hv) hv.textContent = el.value; var hr = document.querySelector('[data-scale="' + col + '"]'); if (hr) hr.value = el.value; }
+            el.dataset.set = '1';
+            var q = el.closest('.sm-section'); if (q) { var n = q.querySelectorAll('[data-answer]'); var c = 0; n.forEach(function(x){ if (x.type === 'range' ? x.dataset.set === '1' : x.value.trim()) c++; }); q.querySelector('.count').textContent = c + '/' + n.length; }
+        });
+    });
+    document.querySelectorAll('.sm-insert[data-text]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            if (!notes) return;
+            var q = btn.dataset.text;
+            notes.value = (notes.value ? notes.value.replace(/\s*$/, '') + '\n\n' : '') + 'Q: ' + q + '\nA: ';
+            notes.focus(); notes.selectionStart = notes.selectionEnd = notes.value.length;
+            queue({notes: notes.value});
+        });
+    });
+    window.insertStamp = function(){
+        if (!notes) return;
+        var now = new Date(), hh = now.getHours(), mm = String(now.getMinutes()).padStart(2, '0');
+        var stamp = '[' + ((hh % 12) || 12) + ':' + mm + (hh < 12 ? ' am' : ' pm') + '] ';
+        notes.value = (notes.value ? notes.value.replace(/\s*$/, '') + '\n' : '') + stamp;
+        notes.focus(); notes.selectionStart = notes.selectionEnd = notes.value.length;
+        queue({notes: notes.value});
+    };
+
+    /* ── checklist ── */
+    document.querySelectorAll('[data-item]').forEach(function(box){
+        box.addEventListener('change', function(){
+            var label = box.closest('.sm-item'); label.classList.toggle('done', box.checked);
+            fetch(CHECK_URL, {method:'POST', headers:{'Content-Type':'application/json', 'X-CSRFToken': CSRF},
+                  body: JSON.stringify({key: box.dataset.item, done: box.checked, meeting_id: MEETING_ID})})
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (!d.ok) { box.checked = !box.checked; label.classList.toggle('done', box.checked); return; }
+                    document.getElementById('sm-count').textContent = d.counts.done + '/' + d.counts.total;
+                    document.getElementById('sm-bar').style.width = (d.counts.total ? Math.round(d.counts.done / d.counts.total * 100) : 0) + '%';
+                    var grp = label.closest('.sm-group'); if (grp) { var boxes = grp.querySelectorAll('[data-item]'); var n = 0; boxes.forEach(function(b){ if (b.checked) n++; }); grp.querySelector('h4 span:last-child').textContent = n + '/' + boxes.length; }
+                })
+                .catch(function(){ box.checked = !box.checked; label.classList.toggle('done', box.checked); });
+        });
+    });
+    var prevStep = document.getElementById('sm-prev-step');
+    if (prevStep) prevStep.addEventListener('change', function(){
+        prevStep.closest('.sm-item').classList.toggle('done', prevStep.checked);
+        fetch("{{ url_for('senior_meetings.api_step_done', meeting_id=previous.id) if previous else '' }}", {method:'POST', headers:{'Content-Type':'application/json', 'X-CSRFToken': CSRF}, body: JSON.stringify({done: prevStep.checked})})
+            .then(function(r){ if (!r.ok) throw new Error(); })
+            .catch(function(){ prevStep.checked = !prevStep.checked; prevStep.closest('.sm-item').classList.toggle('done', prevStep.checked); });
+    });
+
+    window.copySummary = function(){
+        var t = document.getElementById('sm-summary'); if (!t) return;
+        navigator.clipboard.writeText(t.textContent).then(function(){ alert('Summary copied.'); }, function(){ window.getSelection().selectAllChildren(t); });
+    };
+})();
+</script>
+{% endblock %}
